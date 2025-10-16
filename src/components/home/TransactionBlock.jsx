@@ -1,39 +1,7 @@
-// src/App.jsx
-import { FinanceProvider, useFinance } from "./context/FinanceContext";
-import { Header } from "./components/home/Header";
-import prismLogo from "./assets/pngFinal.png";
-import "./App.css";
-import { CreateTransaction } from "./components/home/Form";
-import { useEffect } from "react";
 import { format } from "date-fns";
 import { CircleUserRound } from "lucide-react";
-import { LoginPage } from "./components/pages/Login";
-import { HomePage } from "./components/pages/Home";
 
-function App() {
-    return (
-        <FinanceProvider>
-            <MainApp />
-        </FinanceProvider>
-    );
-}
-
-function MainApp() {
-    const { user, finance, addTransaction, loading, clearTransactions } = useFinance();
-
-    useEffect(() => {
-        console.log(finance);
-    }, [finance]);
-
-    if (loading) return <p className="text-white">Carregando...</p>;
-    if (!user) return <LoginPage/>;
-
-    return (
-        <HomePage/>
-    );
-}
-
-function TransactionBlock(transaction) {
+export function TransactionBlock({ transaction }) {
     return (
         <div className=" bg-[#1e1e1e] rounded-2xl p-4 flex items-center justify-between">
             <img className="w-18 rounded-full" src={`src/assets/${transaction.fonte.origem}.png`} alt="Logo do banco" />
@@ -57,5 +25,3 @@ function TransactionBlock(transaction) {
         </div>
     );
 }
-
-export default App;
