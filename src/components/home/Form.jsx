@@ -65,7 +65,7 @@ export function CreateTransaction() {
                     Pago / Recebido
                 </label>
             </div>
-            <button onClick={handleSubmit}>Submit</button>
+            <button className="default-button" onClick={handleSubmit}>Submit</button>
         </div>
     );
 }

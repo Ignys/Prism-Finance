@@ -31,15 +31,15 @@ export function HomePage() {
     };
 
     return (
-        <main className="justify-center text-center text-white">
+        <main className="justify-center text-center text-white p-5">
             <div className="flex items-center justify-center">
                 <img src={prismLogo} className="logo" alt="Prism logo" />
                 <h1 className="font-medium">Prism Finance</h1>
             </div>
             <Header />
             <div className="flex gap-3 justify-center">
-                <button onClick={exampleSubmit}>Transação Exemplo</button>
-                <button onClick={clearTransactions}>Limpar Transações</button>
+                <button className="default-button" onClick={exampleSubmit}>Transação Exemplo</button>
+                <button className="default-button" onClick={clearTransactions}>Limpar Transações</button>
             </div>
             <div className="flex justify-center gap-2 mt-5">
                 <div>
