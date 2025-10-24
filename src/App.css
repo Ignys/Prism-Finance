@@ -7,25 +7,47 @@ input[type="date"]::-webkit-clear-button {
 }
 
 .logo {
-    height: 8em;
     padding: 1.5em;
     will-change: filter;
     transition: filter 300ms;
 }
+
 .logo:hover {
     filter: drop-shadow(0 0 2em #c164ffaa);
 }
 
-@media (prefers-reduced-motion: no-preference) {
-    a:nth-of-type(2) .logo {
-        animation: logo-spin infinite 20s linear;
+.loading-bar-container {
+    height: 8px;
+    background-color: #d5d5d5;
+    border-radius: 10px;
+    overflow: hidden;
+    position: relative;
+}
+
+.loading-bar-progress {
+    height: 100%;
+    width: 0;
+    background-color: #c164ff;
+    border-radius: 10px;
+    position: absolute;
+    top: 0;
+    left: 0;
+    animation: loadAnimation 2s linear infinite;
+}
+
+@keyframes loadAnimation {
+    0% {
+        width: 0%;
+        left: 0;
     }
-}
 
-.card {
-    padding: 2em;
-}
+    50% {
+        width: 100%;
+        left: 0;
+    }
 
-.read-the-docs {
-    color: #888;
+    100% {
+        width: 0%;
+        left: 100%;
+    }
 }

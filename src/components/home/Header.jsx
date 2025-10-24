@@ -32,7 +32,7 @@ function BalanceBox({ text, amount, children }) {
                 <span className="text-2xl font-medium" style={isBalance ? { color: amount >= 0 ? "#4ade80" : "#f87171" } : {}}>
                     <span className=" font-light">R$</span> {amount.toFixed(2)}
                 </span>
-                <button className="bg-[#1a1a1a] rounded-full w-10 h-10 text-2xl flex items-center justify-center border-1 border-transparent hover:border-[#646cff] duration-200" >
+                <button className="bg-[#1a1a1a] rounded-full w-10 h-10 text-2xl flex items-center justify-center border-1 border-transparent hover:border-[#b964ff] duration-200" >
                     {!isBalance
                     ? <Plus size={22}/>
                     : <Ellipsis size={22}/>}

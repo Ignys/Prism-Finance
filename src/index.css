@@ -15,11 +15,6 @@
     -moz-osx-font-smoothing: grayscale;
 }
 
-h1 {
-    font-size: 3.2em;
-    line-height: 1.1;
-}
-
 .default-button {
     border-radius: 8px;
     border: 1px solid transparent;
@@ -32,7 +27,7 @@ h1 {
     transition: border-color 0.25s;
 }
 .default-button:hover {
-    border-color: #646cff;
+    border-color: #b964ff;
 }
 .default-button:focus,
 .default-button:focus-visible {

@@ -1,14 +1,12 @@
 // src/App.jsx
 import { FinanceProvider, useFinance } from "./context/FinanceContext";
-import { Header } from "./components/home/Header";
-import prismLogo from "./assets/pngFinal.png";
 import "./App.css";
-import { CreateTransaction } from "./components/home/Form";
 import { useEffect } from "react";
 import { format } from "date-fns";
 import { CircleUserRound } from "lucide-react";
 import { LoginPage } from "./components/pages/Login";
 import { HomePage } from "./components/pages/Home";
+import { LoadingPage } from "./components/pages/Loading";
 
 function App() {
     return (
@@ -29,7 +27,7 @@ function MainApp() {
     if (!user) return <LoginPage/>;
 
     return (
-        <HomePage/>
+        <LoadingPage/>
     );
 }
 
