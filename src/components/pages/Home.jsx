@@ -6,9 +6,12 @@ import { useFinance } from "../../context/FinanceContext";
 import { useEffect } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { TransactionBlock } from "../home/TransactionBlock";
+import { DisplayModal } from "../modal/DisplayModal";
+import { useModal } from "../../context/ModalContext";
 
 export function HomePage() {
     const { user, finance, addTransaction, loading, clearTransactions } = useFinance();
+    const {openModal} = useModal()
 
     useEffect(() => {
         console.log(finance);
@@ -31,15 +34,18 @@ export function HomePage() {
     };
 
     return (
-        <main className="justify-center text-center text-white p-5">
+<>
+        <DisplayModal/>
+        <main className="justify-center text-center text-white p-5 bg-[#242424] h-screen">
             <div className="flex items-center justify-center">
-                <img src={prismLogo} className="logo" alt="Prism logo" />
-                <h1 className="font-medium">Prism Finance</h1>
+                <img src={prismLogo} className="logo h-[8em]" alt="Prism logo" />
+                <h1 className="font-medium text-4xl">Prism Finance</h1>
             </div>
             <Header />
             <div className="flex gap-3 justify-center">
                 <button className="default-button" onClick={exampleSubmit}>Transação Exemplo</button>
                 <button className="default-button" onClick={clearTransactions}>Limpar Transações</button>
+                <button className="default-button" onClick={() => openModal("editTransaction")}>Teste</button>
             </div>
             <div className="flex justify-center gap-2 mt-5">
                 <div>
@@ -47,7 +53,7 @@ export function HomePage() {
                 </div>
                 <section className="w-300 space-y-2">
                     <div className="py-4 bg-[#1e1e1e] rounded-2xl">
-                        {finance.transactions.length === 0 ? <p className="text-white/50">Nenhuma transação.</p> : <p className="text-white/50">Suas últimas transações — {finance.transactions.length}</p>}
+                        {finance.transactions.length > 0 ? <p className="text-white/50">Nenhuma transação.</p> : <p className="text-white/50">Suas últimas transações — {finance.transactions.length}</p>}
                     </div>
                     <AnimatePresence initial={false}>
                         {finance.transactions.map((t) => (
@@ -66,5 +72,6 @@ export function HomePage() {
                 </section>
             </div>
         </main>
+</>
     );
 }

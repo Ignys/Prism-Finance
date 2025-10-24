@@ -7,31 +7,46 @@ import { doc, getDoc } from "firebase/firestore";
 export function useAuthListener() {
   const [user, setUser] = useState(null);
   const [finance, setFinance] = useState(null);
-  const [loading, setLoading] = useState(true); // 🔹 garante que só renderiza depois do fetch
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
-      if (firebaseUser) {
-        setUser(firebaseUser);
+    // O listener é síncrono, mas o processamento dentro precisa ser aguardado manualmente
+    const unsub = onAuthStateChanged(auth, (firebaseUser) => {
+      // marcamos loading como true toda vez que o estado mudar
+      setLoading(true);
 
-        // pega dados do Firestore
-        const ref = doc(db, "users", firebaseUser.uid);
-        const snap = await getDoc(ref);
+      (async () => {
+        if (firebaseUser) {
+          setUser(firebaseUser);
 
-        if (snap.exists()) {
-          const data = snap.data();
-          if (data.finance.balance === undefined || data.finance.transactions === undefined) {
+          try {
+            const ref = doc(db, "users", firebaseUser.uid);
+            const snap = await getDoc(ref);
+
+            if (snap.exists()) {
+              const data = snap.data();
+              const financeData =
+                data.finance && data.finance.balance !== undefined
+                  ? data.finance
+                  : { balance: 0, despesas: 0, receitas: 0, transactions: [] };
+
+              setFinance(financeData);
+            } else {
+              // se o documento não existir
+              setFinance({ balance: 0, despesas: 0, receitas: 0, transactions: [] });
+            }
+          } catch (error) {
+            console.error("Erro ao buscar dados do Firestore:", error);
             setFinance({ balance: 0, despesas: 0, receitas: 0, transactions: [] });
           }
-          setFinance(data.finance || { balance: 0, despesas: 0, receitas: 0, transactions: [] });
         } else {
-          setFinance({ balance: 0, despesas: 0, receitas: 0, transactions: [] });
+          setUser(null);
+          setFinance(null);
         }
-      } else {
-        setUser(null);
-        setFinance(null);
-      }
-      setLoading(false);
+
+        // 🔹 Só aqui, depois de TUDO concluído, tiramos o loading
+        setLoading(false);
+      })();
     });
 
     return () => unsub();

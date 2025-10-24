@@ -1,7 +1,10 @@
 import { format } from "date-fns";
 import { CircleUserRound } from "lucide-react";
+import { useModal } from "../../context/ModalContext";
 
 export function TransactionBlock({ transaction }) {
+    const {openModal} = useModal()
+
     return (
         <div className=" bg-[#1e1e1e] rounded-2xl p-4 flex items-center justify-between">
             <img className="w-18 rounded-full" src={`src/assets/${transaction.fonte.origem}.png`} alt="Logo do banco" />
@@ -21,6 +24,7 @@ export function TransactionBlock({ transaction }) {
             </div>
             <div className="w-30 text-right">
                 <p className="text-xl">{transaction.status}</p>
+                <button onClick={() => openModal("editTransaction", transaction)}>editar</button>
             </div>
         </div>
     );
