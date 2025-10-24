@@ -21,6 +21,20 @@ export function FinanceProvider({ children }) {
         updateFinance(clearedFinance);
     };
 
+    const deleteTransaction = async (transaction) => {
+        const updatedTransactions = finance.transactions.filter((t) => t !== transaction);
+        const updatedDespesas = updatedTransactions.reduce((sum, t) => sum + (t.tipo === "despesa" ? t.valor.quantia : 0), 0);
+        const updatedReceitas = updatedTransactions.reduce((sum, t) => sum + (t.tipo === "receita" ? t.valor.quantia : 0), 0);
+        const updatedBalance = updatedReceitas - updatedDespesas;
+
+        updateFinance({
+            despesas: updatedDespesas,
+            receitas: updatedReceitas,
+            balance: updatedBalance,
+            transactions: updatedTransactions,
+        })
+    }
+
     const addTransaction = async (newTransaction) => {
         updateFinance({
             despesas: finance.despesas + (newTransaction.tipo === "despesa" ? newTransaction.valor.quantia : 0),
@@ -30,7 +44,17 @@ export function FinanceProvider({ children }) {
         });
     };
 
-    return <FinanceContext.Provider value={{ user, finance, updateFinance, addTransaction, clearTransactions, loading }}>{children}</FinanceContext.Provider>;
+    const value = {
+        user,
+        finance,
+        updateFinance,
+        addTransaction,
+        deleteTransaction,
+        clearTransactions,
+        loading,
+    };
+
+    return <FinanceContext.Provider value={value}>{children}</FinanceContext.Provider>;
 }
 
 // Hook de conveniência

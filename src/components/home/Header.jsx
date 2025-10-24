@@ -1,5 +1,6 @@
 import { Ellipsis, Pencil, Plus } from "lucide-react";
 import { useFinance } from "../../context/FinanceContext";
+import { useModal } from "../../context/ModalContext";
 
 export function Header() {
     const { balance, despesas, receitas } = useFinance().finance;
@@ -14,14 +15,16 @@ export function Header() {
 }
 
 function BalanceBox({ text, amount, children }) {
+    const { openModal } = useModal();
+
     const isBalance = text === "Saldo atual";
     function buttonClick() {
         if (isBalance) {
-            console.log("Editar saldo");
+            openModal("balanceModal");
         } else if (text === "Receitas") {
-            console.log("Adicionar receita");
+            openModal("addIncome");
         } else {
-            console.log("Adicionar despesa");
+            openModal("addSpending");
         }
     }
 
@@ -32,7 +35,7 @@ function BalanceBox({ text, amount, children }) {
                 <span className="text-2xl font-medium" style={isBalance ? { color: amount >= 0 ? "#4ade80" : "#f87171" } : {}}>
                     <span className=" font-light">R$</span> {amount.toFixed(2)}
                 </span>
-                <button className="bg-[#1a1a1a] rounded-full w-10 h-10 text-2xl flex items-center justify-center border-1 border-transparent hover:border-[#b964ff] duration-200" >
+                <button onClick={() => buttonClick()} className="bg-[#1a1a1a] rounded-full w-10 h-10 text-2xl flex items-center justify-center border-1 border-transparent hover:border-[#b964ff] duration-200" >
                     {!isBalance
                     ? <Plus size={22}/>
                     : <Ellipsis size={22}/>}

@@ -6,7 +6,7 @@ export function ModalStructure({ height, width, children }) {
     const background = useRef(null);
 
     useEffect(() => {
-        document.addEventListener("mousedown", handleClickOutside, true);
+        document.addEventListener("mouseup", handleClickOutside, true);
         document.addEventListener("keydown", handleClickOutside, true);
     }, []);
     const handleClickOutside = (e) => {

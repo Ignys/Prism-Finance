@@ -7,9 +7,9 @@ export function LoadingPage() {
                 <div className="flex items-center justify-center ">
                     <img src={prismLogo} className="log w-10" alt="Prism logo" />
                 </div>
-                <p className="text-center text-xl font-medium">Carregando...</p>
-                <div class="loading-bar-container">
-                    <div class="loading-bar-progress"></div>
+                <p className="text-center text-xl font-medium text-white">Carregando...</p>
+                <div className="loading-bar-container">
+                    <div className="loading-bar-progress"></div>
                 </div>
             </div>
         </div>

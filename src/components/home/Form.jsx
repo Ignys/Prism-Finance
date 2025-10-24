@@ -45,7 +45,7 @@ export function CreateTransaction() {
     };
 
     return (
-        <div className="p-10 bg-[#1e1e1e] rounded-2xl w-150">
+        <div className=" p-5 bg-[#1e1e1e] rounded-2xl">
             <div className="flex flex-col gap-5 my-5 *:p-2.5 *:bg-neutral-900 *:rounded-xl">
                 <input type="number" placeholder="Preço (use negativo para despesa)" value={price} onChange={(e) => setPrice(e.target.value)} />
                 <input type="text" placeholder="Nome (ex: Uber, iFood, Cliente X)" value={name} onChange={(e) => setName(e.target.value)} />
@@ -65,7 +65,7 @@ export function CreateTransaction() {
                     Pago / Recebido
                 </label>
             </div>
-            <button className="default-button" onClick={handleSubmit}>Submit</button>
+            <button className="default-button py-2 px-6" onClick={handleSubmit}>Submit</button>
         </div>
     );
 }

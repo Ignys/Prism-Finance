@@ -20,11 +20,7 @@ function App() {
 }
 
 function MainApp() {
-    const { user, finance, addTransaction, loading, clearTransactions } = useFinance();
-
-    useEffect(() => {
-        console.log(finance);
-    }, [finance]);
+    const { user, loading, } = useFinance();
 
     if (loading) return <LoadingPage />;
     if (!user) return <LoginPage />;

@@ -1,4 +1,5 @@
 import { useModal } from "../../context/ModalContext"
+import { AddIncome } from "./AddIncome";
 import { EditTransaction } from "./EditTransaction"
 import { AnimatePresence, motion } from "framer-motion";
 
@@ -27,6 +28,8 @@ export function DisplayModal() {
                         transition={{ duration: 0.2, ease: "easeOut" }}
                     >
                         {modal === "editTransaction" && <EditTransaction transaction={data}/>}
+                        {modal === "addIncome" && <AddIncome/>}
+                        {modal === "addSpending" && <AddSpending/>}
                     </motion.div>
                 </>
             )}
