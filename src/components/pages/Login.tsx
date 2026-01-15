@@ -1,9 +1,8 @@
 import { useState } from "react";
 import { signInWithEmailAndPassword } from "firebase/auth";
-import { auth } from "/src/firebase/firebaseClient.js";
-import prismLogo from "/src/assets/pngFinal.png";
-import { useFinance } from "/src/context/FinanceContext";
 import { LoadingPage } from "./Loading";
+import { auth } from "../../firebase/firebaseClient";
+import { useFinance } from "../../context/FinanceContext";
 
 export function LoginPage() {
     const { loading } = useFinance(); // 🔹 pega o loading global
@@ -12,7 +11,7 @@ export function LoginPage() {
     const [error, setError] = useState("");
     const [localLoading, setLocalLoading] = useState(false);
 
-    const handleLogin = async (e) => {
+    const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
         setError("");
         setLocalLoading(true);
@@ -34,7 +33,7 @@ export function LoginPage() {
     return (
         <div className="flex items-center justify-center p-20 bg-[#0f0f0f] text-white h-screen">
             <form onSubmit={handleLogin} className="bg-[#1e1e1e] p-10 rounded-2xl flex flex-col gap-5 w-[350px]">
-                <img src={prismLogo} alt="Logo" className="w-24 mx-auto mb-3" />
+                <img src={"pngFinal.png"} alt="Logo" className="w-24 mx-auto mb-3" />
                 <h1 className="text-2xl font-semibold text-center mb-5">Prism Finance</h1>
                 <input
                     type="email"

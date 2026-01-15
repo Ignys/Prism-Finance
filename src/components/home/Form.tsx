@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useFinance } from "../../context/FinanceContext";
 
-export function CreateTransaction() {
+export function CreateTransaction({ type }: { type?: "income" | "spending" }) {
     const [price, setPrice] = useState("");
     const [name, setName] = useState("");
     const [description, setDescription] = useState("");
@@ -13,32 +13,39 @@ export function CreateTransaction() {
     const [forWho, setForWho] = useState("");
     const { addTransaction } = useFinance();
 
+    const getType = () => {
+        if (!type) {
+            if (Number(price) > 0) {
+                return "income";
+            } else if (Number(price) < 0) {
+                return "spending";
+            }
+        } else {
+            return type;
+        }
+        return "income";
+    };
+
     const handleSubmit = () => {
         const transaction = {
             id: `${date}-${name || "transacao"}-${Math.floor(Math.random() * 1000)}`,
-            tipo: price >= 0 ? "receita" : "despesa",
-            valor: {
-                quantia: Math.abs(parseFloat(price)),
-                moeda: "BRL",
+            type: getType(),
+            value: Number(price),
+            date: date || new Date().toISOString().split("T")[0],
+            source: {
+                platform: name,
+                bank: bank,
             },
-            data: date || new Date().toISOString().split("T")[0],
-            fonte: {
-                plataforma: name,
-                origem: bank,
-            },
-            categoria: {
+            category: {
                 principal: category,
-                subcategoria: subCategory || null,
+                sub: subCategory || null,
             },
-            beneficiario: {
-                para: forWho || "Eu",
-            },
-            descricao: description,
-            status: checked ? "Efetuado" : "Pendente",
+            beneficiary: forWho || "Eu",
+            description: description,
+            status: checked,
             meta: {
                 criado_em: new Date().toISOString(),
                 atualizado_em: null,
-                observacoes: [],
             },
         };
         addTransaction(transaction);
@@ -65,7 +72,9 @@ export function CreateTransaction() {
                     Pago / Recebido
                 </label>
             </div>
-            <button className="default-button py-2 px-6" onClick={handleSubmit}>Submit</button>
+            <button className="default-button py-2 px-6" onClick={handleSubmit}>
+                Submit
+            </button>
         </div>
     );
 }

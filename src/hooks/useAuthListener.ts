@@ -1,21 +1,32 @@
 // src/hooks/useAuthListener.js
 import { useEffect, useState } from "react";
-import { onAuthStateChanged } from "firebase/auth";
+import { onAuthStateChanged, User } from "firebase/auth";
 import { auth, db } from "../firebase/firebaseClient";
 import { doc, getDoc } from "firebase/firestore";
 
+interface Finance {
+  balance: number;
+  despesas: number;
+  receitas: number;
+  transactions: any[];
+}
+
+const defaultFinance: Finance = {
+  balance: 0,
+  despesas: 0,
+  receitas: 0,
+  transactions: []
+};
+
 export function useAuthListener() {
-  const [user, setUser] = useState(null);
-  const [finance, setFinance] = useState(null);
+  const [user, setUser] = useState<User | null>(null);
+  const [finance, setFinance] = useState<Finance | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // O listener é síncrono, mas o processamento dentro precisa ser aguardado manualmente
-    const unsub = onAuthStateChanged(auth, (firebaseUser) => {
-      // marcamos loading como true toda vez que o estado mudar
-      setLoading(true);
-
-      (async () => {
+    setLoading(true);
+    const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
+      try {
         if (firebaseUser) {
           setUser(firebaseUser);
 
@@ -25,28 +36,26 @@ export function useAuthListener() {
 
             if (snap.exists()) {
               const data = snap.data();
-              const financeData =
+              const financeData: Finance =
                 data.finance && data.finance.balance !== undefined
                   ? data.finance
-                  : { balance: 0, despesas: 0, receitas: 0, transactions: [] };
+                  : defaultFinance;
 
               setFinance(financeData);
             } else {
-              // se o documento não existir
-              setFinance({ balance: 0, despesas: 0, receitas: 0, transactions: [] });
+              setFinance(defaultFinance);
             }
           } catch (error) {
             console.error("Erro ao buscar dados do Firestore:", error);
-            setFinance({ balance: 0, despesas: 0, receitas: 0, transactions: [] });
+            setFinance(defaultFinance);
           }
         } else {
           setUser(null);
           setFinance(null);
         }
-
-        // 🔹 Só aqui, depois de TUDO concluído, tiramos o loading
+      } finally {
         setLoading(false);
-      })();
+      }
     });
 
     return () => unsub();

@@ -1,12 +1,10 @@
 // src/App.jsx
-import { Header } from "../../components/home/Header";
-import prismLogo from "../../assets/pngFinal.png";
-import { CreateTransaction } from "../../components/home/Form";
+import { Header } from "../home/Header";
+import { CreateTransaction } from "../home/Form";
 import { useFinance } from "../../context/FinanceContext";
 import { AnimatePresence, motion } from "framer-motion";
 import { TransactionBlock } from "../home/TransactionBlock";
 import { DisplayModal } from "../modal/DisplayModal";
-import { useModal } from "../../context/ModalContext";
 
 export function HomePage() {
     const { finance, addTransaction, clearTransactions } = useFinance();
@@ -14,27 +12,25 @@ export function HomePage() {
     const exampleSubmit = () => {
         const transaction = {
             id: Date.now().toString(),
-            tipo: "despesa",
-            valor: { quantia: 50, moeda: "BRL" },
-            data: new Date().toISOString().split("T")[0],
-            fonte: { plataforma: "Uber", origem: "Nubank" },
-            categoria: { principal: "Transporte", subcategoria: null },
-            beneficiario: { para: "Xuxu" },
-            descricao: "Corrida",
-            status: "Efetuado",
+            type: "despesa",
+            value: 29.99,
+            date: new Date().toISOString().split("T")[0],
+            source: { platform: "Uber", bank: "Nubank" },
+            category: { principal: "Transporte", sub: null },
+            beneficiary: "Xuxu",
+            description: "Corrida",
+            status: true,
             meta: { criado_em: new Date().toISOString(), atualizado_em: null, observacoes: [] },
         };
         addTransaction(transaction);
     };
-
+    if (!finance) {
+        return <p>Carregando finanças...</p>;
+    }
     return (
         <>
             <DisplayModal />
             <main className="justify-center text-center text-white p-5 ">
-                <div className="flex items-center justify-center">
-                    <img src={prismLogo} className="logo h-[8em]" alt="Prism logo" />
-                    <h1 className="font-medium text-4xl">Prism Finance</h1>
-                </div>
                 <Header />
                 <div className="flex gap-3 justify-center">
                     <button className="default-button py-2 px-6" onClick={exampleSubmit}>Transação Exemplo</button>

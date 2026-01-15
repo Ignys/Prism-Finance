@@ -1,9 +1,10 @@
-import { CreateTransaction } from "../home/Form";
 import { ModalStructure } from "./ModalStructure";
 
-export function AddIncome() {
+export function BalanceModal() {
     return (
         <ModalStructure height="auto" width="600px">
-                <CreateTransaction/>
+                <div>
+                    <h1>Saldo inicial</h1>
+                </div>
         </ModalStructure>);
 }
