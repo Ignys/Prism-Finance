@@ -3,38 +3,45 @@ import { ModalProvider } from "./context/ModalContext";
 import { LoadingPage } from "./components/pages/Loading";
 import { LoginPage } from "./components/pages/Login";
 import { HomePage } from "./components/pages/Home";
-import { FinanceProvider, useFinance } from "./context/FinanceContext";
-import { Navigate, Route, Routes, BrowserRouter } from "react-router-dom";
+import { FinanceProvider, useFinanceSession } from "./context/FinanceContext";
 import { IncomePage } from "./components/pages/Income";
 import { SpendingPage } from "./components/pages/Spending";
+import { BalancePage } from "./components/pages/Balance";
+import { PageProvider, usePage } from "./context/PageContext";
+import "./lib/chart";
+import { useEffect } from "react";
+
 
 function App() {
     return (
-        <BrowserRouter>
-            <FinanceProvider>
+        <FinanceProvider>
+            <PageProvider>
                 <ModalProvider>
                     <MainApp />
                 </ModalProvider>
-            </FinanceProvider>
-        </BrowserRouter>
+            </PageProvider>
+        </FinanceProvider>
     );
 }
 
 function MainApp() {
-    const { user, loading } = useFinance();
+    const { user, loading } = useFinanceSession();
+    const { currentPage, setCurrentPage } = usePage();
+
+    useEffect(() => {
+        if (user) {
+            setCurrentPage("home");
+        }
+    }, [user, setCurrentPage]);
 
     if (loading) return <LoadingPage />;
     if (!user) return <LoginPage />;
 
-    return (
-        <Routes>
-            <Route path="/login" element={<LoginPage />} />
-            <Route path="/" element={user ? <Navigate to="/home" /> : <Navigate to="/login" />} />
-            <Route path="/home" element={user ? <HomePage /> : <Navigate to="/login" />} />
-            <Route path="/spending" element={user ? <SpendingPage /> : <Navigate to="/login" />} />
-            <Route path="/income" element={user ? <IncomePage /> : <Navigate to="/login" />} />
-        </Routes>
-    );
+    if (currentPage === "spending") return <SpendingPage />;
+    if (currentPage === "income") return <IncomePage />;
+    if (currentPage === "balance") return <BalancePage />;
+
+    return <HomePage />;
 }
 
 export default App;

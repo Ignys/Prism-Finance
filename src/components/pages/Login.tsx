@@ -2,10 +2,10 @@ import { useState } from "react";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { LoadingPage } from "./Loading";
 import { auth } from "../../firebase/firebaseClient";
-import { useFinance } from "../../context/FinanceContext";
+import { useFinanceSession } from "../../context/FinanceContext";
 
 export function LoginPage() {
-    const { loading } = useFinance(); // 🔹 pega o loading global
+    const { loading } = useFinanceSession();
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [error, setError] = useState("");
@@ -18,7 +18,6 @@ export function LoginPage() {
 
         try {
             await signInWithEmailAndPassword(auth, email, password);
-            // o FinanceProvider vai cuidar do redirecionamento
         } catch (err) {
             console.error(err);
             setError("E-mail ou senha incorretos.");
@@ -27,7 +26,6 @@ export function LoginPage() {
         setLocalLoading(false);
     };
 
-    // 🔹 mostra o loader se o contexto ainda estiver carregando
     if (loading) return <LoadingPage />;
 
     return (
@@ -54,11 +52,7 @@ export function LoginPage() {
 
                 {error && <p className="text-red-400 text-sm text-center">{error}</p>}
 
-                <button
-                    type="submit"
-                    disabled={localLoading}
-                    className="bg-green-600 hover:bg-green-700 px-4 py-2 rounded-lg transition-colors"
-                >
+                <button type="submit" disabled={localLoading} className="bg-green-600 hover:bg-green-700 px-4 py-2 rounded-lg transition-colors">
                     {localLoading ? "Entrando..." : "Entrar"}
                 </button>
             </form>

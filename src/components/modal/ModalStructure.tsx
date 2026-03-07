@@ -1,16 +1,16 @@
 import { useEffect, useRef } from "react";
 import { useModal } from "../../context/ModalContext";
 
-export function ModalStructure({ height, width, children }) {
+export function ModalStructure({ height, width, children }: { height: number, width: number, children: React.ReactNode }) {
     const {closeModal} = useModal()
-    const background = useRef(null);
+    const background = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         document.addEventListener("mouseup", handleClickOutside, true);
         document.addEventListener("keydown", handleClickOutside, true);
     }, []);
-    const handleClickOutside = (e) => {
-        if (e instanceof MouseEvent && background.current && !background.current.contains(e.target)) {
+    const handleClickOutside = (e: MouseEvent | KeyboardEvent) => {
+        if (e instanceof MouseEvent && background.current && e.target instanceof Node && !background.current.contains(e.target)) {
             closeModal();
         } else if (e instanceof KeyboardEvent && e.key === "Escape") {
             closeModal();

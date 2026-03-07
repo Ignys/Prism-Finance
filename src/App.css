@@ -35,6 +35,26 @@ input[type="date"]::-webkit-clear-button {
     animation: loadAnimation 2s linear infinite;
 }
 
+.beige {
+    background-color: #f7f4d5;
+}
+
+.palm {
+    background-color: #839958;
+}
+
+.evergreen {
+    background-color: #839958;
+}
+
+.rosy {
+    background-color: #d3968c;
+}
+
+.teal {
+    background-color: #105666;
+}
+
 @keyframes loadAnimation {
     0% {
         width: 0%;

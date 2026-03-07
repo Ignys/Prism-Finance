@@ -1,18 +1,29 @@
 import { format } from "date-fns";
-import { CircleUserRound, Pencil, Trash } from "lucide-react";
+import { CircleUserRound, Pencil, Trash, Wallet } from "lucide-react";
 import { useModal } from "../../context/ModalContext";
-import { Transaction, useFinance } from "../../context/FinanceContext";
+import { DEFAULT_WALLET_ID, Transaction, useFinanceActions, useFinanceWallets, Wallet as FinanceWallet } from "../../context/FinanceContext";
 import { EditTransaction } from "../modal/EditTransaction";
 
-export function TransactionBlock({ transaction }: {transaction: Transaction}) {
-    const { openModal } = useModal()
-    const { deleteTransaction } = useFinance()
+const REMOVED_WALLET: FinanceWallet = {
+    id: "removedWallet",
+    name: "Carteira Removida",
+    icon: "/wallet.svg",
+    balance: 0,
+    startBalance: 0,
+};
+
+export function TransactionBlock({ transaction }: { transaction: Transaction }) {
+    const { openModal } = useModal();
+    const wallets = useFinanceWallets();
+    const { deleteTransaction } = useFinanceActions();
+
+    const wallet = wallets.find((item) => item.id === transaction.inWallet) ?? REMOVED_WALLET;
 
     return (
-        <div className="bg-[#1e1e1e] rounded-2xl p-4 flex items-center justify-between">
-            <img className="w-18 rounded-full" src={`${transaction.source.bank}.png`} alt="Logo do banco" />
-            <div className="w-1/6 text-left">
-                <h2 className="text-xl font-medium">{transaction.source.platform}</h2>
+        <div className="bg-[#1e1e1e] rounded-2xl p-3 flex items-center justify-between">
+            {wallet.id === DEFAULT_WALLET_ID ? <Wallet className="w-12 rounded-xl" size={64} strokeWidth={1.2} /> : <img src={wallet.icon} alt="Wallet Icon" className="w-12 rounded-xl" />}
+            <div className="w-2/6 text-left">
+                <h2 className="text-xl font-medium">{wallet.name}</h2>
                 <p className="text-lg">{transaction.description}</p>
                 <p className="text-lg/1 flex items-center gap-1 text-neutral-300">
                     <CircleUserRound width={20} /> {transaction.beneficiary}
@@ -25,11 +36,15 @@ export function TransactionBlock({ transaction }: {transaction: Transaction}) {
                 <p className="text-lg">{transaction.category.principal}</p>
                 <p className="text-lg text-neutral-300">{format(new Date(transaction.date), "dd/MM/yyyy")}</p>
             </div>
-            <div className="w-30 flex flex-col text-right gap-2">
+            <div className=" flex flex-col text-right gap-2">
                 <p className="text-xl">{transaction.status}</p>
                 <div className="flex justify-end gap-1">
-                    <button onClick={() => openModal(<EditTransaction transaction={transaction}/>) } className="default-button p-2"><Pencil size={20} /></button>
-                    <button onClick={() => deleteTransaction(transaction)} className="default-button p-2"><Trash size={20} /></button>
+                    <button onClick={() => openModal(<EditTransaction transaction={transaction} />)} className="default-button p-2">
+                        <Pencil size={20} />
+                    </button>
+                    <button onClick={() => deleteTransaction(transaction)} className="default-button p-2">
+                        <Trash size={20} />
+                    </button>
                 </div>
             </div>
         </div>

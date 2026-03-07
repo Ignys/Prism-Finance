@@ -1,10 +1,13 @@
 @import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Azeret+Mono:ital,wght@0,100..900;1,100..900&display=swap');
+
 
 :root {
     font-family: "Spline Sans", sans-serif;
     line-height: 1.5;
     font-weight: 400;
-    background-color: #242424;
+    background-color: #0e0e10;
 
     font-synthesis: none;
     text-rendering: optimizeLegibility;
@@ -46,27 +49,15 @@ body::-webkit-scrollbar-thumb {
     font-size: 1em;
     font-weight: 500;
     font-family: inherit;
-    background-color: #111111;
+    background-color: #2e2e2e;
     cursor: pointer;
     transition: border-color 0.25s;
 }
 .default-button:hover {
-    border-color: #b964ff;
+    border-color: #367d88;
 }
 .default-button:focus,
 .default-button:focus-visible {
     outline: 4px auto -webkit-focus-ring-color;
 }
 
-@media (prefers-color-scheme: light) {
-    :root {
-        color: #213547;
-        background-color: #ffffff;
-    }
-    a:hover {
-        color: #747bff;
-    }
-    button {
-        background-color: #f9f9f9;
-    }
-}
