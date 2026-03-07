@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { motion } from "framer-motion";
-import { TrendingUp, TrendingDown, CreditCard, Home, CircleDollarSign } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
+import { TrendingUp, TrendingDown, CreditCard, Home, Wallet } from "lucide-react";
 import { useFinanceSummary } from "../../context/FinanceContext";
 import { useModal } from "../../context/ModalContext";
 import { AddIncome } from "../modal/AddIncome";
@@ -10,8 +10,8 @@ import { AppPage, usePage } from "../../context/PageContext";
 const iconSize = 24;
 
 const NAV_ITEMS: { label: string; page: AppPage; icon: React.ReactNode }[] = [
-    { label: "Home", page: "home", icon: <Home size={iconSize} /> },
-    { label: "Saldo", page: "balance", icon: <CircleDollarSign size={iconSize} /> },
+    { label: "Início", page: "home", icon: <Home size={iconSize} /> },
+    { label: "Carteiras", page: "balance", icon: <Wallet size={iconSize} /> },
     { label: "Receitas", page: "income", icon: <TrendingUp size={iconSize} /> },
     { label: "Despesas", page: "spending", icon: <TrendingDown size={iconSize} /> },
     { label: "Fatura", page: "statement", icon: <CreditCard size={iconSize} /> },
@@ -53,6 +53,7 @@ export function Header() {
                 }}
             >
                 {/* ── LEFT: Nav ── */}
+
                 <nav className="relative flex items-center gap-1 rounded-[11px] bg-white/[0.04] p-[3px]" onMouseLeave={() => setHoveredNav(null)}>
                     {NAV_ITEMS.map(({ label, page, icon }) => {
                         const isActive = currentPage === page;
@@ -76,7 +77,10 @@ export function Header() {
                                     <motion.span layoutId="nav-indicator" className="absolute inset-0 rounded-lg bg-white/[0.05]" transition={{ type: "spring", stiffness: 500, damping: 40 }} />
                                 )}
 
-                                <span className="relative z-10 flex items-center gap-1.5">{icon}</span>
+                                <span className="relative z-10 flex items-center gap-2">
+                                    {icon}
+                                    <span className="text-sm uppercase overflow-hidden whitespace-nowrap">{label}</span>
+                                </span>
                             </button>
                         );
                     })}
@@ -86,7 +90,7 @@ export function Header() {
                 <div className="flex items-center gap-2">
                     {METRIC_ITEMS.map(({ label, amountKey, modal, isBalance }, i) => {
                         const amount: number = summary[amountKey];
-                        const amountColor = isBalance ? (amount >= 0 ? "text-emerald-300" : "text-red-300") : "text-white/85";
+                        const amountColor = isBalance ? (amount >= 0 ? "text-emerald-300" : "text-red-400") : "text-white/85";
 
                         return (
                             <div key={label + i} className="contents">
@@ -94,8 +98,8 @@ export function Header() {
                                 {!isBalance ? (
                                     <div className="group relative flex cursor-pointer items-center gap-2 rounded-[9px] border border-transparent px-5 py-1.5 transition-all duration-200 hover:border-white/[0.08] hover:bg-white/[0.05]">
                                         <div className="flex flex-col gap-px transition-opacity duration-150 group-hover:opacity-0">
-                                            <span className="whitespace-nowrap text-[10px] font-medium uppercase tracking-[0.08em] text-white/30">{label}</span>
-                                            <span className={`whitespace-nowrap text-[13.5px] font-normal ${amountColor}`} style={{ fontFamily: "'Azeret Mono', monospace" }}>
+                                            <span className="whitespace-nowrap text-[12px] font-light uppercase tracking-[0.2em] text-white/30">{label}</span>
+                                            <span className={`whitespace-nowrap text-[15px] font-normal ${amountColor}`} style={{ fontFamily: "'Azeret Mono', monospace" }}>
                                                 R$ {amount.toFixed(2)}
                                             </span>
                                         </div>
@@ -116,8 +120,8 @@ export function Header() {
                                 ) : (
                                     <div className=" flex items-center gap-2 rounded-[9px] border border-transparent px-5 py-1.5 transition-all duration-200">
                                         <div className="flex flex-col gap-px transition-opacity duration-150 group-hover:opacity-0">
-                                            <span className="whitespace-nowrap text-[10px] font-medium uppercase tracking-[0.08em] text-white/30">{label}</span>
-                                            <span className={`whitespace-nowrap text-[13.5px] font-normal ${amountColor}`} style={{ fontFamily: "'Azeret Mono', monospace" }}>
+                                            <span className="whitespace-nowrap text-[12px] font-light uppercase tracking-[0.2em] text-white/30">{label}</span>
+                                            <span className={`whitespace-nowrap text-[15px] font-normal ${amountColor}`} style={{ fontFamily: "'Azeret Mono', monospace" }}>
                                                 R$ {amount.toFixed(2)}
                                             </span>
                                         </div>
