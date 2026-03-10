@@ -5,9 +5,9 @@ import { ModalStructure } from "./ModalStructure";
 
 export function AddWallet() {
     const [name, setName] = useState("");
-    const [icon, setIcon] = useState("/assets/Nubank.png");
+    const [icon, setIcon] = useState("/Nubank.png");
     const [startBalance, setStartBalance] = useState("");
-    const [iconPreview, setIconPreview] = useState("/assets/Nubank.png");
+    const [iconPreview, setIconPreview] = useState("/Nubank.png");
     const { addWallet } = useFinanceActions();
 
     const handleIconUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -35,13 +35,18 @@ export function AddWallet() {
             id: uuidv4(),
             name: name.trim(),
             icon,
+            type: "checking",
             balance: Number(startBalance),
-            startBalance: Number(startBalance),
+            initialBalance: Number(startBalance),
+            currency: "BRL",
+            color: "#3B82F6",
+            isActive: true,
+            createdAt: new Date().toISOString(),
         });
 
         setName("");
-        setIcon("/assets/Nubank.png");
-        setIconPreview("/assets/Nubank.png");
+        setIcon("/Nubank.png");
+        setIconPreview("/Nubank.png");
         setStartBalance("");
 
         alert("Carteira adicionada com sucesso!");

@@ -1,7 +1,6 @@
+@import url("https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Azeret+Mono:ital,wght@0,100..900;1,100..900&display=swap");
 @import "tailwindcss";
-@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Azeret+Mono:ital,wght@0,100..900;1,100..900&display=swap');
-
 
 :root {
     font-family: "Spline Sans", sans-serif;
@@ -16,32 +15,30 @@
 }
 
 body {
-  --sb-track-color: #242424;
-  --sb-thumb-color: #424242;
-  --sb-size: 8px;
+    --sb-track-color: #242424;
+    --sb-thumb-color: #424242;
+    --sb-size: 8px;
 }
 
 body::-webkit-scrollbar {
-  width: var(--sb-size);
+    width: var(--sb-size);
 }
 
 body::-webkit-scrollbar-track {
-  background: var(--sb-track-color);
-  border-radius: 50px;
+    background: var(--sb-track-color);
+    border-radius: 50px;
 }
 
 body::-webkit-scrollbar-thumb {
-  background: var(--sb-thumb-color);
-  border-radius: 32px;
+    background: var(--sb-thumb-color);
+    border-radius: 32px;
 }
 
 @supports not selector(::-webkit-scrollbar) {
-  body {
-      scrollbar-color: var(--sb-thumb-color)
-                     var(--sb-track-color);
-  }
+    body {
+        scrollbar-color: var(--sb-thumb-color) var(--sb-track-color);
+    }
 }
-
 
 .default-button {
     border-radius: 8px;
@@ -53,11 +50,12 @@ body::-webkit-scrollbar-thumb {
     cursor: pointer;
     transition: border-color 0.25s;
 }
+
 .default-button:hover {
     border-color: #367d88;
 }
+
 .default-button:focus,
 .default-button:focus-visible {
     outline: 4px auto -webkit-focus-ring-color;
 }
-

@@ -1,9 +1,5 @@
-import { CreateTransaction } from "../home/Form";
-import { ModalStructure } from "./ModalStructure";
+import { AddTransactionModal } from "./AddTransaction";
 
 export function AddSpending() {
-    return (
-        <ModalStructure height="auto" width="600px">
-                <CreateTransaction type="spending"/>
-        </ModalStructure>);
+    return <AddTransactionModal type="spending" />;
 }

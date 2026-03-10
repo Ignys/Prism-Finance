@@ -1,6 +1,6 @@
 import { createContext, ReactNode, useContext, useMemo, useState } from "react";
 
-export type AppPage = "home" | "spending" | "income" | "balance" | "statement";
+export type AppPage = "home" | "spending" | "income" | "balance" | "beneficiaries" | "categories" | "tags" | "statement" | "transactions";
 
 interface PageContextType {
     currentPage: AppPage;

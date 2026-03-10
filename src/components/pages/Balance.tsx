@@ -1,64 +1,116 @@
-import { Wallet } from "lucide-react";
-import { DEFAULT_WALLET_ID, useFinanceWallets } from "../../context/FinanceContext";
-import { Header } from "../home/Header";
-import { DisplayModal } from "../modal/DisplayModal";
-import { AddWallet } from "../modal/AddWallet";
+import { motion } from "framer-motion";
+import { Plus, Star, Wallet as WalletIcon } from "lucide-react";
+import { DEFAULT_WALLET_ID, useFinanceActions, useFinanceFavoriteWallet, useFinanceSummary, useFinanceWallets } from "../../context/FinanceContext";
 import { useModal } from "../../context/ModalContext";
+import { AuthShell } from "../layout/AuthShell";
+import { AddWallet } from "../modal/AddWallet";
+
+const currencyFormatter = new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+    minimumFractionDigits: 2,
+});
 
 export function BalancePage() {
     const wallets = useFinanceWallets();
+    const summary = useFinanceSummary();
+    const favoriteWalletId = useFinanceFavoriteWallet();
+    const { setFavoriteWallet } = useFinanceActions();
     const { openModal } = useModal();
+    const activeWallets = wallets.filter((wallet) => wallet.isActive);
+    const favoriteWallet = wallets.find((wallet) => wallet.id === favoriteWalletId) ?? wallets[0] ?? null;
+
+    const metrics = [
+        { label: "Saldo total", value: currencyFormatter.format(summary.balance) },
+        { label: "Favorita", value: favoriteWallet?.name ?? "Nenhuma" },
+    ];
 
     return (
-        <>
-            <DisplayModal />
-            <main className="justify-center text-center text-white p-5 ">
-                <Header />
-                <div className="flex justify-center gap-2 mt-5">
-                    <section className="space-y-2">
-                        <div className="flex flex-col gap-1 w-90">
-                            {wallets.map((wallet) => {
-                                return wallet.id === DEFAULT_WALLET_ID ? (
-                                    <div key={wallet.id} className="bg-neutral-900 p-2 rounded-lg items-center flex gap-2">
-                                        <Wallet className="rounded-xl p-2" size={64} color="#ffffff" strokeWidth={1.8} />
-                                        <div className="flex flex-col text-left ml-2">
-                                            <span className="text-base font-light">Sua carteira</span>
-                                            <span className="text-lg font-medium">R${wallet.balance.toFixed(2)}</span>
+        <AuthShell mainClassName="text-white">
+            <div className="mx-auto flex w-full max-w-6xl flex-col gap-2 px-6 pb-10 lg:flex-row lg:items-start">
+                <section className="w-full lg:w-[66%]">
+                    <div className="relative overflow-hidden rounded-2xl border border-white/[0.08] bg-[#111111] p-4 shadow-[0_24px_60px_-32px_rgba(0,0,0,0.9)]">
+                        <div className="pointer-events-none absolute -right-10 -top-10 h-32 w-32 rounded-full bg-sky-500/10 blur-3xl" />
+                        <div className="pointer-events-none absolute -bottom-20 -left-20 h-40 w-40 rounded-full bg-emerald-500/10 blur-3xl" />
+
+                        <div className="relative flex flex-wrap items-center justify-between gap-3">
+                            <div className="text-left">
+                                <p className="text-lg font-medium text-white">Suas carteiras</p>
+                            </div>
+
+                            <button
+                                type="button"
+                                onClick={() => openModal(<AddWallet />)}
+                                className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-white/[0.1] bg-white/[0.04] px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.05em] text-white/80 transition-all hover:border-white/[0.18] hover:bg-white/[0.08]"
+                            >
+                                <Plus size={14} />
+                                Criar carteira
+                            </button>
+                        </div>
+
+                        <div className="relative mt-4 space-y-2">
+                            {wallets.map((wallet, index) => {
+                                const isFavorite = wallet.id === favoriteWalletId;
+                                const isDefault = wallet.id === DEFAULT_WALLET_ID;
+
+                                return (
+                                    <motion.article
+                                        key={wallet.id}
+                                        initial={{ opacity: 0, y: 14 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        transition={{ duration: 0.22, delay: index * 0.03, ease: "easeOut" }}
+                                        className="flex items-center justify-between gap-3 rounded-xl border border-white/[0.06] bg-white/[0.02] p-3"
+                                    >
+                                        <div className="flex min-w-0 items-center gap-3">
+                                            {isDefault ? (
+                                                <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
+                                                    <WalletIcon size={30} className="text-white/80" strokeWidth={1.7} />
+                                                </div>
+                                            ) : (
+                                                <img src={wallet.icon} className="h-14 w-14 rounded-xl border border-white/10 object-cover" alt={wallet.name} />
+                                            )}
+
+                                            <div className="min-w-0 text-left">
+                                                <p className="truncate text-[15px] font-medium text-white">{isDefault ? "Carteira principal" : wallet.name}</p>
+                                                <p className="text-sm font-normal text-white/60 tracking-widest">{currencyFormatter.format(wallet.balance)}</p>
+                                            </div>
                                         </div>
-                                    </div>
-                                ) : (
-                                    <div key={wallet.id} className="bg-neutral-900 p-2 rounded-lg flex items-center gap-2">
-                                        <img src={wallet.icon} className="w-[64px] rounded-lg" alt="" />
-                                        <div className="flex flex-col text-left ml-2">
-                                            <span className="text-base font-light">{wallet.name}</span>
-                                            <span className="text-lg font-medium">R${wallet.balance.toFixed(2)}</span>
-                                        </div>
-                                    </div>
+
+                                        <button
+                                            type="button"
+                                            onClick={() => void setFavoriteWallet(wallet.id)}
+                                            className={[
+                                                "inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.04em] transition-all",
+                                                isFavorite
+                                                    ? "border-amber-200/35 bg-amber-300/10 text-amber-200"
+                                                    : "border-white/[0.12] bg-white/[0.03] text-white/70 hover:border-white/[0.2] hover:text-white",
+                                            ].join(" ")}
+                                        >
+                                            <Star size={14} className={isFavorite ? "fill-amber-200 text-amber-200" : ""} />
+                                            {isFavorite ? "Favorita" : "Marcar favorita"}
+                                        </button>
+                                    </motion.article>
                                 );
                             })}
-                            <div>
-                                <button onClick={() => openModal(<AddWallet />)} className=" w-full bg-neutral-950 hover:bg-neutral-900 duration-200 p-2 rounded-lg">
-                                    Criar nova carteira
-                                </button>
-                            </div>
                         </div>
-                    </section>
-                    <section className="flex flex-col gap-2">
-                        <div className="p-3 bg-neutral-900 w-50 text-left rounded-lg">
-                            <p className="font-light text-white/50">Anterior</p>
-                            <span>R$0.00</span>
-                        </div>
-                        <div className="p-3 bg-neutral-900 w-50 text-left rounded-lg">
-                            <p className="font-light text-white/50">Atual</p>
-                            <span>R$0.00</span>
-                        </div>
-                        <div className="p-3 bg-neutral-900 w-50 text-left rounded-lg">
-                            <p className="font-light text-white/50">Projecao</p>
-                            <span>R$0.00</span>
-                        </div>
-                    </section>
-                </div>
-            </main>
-        </>
+                    </div>
+                </section>
+
+                <aside className="w-full space-y-2 lg:w-[34%]">
+                    {metrics.map((metric, index) => (
+                        <motion.div
+                            key={metric.label}
+                            initial={{ opacity: 0, y: 12 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.2, delay: 0.05 + index * 0.04, ease: "easeOut" }}
+                            className="rounded-2xl border border-white/[0.08] bg-[#111111] p-4 text-left shadow-[0_24px_60px_-32px_rgba(0,0,0,0.9)]"
+                        >
+                            <p className="text-xs uppercase tracking-[0.2em] text-white/35">{metric.label}</p>
+                            <p className="mt-1 text-lg font-medium text-white">{metric.value}</p>
+                        </motion.div>
+                    ))}
+                </aside>
+            </div>
+        </AuthShell>
     );
 }

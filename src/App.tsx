@@ -1,16 +1,18 @@
+import { Suspense, lazy, useEffect } from "react";
 import "./App.css";
-import { ModalProvider } from "./context/ModalContext";
 import { LoadingPage } from "./components/pages/Loading";
-import { LoginPage } from "./components/pages/Login";
-import { HomePage } from "./components/pages/Home";
 import { FinanceProvider, useFinanceSession } from "./context/FinanceContext";
-import { IncomePage } from "./components/pages/Income";
-import { SpendingPage } from "./components/pages/Spending";
-import { BalancePage } from "./components/pages/Balance";
+import { ModalProvider } from "./context/ModalContext";
 import { PageProvider, usePage } from "./context/PageContext";
 import "./lib/chart";
-import { useEffect } from "react";
 
+const LoginPage = lazy(() => import("./components/pages/Login").then((module) => ({ default: module.LoginPage })));
+const HomePage = lazy(() => import("./components/pages/Home").then((module) => ({ default: module.HomePage })));
+const BalancePage = lazy(() => import("./components/pages/Balance").then((module) => ({ default: module.BalancePage })));
+const BeneficiariesPage = lazy(() => import("./components/pages/Beneficiaries").then((module) => ({ default: module.BeneficiariesPage })));
+const CategoriesPage = lazy(() => import("./components/pages/Categories").then((module) => ({ default: module.CategoriesPage })));
+const TagsPage = lazy(() => import("./components/pages/Tags").then((module) => ({ default: module.TagsPage })));
+const TransactionsPage = lazy(() => import("./components/pages/TransactionsPage").then((module) => ({ default: module.TransactionsPage })));
 
 function App() {
     return (
@@ -35,13 +37,24 @@ function MainApp() {
     }, [user, setCurrentPage]);
 
     if (loading) return <LoadingPage />;
-    if (!user) return <LoginPage />;
 
-    if (currentPage === "spending") return <SpendingPage />;
-    if (currentPage === "income") return <IncomePage />;
-    if (currentPage === "balance") return <BalancePage />;
+    if (!user) {
+        return (
+            <Suspense fallback={<LoadingPage />}>
+                <LoginPage />
+            </Suspense>
+        );
+    }
 
-    return <HomePage />;
+    let page = <HomePage />;
+
+    if (currentPage === "transactions") page = <TransactionsPage />;
+    if (currentPage === "balance") page = <BalancePage />;
+    if (currentPage === "beneficiaries") page = <BeneficiariesPage />;
+    if (currentPage === "categories") page = <CategoriesPage />;
+    if (currentPage === "tags") page = <TagsPage />;
+
+    return <Suspense fallback={<LoadingPage />}>{page}</Suspense>;
 }
 
 export default App;

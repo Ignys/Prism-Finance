@@ -1,27 +1,24 @@
-import { format } from "date-fns";
-import { CircleUserRound, Pencil, Trash, Wallet } from "lucide-react";
+import { CircleUserRound, Pencil, Trash, Wallet as WalletIcon } from "lucide-react";
 import { useModal } from "../../context/ModalContext";
-import { DEFAULT_WALLET_ID, Transaction, useFinanceActions, useFinanceWallets, Wallet as FinanceWallet } from "../../context/FinanceContext";
+import { type Transaction, useFinanceActions, useFinanceWallets } from "../../context/FinanceContext";
 import { EditTransaction } from "../modal/EditTransaction";
-
-const REMOVED_WALLET: FinanceWallet = {
-    id: "removedWallet",
-    name: "Carteira Removida",
-    icon: "/wallet.svg",
-    balance: 0,
-    startBalance: 0,
-};
+import { formatCurrencyBRL, formatTransactionDate, getTransactionTypeMeta, isDefaultWallet, resolveTransactionWallet } from "../transactions/transactionView";
 
 export function TransactionBlock({ transaction }: { transaction: Transaction }) {
     const { openModal } = useModal();
     const wallets = useFinanceWallets();
     const { deleteTransaction } = useFinanceActions();
 
-    const wallet = wallets.find((item) => item.id === transaction.inWallet) ?? REMOVED_WALLET;
+    const wallet = resolveTransactionWallet(wallets, transaction.inWallet);
+    const typeMeta = getTransactionTypeMeta(transaction.type);
 
     return (
         <div className="bg-[#1e1e1e] rounded-2xl p-3 flex items-center justify-between">
-            {wallet.id === DEFAULT_WALLET_ID ? <Wallet className="w-12 rounded-xl" size={64} strokeWidth={1.2} /> : <img src={wallet.icon} alt="Wallet Icon" className="w-12 rounded-xl" />}
+            {isDefaultWallet(wallet.id) ? (
+                <WalletIcon className="w-12 rounded-xl" size={64} strokeWidth={1.2} />
+            ) : (
+                <img src={wallet.icon} alt="Wallet Icon" className="w-12 rounded-xl" />
+            )}
             <div className="w-2/6 text-left">
                 <h2 className="text-xl font-medium">{wallet.name}</h2>
                 <p className="text-lg">{transaction.description}</p>
@@ -31,13 +28,13 @@ export function TransactionBlock({ transaction }: { transaction: Transaction }) 
             </div>
             <div className="w-45 text-right">
                 <p className="text-xl font-medium">
-                    <span className={transaction.type === "income" ? "text-green-400" : "text-[#c44b4b]"}>R${transaction.value.toFixed(2)}</span>
+                    <span className={typeMeta.amountColorClass}>R$ {formatCurrencyBRL(transaction.value)}</span>
                 </p>
                 <p className="text-lg">{transaction.category.principal}</p>
-                <p className="text-lg text-neutral-300">{format(new Date(transaction.date), "dd/MM/yyyy")}</p>
+                <p className="text-lg text-neutral-300">{formatTransactionDate(transaction.date, "dd/MM/yyyy")}</p>
             </div>
             <div className=" flex flex-col text-right gap-2">
-                <p className="text-xl">{transaction.status}</p>
+                <p className="text-xl capitalize">{transaction.status}</p>
                 <div className="flex justify-end gap-1">
                     <button onClick={() => openModal(<EditTransaction transaction={transaction} />)} className="default-button p-2">
                         <Pencil size={20} />

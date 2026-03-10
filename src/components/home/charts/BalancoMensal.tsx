@@ -1,15 +1,18 @@
+import { ChartOptions, ScriptableContext } from "chart.js";
 import { Bar } from "react-chartjs-2";
 import { useFinanceTransactions } from "../../../context/FinanceContext";
 
 export function BalancoMensal() {
     const transactions = useFinanceTransactions();
 
-    // Obter mês e ano atuais
     const currentDate = new Date();
     const currentMonth = currentDate.getMonth();
     const currentYear = currentDate.getFullYear();
+    const monthLabel = new Intl.DateTimeFormat("pt-BR", {
+        month: "long",
+        year: "numeric",
+    }).format(currentDate);
 
-    // Filtrar transações do mês atual
     const currentMonthTransactions = transactions.filter((t) => {
         const transactionDate = new Date(t.date);
         return transactionDate.getMonth() === currentMonth && transactionDate.getFullYear() === currentYear;
@@ -24,6 +27,29 @@ export function BalancoMensal() {
         .reduce((sum, tx) => sum + tx.value, 0);
 
     const balance = incomes - spending;
+    const totalFlow = incomes + spending;
+    const incomeShare = totalFlow > 0 ? (incomes / totalFlow) * 100 : 0;
+    const spendingShare = totalFlow > 0 ? (spending / totalFlow) * 100 : 0;
+
+    const formatCurrency = (value: number) =>
+        value.toLocaleString("pt-BR", {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+        });
+
+    const buildGradient = (context: ScriptableContext<"bar">, from: string, to: string) => {
+        const chart = context.chart;
+        const area = chart.chartArea;
+
+        if (!area) {
+            return from;
+        }
+
+        const gradient = chart.ctx.createLinearGradient(0, area.top, 0, area.bottom);
+        gradient.addColorStop(0, from);
+        gradient.addColorStop(1, to);
+        return gradient;
+    };
 
     const mensalBarData = {
         labels: ["Receitas", "Despesas"],
@@ -31,35 +57,46 @@ export function BalancoMensal() {
             {
                 label: "Valor",
                 data: [incomes, spending],
-                backgroundColor: ["#10b981", "#ef4444"],
-                borderRadius: 8,
+                backgroundColor: (context: ScriptableContext<"bar">) =>
+                    context.dataIndex === 0
+                        ? buildGradient(context, "rgba(52, 211, 153, 0.95)", "rgba(16, 185, 129, 0.5)")
+                        : buildGradient(context, "rgba(248, 113, 113, 0.95)", "rgba(239, 68, 68, 0.5)"),
+                borderColor: (context: ScriptableContext<"bar">) => (context.dataIndex === 0 ? "#34d399" : "#f87171"),
+                borderWidth: 1,
+                borderRadius: 12,
                 borderSkipped: false,
-                barPercentage: 0.6,
+                barThickness: 42,
+                hoverBorderWidth: 1.5,
             },
         ],
     };
 
-    const barOptions = {
+    const barOptions: ChartOptions<"bar"> = {
         responsive: true,
-        maintainAspectRatio: true,
+        maintainAspectRatio: false,
+        animation: {
+            duration: 850,
+            easing: "easeOutQuart",
+        },
         plugins: {
             legend: {
                 display: false,
             },
             tooltip: {
-                backgroundColor: "rgba(0, 0, 0, 0.9)",
-                padding: 12,
+                backgroundColor: "rgba(10, 10, 10, 0.96)",
+                padding: 14,
                 titleColor: "#ffffff",
-                bodyColor: "#ffffff",
-                borderColor: "#374151",
+                bodyColor: "#e5e7eb",
+                borderColor: "rgba(255, 255, 255, 0.12)",
                 borderWidth: 1,
                 displayColors: false,
+                cornerRadius: 10,
                 callbacks: {
-                    label: function (context: any) {
-                        return "R$ " + context.parsed.y.toLocaleString("pt-BR", {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2,
-                        });
+                    title: function (context) {
+                        return context[0]?.label ?? "";
+                    },
+                    label: function (context) {
+                        return "R$ " + formatCurrency(Number(context.parsed.y ?? 0));
                     },
                 },
             },
@@ -69,27 +106,33 @@ export function BalancoMensal() {
                 grid: {
                     display: false,
                 },
+                border: {
+                    display: false,
+                },
                 ticks: {
-                    color: "#a3a3a3",
+                    color: "#d4d4d4",
                     font: {
-                        size: 13,
-                        weight: "normal",
+                        size: 12,
+                        weight: 600,
                     },
                 },
             },
             y: {
                 beginAtZero: true,
                 grid: {
-                    color: "rgba(163, 163, 163, 0.1)",
-                    drawBorder: false,
+                    color: "rgba(163, 163, 163, 0.12)",
+                    drawTicks: false,
+                },
+                border: {
+                    display: false,
                 },
                 ticks: {
-                    color: "#737373",
+                    color: "#a3a3a3",
                     font: {
-                        size: 12,
+                        size: 11,
                     },
-                    callback: function (value: any) {
-                        return "R$ " + value.toLocaleString("pt-BR");
+                    callback: function (value) {
+                        return "R$ " + formatCurrency(Number(value));
                     },
                 },
             },
@@ -97,56 +140,65 @@ export function BalancoMensal() {
     };
 
     return (
-        <div className="w-full bg-[#1e1e1e] p-6 rounded-2xl shadow-lg">
-            <p className="text-white text-lg font-medium mb-6">Balanço mensal</p>
-            <div className="flex gap-8 items-center">
-                {/* Gráfico de Barras */}
-                <div className="w-[400px] h-[200px]">
+        <div className="relative w-full overflow-hidden rounded-2xl border border-white/[0.08] bg-[#111111] p-5 shadow-[0_24px_60px_-32px_rgba(0,0,0,0.9)]">
+            <div className="pointer-events-none absolute -left-20 -top-24 h-44 w-44 rounded-full bg-emerald-500/10 blur-3xl" />
+            <div className="pointer-events-none absolute -bottom-24 -right-20 h-44 w-44 rounded-full bg-red-500/10 blur-3xl" />
+
+            <div className="relative mb-5 flex items-center justify-between gap-3">
+                <p className="text-lg font-medium text-white">Balanco mensal</p>
+                <span className="rounded-full border border-white/[0.09] bg-white/[0.04] px-3 py-1 text-xs uppercase tracking-[0.12em] text-neutral-300">
+                    {monthLabel}
+                </span>
+            </div>
+
+            <div className="relative flex flex-col gap-5 xl:flex-row xl:items-stretch">
+                <div className="h-[230px] w-full rounded-xl border border-white/[0.06] bg-black/20 p-3 xl:w-[58%]">
                     <Bar data={mensalBarData} options={barOptions} />
                 </div>
 
-                {/* Informações do Balanço */}
                 <div className="flex-1 space-y-3">
-                    {/* Receitas */}
-                    <div className="flex items-center justify-between group hover:bg-neutral-800/50 p-3 rounded-lg transition-colors">
-                        <div className="flex items-center gap-3">
-                            <div className="w-4 h-4 rounded-full bg-green-500 flex-shrink-0" />
-                            <span className="text-neutral-200 font-medium text-sm">Receitas</span>
+                    <div className="rounded-xl border border-emerald-400/20 bg-emerald-500/[0.08] p-3">
+                        <div className="mb-2 flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                                <div className="h-2.5 w-2.5 rounded-full bg-emerald-400" />
+                                <span className="text-sm font-medium text-neutral-200">Receitas</span>
+                            </div>
+                            <span className="text-sm font-semibold text-emerald-300">{incomeShare.toFixed(1)}%</span>
                         </div>
-                        <span className="text-green-400 font-semibold text-sm">
-                            R$ {incomes.toLocaleString("pt-BR", {
-                                minimumFractionDigits: 2,
-                                maximumFractionDigits: 2,
-                            })}
-                        </span>
+                        <div className="mb-2 h-1.5 w-full rounded-full bg-black/30">
+                            <div className="h-1.5 rounded-full bg-emerald-400" style={{ width: `${incomeShare}%` }} />
+                        </div>
+                        <p className="text-sm font-semibold text-emerald-300">R$ {formatCurrency(incomes)}</p>
                     </div>
 
-                    {/* Despesas */}
-                    <div className="flex items-center justify-between group hover:bg-neutral-800/50 p-3 rounded-lg transition-colors">
-                        <div className="flex items-center gap-3">
-                            <div className="w-4 h-4 rounded-full bg-red-500 flex-shrink-0" />
-                            <span className="text-neutral-200 font-medium text-sm">Despesas</span>
+                    <div className="rounded-xl border border-red-400/20 bg-red-500/[0.08] p-3">
+                        <div className="mb-2 flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                                <div className="h-2.5 w-2.5 rounded-full bg-red-400" />
+                                <span className="text-sm font-medium text-neutral-200">Despesas</span>
+                            </div>
+                            <span className="text-sm font-semibold text-red-300">{spendingShare.toFixed(1)}%</span>
                         </div>
-                        <span className="text-red-400 font-semibold text-sm">
-                            R$ {spending.toLocaleString("pt-BR", {
-                                minimumFractionDigits: 2,
-                                maximumFractionDigits: 2,
-                            })}
-                        </span>
+                        <div className="mb-2 h-1.5 w-full rounded-full bg-black/30">
+                            <div className="h-1.5 rounded-full bg-red-400" style={{ width: `${spendingShare}%` }} />
+                        </div>
+                        <p className="text-sm font-semibold text-red-300">R$ {formatCurrency(spending)}</p>
                     </div>
 
-                    {/* Separador */}
-                    <div className="pt-3 mt-3 border-t border-neutral-700">
-                        {/* Balanço Final */}
-                        <div className="flex items-center justify-between p-3 bg-neutral-800/30 rounded-lg">
-                            <span className="text-neutral-300 font-semibold">Balanço</span>
-                            <span className={`font-bold text-lg ${balance >= 0 ? "text-green-400" : "text-red-400"}`}>
-                                R$ {balance.toLocaleString("pt-BR", {
-                                    minimumFractionDigits: 2,
-                                    maximumFractionDigits: 2,
-                                })}
-                            </span>
+                    <div
+                        className={`rounded-xl border p-3 ${
+                            balance >= 0 ? "border-emerald-500/30 bg-emerald-500/[0.08]" : "border-red-500/30 bg-red-500/[0.08]"
+                        }`}
+                    >
+                        <div className="flex items-center gap-3">
+                            <span className="text-sm font-medium text-neutral-300">Saldo do mes</span>
                         </div>
+                        <span className={`mt-1 block text-xl font-bold ${balance >= 0 ? "text-emerald-300" : "text-red-300"}`}>
+                            R$ {formatCurrency(balance)}
+                        </span>
+                        <p className="mt-1 text-xs text-neutral-400">
+                            {totalFlow > 0 ? `${currentMonthTransactions.length} transacoes no periodo` : "Sem transacoes neste mes"}
+                        </p>
                     </div>
                 </div>
             </div>
