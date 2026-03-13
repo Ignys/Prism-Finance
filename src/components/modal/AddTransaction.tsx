@@ -1,5 +1,5 @@
 import type { TransactionType } from "../../context/FinanceContext";
-import { CreateTransaction } from "../home/Form";
+import { TransactionForm } from "../transactions/TransactionForm";
 import { ModalStructure } from "./ModalStructure";
 
 interface AddTransactionModalProps {
@@ -8,8 +8,8 @@ interface AddTransactionModalProps {
 
 export function AddTransactionModal({ type }: AddTransactionModalProps) {
     return (
-        <ModalStructure height="auto" width="600px">
-            <CreateTransaction type={type} />
+        <ModalStructure height="auto" width="700px">
+            <TransactionForm type={type} />
         </ModalStructure>
     );
 }

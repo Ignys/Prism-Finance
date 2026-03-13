@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { type Transaction, useFinanceActions, useFinanceTransactions, useFinanceWallets } from "../../context/FinanceContext";
 import { normalizeComparisonText } from "../../context/finance/helpers";
 import { useModal } from "../../context/ModalContext";
@@ -11,8 +11,6 @@ import { TransactionsSummaryCards } from "./transactions/TransactionsSummaryCard
 import {
     INITIAL_FILTER_STATE,
     compareTransactions,
-    formatMonthLabel,
-    getCurrentMonthKey,
     getTransactionCategoryKey,
     getTransactionCategoryLabel,
     getTransactionMonthKey,
@@ -85,32 +83,6 @@ export function TransactionsPage() {
         wallets.forEach((wallet) => next.set(wallet.id, wallet.name));
         return next;
     }, [wallets]);
-
-    const monthOptions = useMemo<SelectOption[]>(() => {
-        const availableMonths = new Set<string>([getCurrentMonthKey()]);
-
-        transactions.forEach((transaction) => {
-            availableMonths.add(getTransactionMonthKey(transaction.date));
-        });
-
-        return Array.from(availableMonths)
-            .sort((a, b) => b.localeCompare(a))
-            .map((monthKey) => ({
-                value: monthKey,
-                label: formatMonthLabel(monthKey),
-            }));
-    }, [transactions]);
-
-    useEffect(() => {
-        if (monthOptions.some((option) => option.value === selectedMonth)) {
-            return;
-        }
-
-        setFilters((current) => ({
-            ...current,
-            selectedMonth: monthOptions[0]?.value ?? getCurrentMonthKey(),
-        }));
-    }, [monthOptions, selectedMonth]);
 
     const categoryOptions = useMemo<SelectOption[]>(() => {
         const categoryMap = new Map<string, string>();
@@ -302,11 +274,10 @@ export function TransactionsPage() {
     return (
         <AuthShell mainClassName="text-white">
             <div className="w-full flex justify-center space-y-3">
-                <div className="flex flex-col gap-3 2xl:flex-row w-5/6">
+                <div className="flex flex-col gap-3 2xl:flex-row w-[90%]">
                     <div className="min-w-0 flex-1 space-y-3">
                         <TransactionsFiltersPanel
                             selectedMonth={selectedMonth}
-                            monthOptions={monthOptions}
                             showAdvancedFilters={showAdvancedFilters}
                             searchQuery={searchQuery}
                             selectedCategoryKey={selectedCategoryKey}

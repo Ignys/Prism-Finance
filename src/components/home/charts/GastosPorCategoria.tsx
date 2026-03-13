@@ -4,6 +4,7 @@ import { Doughnut } from "react-chartjs-2";
 import { useFinanceCategories, useFinanceTransactions } from "../../../context/FinanceContext";
 import { getCategoryIconComponent } from "../../../lib/categoryIcons";
 import { motion } from "framer-motion";
+import { parseAppDate } from "../../../lib/localDate";
 
 type BreakdownMode = "category" | "category-with-subcategories";
 
@@ -30,7 +31,10 @@ export function GastosPorCategoria() {
     }).format(currentDate);
 
     const currentMonthTransactions = transactions.filter((t) => {
-        const transactionDate = new Date(t.date);
+        const transactionDate = parseAppDate(t.date);
+        if (!transactionDate) {
+            return false;
+        }
         return transactionDate.getMonth() === currentMonth && transactionDate.getFullYear() === currentYear;
     });
 
@@ -125,7 +129,6 @@ export function GastosPorCategoria() {
     };
 
     const biggestCategoryValue = finalCategories[0]
-    console.log(biggestCategoryValue)
 
     return (
         <div className="relative w-full overflow-hidden rounded-2xl border border-white/[0.08] bg-[#111111] p-4 shadow-[0_24px_60px_-32px_rgba(0,0,0,0.9)]">

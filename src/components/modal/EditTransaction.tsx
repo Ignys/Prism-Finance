@@ -1,12 +1,15 @@
-import { Transaction } from "../../context/FinanceContext";
+import type { Transaction } from "../../context/FinanceContext";
+import { TransactionForm } from "../transactions/TransactionForm";
 import { ModalStructure } from "./ModalStructure";
 
-export function EditTransaction({ transaction }: { transaction: Transaction }) {
+interface EditTransactionProps {
+    transaction: Transaction;
+}
+
+export function EditTransaction({ transaction }: EditTransactionProps) {
     return (
-        <ModalStructure height="500px" width="400px">
-            <div className="bg-neutral-800 rounded-2xl p-10 drop-shadow-xl/20 h-full">
-                Editar
-                {JSON.stringify(transaction)}
-            </div>
-        </ModalStructure>);
+        <ModalStructure height="auto" width="700px">
+            <TransactionForm transaction={transaction} />
+        </ModalStructure>
+    );
 }

@@ -1,5 +1,6 @@
 import { format } from "date-fns";
 import { DEFAULT_WALLET_ID, type Transaction, type Wallet } from "../../context/FinanceContext";
+import { parseAppDate } from "../../lib/localDate";
 
 export const REMOVED_WALLET: Wallet = {
     id: "removedWallet",
@@ -19,8 +20,8 @@ export function resolveTransactionWallet(wallets: Wallet[], walletId: string): W
 }
 
 export function formatTransactionDate(date: string, output = "dd/MM"): string {
-    const parsedDate = new Date(date);
-    if (Number.isNaN(parsedDate.getTime())) {
+    const parsedDate = parseAppDate(date);
+    if (!parsedDate) {
         return output === "dd/MM/yyyy" ? "--/--/----" : "--/--";
     }
     return format(parsedDate, output);

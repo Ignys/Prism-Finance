@@ -1,6 +1,7 @@
 import { ChartOptions, ScriptableContext } from "chart.js";
 import { Bar } from "react-chartjs-2";
 import { useFinanceTransactions } from "../../../context/FinanceContext";
+import { parseAppDate } from "../../../lib/localDate";
 
 export function BalancoMensal() {
     const transactions = useFinanceTransactions();
@@ -14,7 +15,10 @@ export function BalancoMensal() {
     }).format(currentDate);
 
     const currentMonthTransactions = transactions.filter((t) => {
-        const transactionDate = new Date(t.date);
+        const transactionDate = parseAppDate(t.date);
+        if (!transactionDate) {
+            return false;
+        }
         return transactionDate.getMonth() === currentMonth && transactionDate.getFullYear() === currentYear;
     });
 

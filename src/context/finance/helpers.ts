@@ -1,5 +1,6 @@
 import type { Beneficiary, Category, TransactionDraft, TransactionGroup, Wallet } from "../financeTypes";
 import { DEFAULT_WALLET_ID } from "../financeTypes";
+import { getLocalTodayDate } from "../../lib/localDate";
 
 export function roundToCents(value: number): number {
     return Math.round(value * 100) / 100;
@@ -23,7 +24,7 @@ export function resolveGroupType(type: TransactionDraft["type"], signedValue: nu
 }
 
 export function getTodayDate(): string {
-    return new Date().toISOString().slice(0, 10);
+    return getLocalTodayDate();
 }
 
 export function ensureWalletId(candidateWalletId: string, wallets: Wallet[]): string {

@@ -14,6 +14,7 @@ import {
 } from "../../context/FinanceContext";
 import { useModal } from "../../context/ModalContext";
 import { AppPage, usePage } from "../../context/PageContext";
+import { formatLocalDateInput } from "../../lib/localDate";
 
 const AddIncome = lazy(() => import("../modal/AddIncome").then((module) => ({ default: module.AddIncome })));
 const AddSpending = lazy(() => import("../modal/AddSpending").then((module) => ({ default: module.AddSpending })));
@@ -58,7 +59,7 @@ function buildTestTransactions(categories: Category[], walletId: string): Transa
         return {
             type: isIncome ? "income" : "spending",
             amount,
-            scheduledDate: scheduledDate.toISOString().slice(0, 10),
+            scheduledDate: formatLocalDateInput(scheduledDate),
             inWallet: walletId,
             categoryId: category.id,
             beneficiary: isIncome ? "Entrada de teste" : "Saida de teste",
@@ -137,7 +138,7 @@ export function Header() {
     const indicatorTarget = hoveredNav ?? NAV_ITEMS.find((item) => item.page === normalizedPage)?.label ?? null;
 
     return (
-        <header className="pointer-events-none sticky top-5 z-50 mb-10 px-6">
+        <header className="pointer-events-none sticky top-5 z-20 mb-10 px-6">
             <div
                 className="pointer-events-auto flex items-center justify-between gap-2 rounded-[18px] border border-white/[0.08] px-3.5 py-2.5"
                 style={{

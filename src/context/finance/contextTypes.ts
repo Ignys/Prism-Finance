@@ -36,6 +36,12 @@ export interface FinanceActionsValue {
     addBeneficiary: (newBeneficiary: Beneficiary) => Promise<void>;
     addCategory: (newCategory: Category) => Promise<void>;
     addTag: (newTag: Tag) => Promise<void>;
+    reorderBeneficiaries: (beneficiaryIds: string[]) => Promise<void>;
+    reorderCategories: (categoryIds: string[]) => Promise<void>;
+    reorderTags: (tagIds: string[]) => Promise<void>;
+    setBeneficiaryActive: (beneficiaryId: string, isActive: boolean) => Promise<void>;
+    setCategoryActive: (categoryId: string, isActive: boolean) => Promise<void>;
+    setTagActive: (tagId: string, isActive: boolean) => Promise<void>;
 }
 
 export interface FinanceContextType extends FinanceActionsValue {

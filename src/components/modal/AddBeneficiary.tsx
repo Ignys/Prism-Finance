@@ -1,8 +1,12 @@
-import { ChangeEvent, useEffect, useMemo, useState } from "react";
+import { type ChangeEvent, useEffect, useMemo, useState } from "react";
+import { RotateCcw, Trash2, X } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
 import { type Beneficiary, useFinanceActions, useFinanceBeneficiaries } from "../../context/FinanceContext";
 import { useModal } from "../../context/ModalContext";
 import { ModalStructure } from "./ModalStructure";
+
+const FIELD_LABEL_CLASS = "text-[11px] uppercase tracking-[0.12em] text-white/50";
+const FIELD_INPUT_CLASS = "rounded-xl border border-white/[0.1] bg-black/35 p-2.5 text-white outline-none transition-colors placeholder:text-white/35 focus:border-white/[0.24]";
 
 const BENEFICIARY_TYPES = [
     { value: "person", label: "Pessoa" },
@@ -93,8 +97,9 @@ function normalizeAvatarImage(value: string): string | null {
 
 export function AddBeneficiary({ mode = "create", beneficiaryId, initialBeneficiary }: AddBeneficiaryProps) {
     const beneficiaries = useFinanceBeneficiaries();
-    const { addBeneficiary } = useFinanceActions();
+    const { addBeneficiary, setBeneficiaryActive } = useFinanceActions();
     const { closeModal } = useModal();
+    const [submitting, setSubmitting] = useState(false);
 
     const editingBeneficiary = useMemo(() => {
         if (mode !== "edit") {
@@ -118,18 +123,44 @@ export function AddBeneficiary({ mode = "create", beneficiaryId, initialBenefici
     const [isProcessingUpload, setIsProcessingUpload] = useState(false);
 
     useEffect(() => {
-        if (!editingBeneficiary) {
+        if (editingBeneficiary) {
+            setName(editingBeneficiary.name);
+            setType(editingBeneficiary.type);
+            setAvatarColor(editingBeneficiary.avatarColor ?? "#4B5563");
+            setAvatarImage(editingBeneficiary.avatarImage ?? null);
+            setAvatarUrlInput(editingBeneficiary.avatarImage ?? "");
             return;
         }
-        setName(editingBeneficiary.name);
-        setType(editingBeneficiary.type);
-        setAvatarColor(editingBeneficiary.avatarColor ?? "#4B5563");
-        setAvatarImage(editingBeneficiary.avatarImage ?? null);
-        setAvatarUrlInput(editingBeneficiary.avatarImage ?? "");
+
+        setName("");
+        setType("person");
+        setAvatarColor("#4B5563");
+        setAvatarImage(null);
+        setAvatarUrlInput("");
+        setUploadError("");
     }, [editingBeneficiary]);
 
     const normalizedName = name.trim();
     const isEditMode = mode === "edit" && Boolean(editingBeneficiary);
+
+    const runAction = async (action: () => Promise<boolean>) => {
+        if (submitting) {
+            return;
+        }
+
+        setSubmitting(true);
+        try {
+            const success = await action();
+            if (success) {
+                closeModal();
+                return;
+            }
+            setSubmitting(false);
+        } catch (error) {
+            console.error("Failed to submit beneficiary modal:", error);
+            setSubmitting(false);
+        }
+    };
 
     const handleFileUpload = async (event: ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
@@ -168,105 +199,178 @@ export function AddBeneficiary({ mode = "create", beneficiaryId, initialBenefici
         setUploadError("");
     };
 
-    const handleSubmit = async () => {
-        if (!normalizedName) {
-            return;
-        }
+    const handleSubmit = () =>
+        runAction(async () => {
+            if (!normalizedName) {
+                return false;
+            }
 
-        const targetBeneficiary = editingBeneficiary;
-        const resolvedAvatarImage = normalizeAvatarImage(avatarImage ?? "") ?? normalizeAvatarImage(avatarUrlInput) ?? null;
-        await addBeneficiary({
-            id: targetBeneficiary?.id ?? uuidv4(),
-            userId: targetBeneficiary?.userId ?? null,
-            name: normalizedName,
-            type,
-            avatarColor: avatarColor.trim() || null,
-            avatarImage: resolvedAvatarImage,
-            isActive: targetBeneficiary?.isActive ?? true,
-            createdAt: targetBeneficiary?.createdAt ?? new Date().toISOString(),
+            const targetBeneficiary = editingBeneficiary;
+            const resolvedAvatarImage = normalizeAvatarImage(avatarImage ?? "") ?? normalizeAvatarImage(avatarUrlInput) ?? null;
+
+            await addBeneficiary({
+                id: targetBeneficiary?.id ?? uuidv4(),
+                userId: targetBeneficiary?.userId ?? null,
+                name: normalizedName,
+                type,
+                avatarColor: avatarColor.trim() || null,
+                avatarImage: resolvedAvatarImage,
+                isActive: targetBeneficiary?.isActive ?? true,
+                sortOrder: targetBeneficiary?.sortOrder ?? 0,
+                createdAt: targetBeneficiary?.createdAt ?? new Date().toISOString(),
+            });
+            return true;
         });
-        closeModal();
-    };
+
+    const handleToggleActive = () =>
+        runAction(async () => {
+            if (!editingBeneficiary) {
+                return false;
+            }
+            await setBeneficiaryActive(editingBeneficiary.id, !editingBeneficiary.isActive);
+            return true;
+        });
 
     return (
-        <ModalStructure height="auto" width="560px">
-            <div className="rounded-lg bg-neutral-800 p-6">
-                <h2 className="mb-5 text-2xl font-semibold">{isEditMode ? "Editar beneficiario" : "Novo beneficiario"}</h2>
-                <div className="flex flex-col gap-4">
+        <ModalStructure height="auto" width="620px">
+            <div className="rounded-2xl border border-white/[0.09] bg-[#131313] p-4 text-white shadow-[0_26px_70px_-38px_rgba(0,0,0,0.95)]">
+                <div className="flex items-start justify-between gap-3">
+                    <div>
+                        <h2 className="text-2xl font-medium">{isEditMode ? "Editar beneficiario" : "Novo beneficiario"}</h2>
+                        <p className="text-xs uppercase tracking-[0.12em] text-white/45">Cadastro de beneficiarios</p>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={closeModal}
+                        disabled={submitting}
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-white/[0.12] bg-white/[0.03] text-white/70 transition-colors hover:border-white/[0.22] hover:text-white disabled:cursor-not-allowed disabled:opacity-55"
+                        aria-label="Fechar modal"
+                        title="Fechar"
+                    >
+                        <X size={15} />
+                    </button>
+                </div>
+
+                <section className="mt-4 grid grid-cols-1 gap-3">
                     {mode === "edit" && !editingBeneficiary && (
                         <p className="rounded-md border border-amber-400/25 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">Beneficiario nao encontrado.</p>
                     )}
 
-                    <input
-                        type="text"
-                        value={name}
-                        onChange={(event) => setName(event.target.value)}
-                        className="rounded border border-neutral-600 bg-neutral-700 p-2.5"
-                        placeholder="Nome do beneficiario"
-                    />
+                    <label className="flex flex-col gap-1.5">
+                        <span className={FIELD_LABEL_CLASS}>Nome</span>
+                        <input type="text" value={name} onChange={(event) => setName(event.target.value)} className={FIELD_INPUT_CLASS} placeholder="Nome do beneficiario" />
+                    </label>
 
-                    <select value={type} onChange={(event) => setType(event.target.value as (typeof BENEFICIARY_TYPES)[number]["value"])} className="rounded border border-neutral-600 bg-neutral-700 p-2.5">
-                        {BENEFICIARY_TYPES.map((item) => (
-                            <option key={item.value} value={item.value}>
-                                {item.label}
-                            </option>
-                        ))}
-                    </select>
+                    <label className="flex flex-col gap-1.5">
+                        <span className={FIELD_LABEL_CLASS}>Tipo</span>
+                        <select value={type} onChange={(event) => setType(event.target.value as (typeof BENEFICIARY_TYPES)[number]["value"])} className={FIELD_INPUT_CLASS}>
+                            {BENEFICIARY_TYPES.map((item) => (
+                                <option key={item.value} value={item.value}>
+                                    {item.label}
+                                </option>
+                            ))}
+                        </select>
+                    </label>
 
-                    <div className="rounded-lg border border-white/10 bg-neutral-900/70 p-3">
+                    <div className="rounded-xl border border-white/[0.1] bg-black/35 p-3">
                         <div className="mb-3 flex items-center gap-3">
                             <div className="h-14 w-14 overflow-hidden rounded-full border border-white/10">
                                 {avatarImage ? <img src={avatarImage} alt="Preview" className="h-full w-full object-cover" /> : <div className="h-full w-full" style={{ backgroundColor: avatarColor }} />}
                             </div>
                             <div>
                                 <p className="text-sm font-medium">Foto do beneficiario (opcional)</p>
-                                <p className="text-xs text-white/50">Upload processado localmente (max 320px) ou URL externa.</p>
+                                <p className="text-xs text-white/50">Upload local (max 320px) ou URL externa.</p>
                             </div>
                         </div>
 
-                        <div className="flex flex-col gap-3">
-                            <label className="text-xs uppercase tracking-[0.12em] text-white/45">Upload</label>
-                            <input
-                                type="file"
-                                accept="image/*"
-                                onChange={handleFileUpload}
-                                className="rounded border border-neutral-600 bg-neutral-700 p-2 text-sm"
-                                disabled={isProcessingUpload}
-                            />
-
-                            <label className="text-xs uppercase tracking-[0.12em] text-white/45">URL da imagem</label>
-                            <div className="flex gap-2">
+                        <div className="grid gap-3">
+                            <label className="flex flex-col gap-1.5">
+                                <span className={FIELD_LABEL_CLASS}>Upload</span>
                                 <input
-                                    type="text"
-                                    value={avatarUrlInput}
-                                    onChange={(event) => setAvatarUrlInput(event.target.value)}
-                                    className="flex-1 rounded border border-neutral-600 bg-neutral-700 p-2.5 text-sm"
-                                    placeholder="https://..."
+                                    type="file"
+                                    accept="image/*"
+                                    onChange={handleFileUpload}
+                                    className={`${FIELD_INPUT_CLASS} p-2 text-sm`}
+                                    disabled={isProcessingUpload || submitting}
                                 />
-                                <button type="button" onClick={applyImageUrl} className="rounded border border-white/20 px-3 text-xs uppercase tracking-[0.08em] text-white/75 transition-colors hover:bg-white/[0.08]">
-                                    Usar URL
-                                </button>
-                                <button type="button" onClick={clearImage} className="rounded border border-white/20 px-3 text-xs uppercase tracking-[0.08em] text-white/75 transition-colors hover:bg-white/[0.08]">
-                                    Limpar
-                                </button>
-                            </div>
+                            </label>
+
+                            <label className="flex flex-col gap-1.5">
+                                <span className={FIELD_LABEL_CLASS}>URL da imagem</span>
+                                <div className="flex gap-2">
+                                    <input
+                                        type="text"
+                                        value={avatarUrlInput}
+                                        onChange={(event) => setAvatarUrlInput(event.target.value)}
+                                        className={`${FIELD_INPUT_CLASS} flex-1`}
+                                        placeholder="https://..."
+                                        disabled={submitting}
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={applyImageUrl}
+                                        disabled={submitting}
+                                        className="rounded-xl border border-white/[0.15] bg-white/[0.03] px-3 text-xs uppercase tracking-[0.08em] text-white/75 transition-colors hover:border-white/[0.28] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                                    >
+                                        Usar
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={clearImage}
+                                        disabled={submitting}
+                                        className="rounded-xl border border-white/[0.15] bg-white/[0.03] px-3 text-xs uppercase tracking-[0.08em] text-white/75 transition-colors hover:border-white/[0.28] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                                    >
+                                        Limpar
+                                    </button>
+                                </div>
+                            </label>
                             {uploadError && <p className="text-sm text-amber-200">{uploadError}</p>}
                         </div>
                     </div>
 
                     <div className="flex items-center gap-3">
-                        <input type="color" value={avatarColor} onChange={(event) => setAvatarColor(event.target.value)} className="h-10 w-14 rounded border border-neutral-600 bg-neutral-700 p-1" />
-                        <input type="text" value={avatarColor} onChange={(event) => setAvatarColor(event.target.value)} className="flex-1 rounded border border-neutral-600 bg-neutral-700 p-2.5" placeholder="#4B5563" />
+                        <input type="color" value={avatarColor} onChange={(event) => setAvatarColor(event.target.value)} className="h-10 w-14 rounded border border-white/[0.12] bg-black/35 p-1" />
+                        <input type="text" value={avatarColor} onChange={(event) => setAvatarColor(event.target.value)} className={FIELD_INPUT_CLASS} placeholder="#4B5563" />
+                    </div>
+                </section>
+
+                <div className="mt-5 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2">
+                        {isEditMode && editingBeneficiary && (
+                            <button
+                                type="button"
+                                onClick={() => void handleToggleActive()}
+                                disabled={submitting}
+                                className={`inline-flex min-w-28 items-center justify-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+                                    editingBeneficiary.isActive
+                                        ? "border-red-400/25 bg-red-500/10 text-red-200 hover:border-red-400/45 hover:text-red-100"
+                                        : "border-emerald-400/35 bg-emerald-500/15 text-emerald-100 hover:border-emerald-400/55 hover:bg-emerald-500/20"
+                                }`}
+                            >
+                                {editingBeneficiary.isActive ? <Trash2 size={15} /> : <RotateCcw size={15} />}
+                                {editingBeneficiary.isActive ? "Remover" : "Reativar"}
+                            </button>
+                        )}
                     </div>
 
-                    <button
-                        type="button"
-                        onClick={handleSubmit}
-                        disabled={mode === "edit" && !editingBeneficiary}
-                        className="default-button px-4 py-2 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                        {isEditMode ? "Salvar alteracoes" : "Criar beneficiario"}
-                    </button>
+                    <div className="flex items-center gap-2">
+                        <button
+                            type="button"
+                            onClick={closeModal}
+                            disabled={submitting}
+                            className="inline-flex min-w-24 items-center justify-center rounded-xl border border-white/[0.12] bg-white/[0.03] px-4 py-2 text-sm font-medium text-white/70 transition-colors hover:border-white/[0.2] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                            Cancelar
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => void handleSubmit()}
+                            disabled={(mode === "edit" && !editingBeneficiary) || !normalizedName || submitting || isProcessingUpload}
+                            className="inline-flex min-w-28 items-center justify-center rounded-xl border border-emerald-400/35 bg-emerald-500/15 px-4 py-2 text-sm font-semibold text-emerald-100 transition-colors hover:border-emerald-400/55 hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                            {submitting ? "Processando..." : "Concluir"}
+                        </button>
+                    </div>
                 </div>
             </div>
         </ModalStructure>

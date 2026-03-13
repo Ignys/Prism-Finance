@@ -121,9 +121,9 @@ export function LoginPage() {
                     <div className="relative hidden flex-col justify-between border-r border-white/10 bg-[linear-gradient(160deg,#0a1428_0%,#12263f_65%,#1b3f63_100%)] p-10 lg:flex">
                         <div>
                             <img src={"pngFinal.png"} alt="Logo Prism Finance" className="mb-8 w-24" />
-                            <p className="inline-flex rounded-full border border-white/25 bg-white/10 px-3 py-1 text-xs uppercase tracking-[0.18em] text-cyan-100">Painel financeiro pessoal</p>
-                            <h1 className="mt-5 max-w-sm text-4xl font-semibold leading-tight text-white">Controle suas financas sem complicacao.</h1>
-                            <p className="mt-4 max-w-md text-sm leading-relaxed text-cyan-100/90">
+                            <p className="inline-flex rounded-full border border-white/25 bg-white/10 px-3 py-1 text-xs uppercase tracking-[0.18em] text-cyan-100">Painel financeiro</p>
+                            <h1 className="mt-5 max-w-sm text-4xl font-semibold leading-tight text-white">Controle suas finanças sem complicação.</h1>
+                            <p className="mt-2 max-w-md text-sm leading-relaxed text-cyan-100/90">
                                 Acompanhe saldo, gastos e metas em um fluxo simples: entre, organize e mantenha seus dados sincronizados em qualquer dispositivo.
                             </p>
                         </div>
@@ -143,7 +143,7 @@ export function LoginPage() {
                             <div className="mb-7 flex items-center justify-between">
                                 <div>
                                     <h2 className="text-2xl font-semibold">{isSignUpMode ? "Criar conta" : "Entrar no Prism"}</h2>
-                                    <p className="mt-1 text-sm text-slate-300">{isSignUpMode ? "Use e-mail e senha para comecar." : "Acesse sua conta para continuar."}</p>
+                                    <p className="mt-1 text-sm text-slate-300">{isSignUpMode ? "Use e-mail e senha para começar." : "Acesse sua conta para continuar."}</p>
                                 </div>
                                 <img src={"pngFinal.png"} alt="Logo Prism Finance" className="w-12 lg:hidden" />
                             </div>
@@ -185,7 +185,7 @@ export function LoginPage() {
                                     Senha
                                     <input
                                         type="password"
-                                        placeholder={isSignUpMode ? "Minimo 6 caracteres" : "Sua senha"}
+                                        placeholder={isSignUpMode ? "Mínimo 6 caracteres" : "Sua senha"}
                                         value={password}
                                         onChange={(e) => setPassword(e.target.value)}
                                         autoComplete={isSignUpMode ? "new-password" : "current-password"}
@@ -243,14 +243,14 @@ export function LoginPage() {
                             </button>
 
                             <p className="mt-6 text-center text-sm text-slate-300">
-                                {isSignUpMode ? "Ja possui conta?" : "Ainda nao tem conta?"}{" "}
+                                {isSignUpMode ? "Já possui conta?" : "Ainda não tem conta?"}{" "}
                                 <button
                                     type="button"
                                     onClick={() => handleModeChange(!isSignUpMode)}
                                     disabled={isLoading}
                                     className="font-semibold text-cyan-300 transition hover:text-cyan-200 disabled:cursor-not-allowed disabled:opacity-60"
                                 >
-                                    {isSignUpMode ? "Entrar" : "Criar conta"}
+                                    {isSignUpMode ? "Entrar" : "Crie já a sua!"}
                                 </button>
                             </p>
                         </div>

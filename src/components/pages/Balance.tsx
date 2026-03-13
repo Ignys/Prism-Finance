@@ -1,9 +1,10 @@
 import { motion } from "framer-motion";
-import { Plus, Star, Wallet as WalletIcon } from "lucide-react";
+import { Pencil, Plus, Star } from "lucide-react";
 import { DEFAULT_WALLET_ID, useFinanceActions, useFinanceFavoriteWallet, useFinanceSummary, useFinanceWallets } from "../../context/FinanceContext";
 import { useModal } from "../../context/ModalContext";
+import { WalletAvatar } from "../common/WalletAvatar";
 import { AuthShell } from "../layout/AuthShell";
-import { AddWallet } from "../modal/AddWallet";
+import { BalanceModal } from "../modal/BalanceModal";
 
 const currencyFormatter = new Intl.NumberFormat("pt-BR", {
     style: "currency",
@@ -17,7 +18,6 @@ export function BalancePage() {
     const favoriteWalletId = useFinanceFavoriteWallet();
     const { setFavoriteWallet } = useFinanceActions();
     const { openModal } = useModal();
-    const activeWallets = wallets.filter((wallet) => wallet.isActive);
     const favoriteWallet = wallets.find((wallet) => wallet.id === favoriteWalletId) ?? wallets[0] ?? null;
 
     const metrics = [
@@ -40,7 +40,7 @@ export function BalancePage() {
 
                             <button
                                 type="button"
-                                onClick={() => openModal(<AddWallet />)}
+                                onClick={() => openModal(<BalanceModal mode="create" />)}
                                 className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-white/[0.1] bg-white/[0.04] px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.05em] text-white/80 transition-all hover:border-white/[0.18] hover:bg-white/[0.08]"
                             >
                                 <Plus size={14} />
@@ -62,33 +62,42 @@ export function BalancePage() {
                                         className="flex items-center justify-between gap-3 rounded-xl border border-white/[0.06] bg-white/[0.02] p-3"
                                     >
                                         <div className="flex min-w-0 items-center gap-3">
-                                            {isDefault ? (
-                                                <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
-                                                    <WalletIcon size={30} className="text-white/80" strokeWidth={1.7} />
-                                                </div>
-                                            ) : (
-                                                <img src={wallet.icon} className="h-14 w-14 rounded-xl border border-white/10 object-cover" alt={wallet.name} />
-                                            )}
+                                            <WalletAvatar wallet={wallet} className="h-14 w-14 rounded-xl border border-white/10" iconSize={30} iconStrokeWidth={1.7} />
 
                                             <div className="min-w-0 text-left">
-                                                <p className="truncate text-[15px] font-medium text-white">{isDefault ? "Carteira principal" : wallet.name}</p>
+                                                <p className="truncate text-[15px] font-medium text-white">{wallet.name}</p>
                                                 <p className="text-sm font-normal text-white/60 tracking-widest">{currencyFormatter.format(wallet.balance)}</p>
                                             </div>
                                         </div>
 
-                                        <button
-                                            type="button"
-                                            onClick={() => void setFavoriteWallet(wallet.id)}
-                                            className={[
-                                                "inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.04em] transition-all",
-                                                isFavorite
-                                                    ? "border-amber-200/35 bg-amber-300/10 text-amber-200"
-                                                    : "border-white/[0.12] bg-white/[0.03] text-white/70 hover:border-white/[0.2] hover:text-white",
-                                            ].join(" ")}
-                                        >
-                                            <Star size={14} className={isFavorite ? "fill-amber-200 text-amber-200" : ""} />
-                                            {isFavorite ? "Favorita" : "Marcar favorita"}
-                                        </button>
+                                        <div className="flex items-center gap-2">
+                                            <button
+                                                type="button"
+                                                onClick={() => openModal(<BalanceModal mode="edit" walletId={wallet.id} />)}
+                                                className={[
+                                                    "inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.04em] transition-all",
+                                                    isDefault
+                                                        ? "border-sky-300/25 bg-sky-500/10 text-sky-200 hover:border-sky-300/40"
+                                                        : "border-white/[0.12] bg-white/[0.03] text-white/70 hover:border-white/[0.2] hover:text-white",
+                                                ].join(" ")}
+                                            >
+                                                <Pencil size={14} />
+                                                Editar
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => void setFavoriteWallet(wallet.id)}
+                                                className={[
+                                                    "inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.04em] transition-all",
+                                                    isFavorite
+                                                        ? "border-amber-200/35 bg-amber-300/10 text-amber-200"
+                                                        : "border-white/[0.12] bg-white/[0.03] text-white/70 hover:border-white/[0.2] hover:text-white",
+                                                ].join(" ")}
+                                            >
+                                                <Star size={14} className={isFavorite ? "fill-amber-200 text-amber-200" : ""} />
+                                                {isFavorite ? "Favorita" : "Marcar favorita"}
+                                            </button>
+                                        </div>
                                     </motion.article>
                                 );
                             })}

@@ -61,6 +61,67 @@ function resolveFavoriteWalletId(candidate: unknown, wallets: Wallet[]): string 
     return wallets.find((wallet) => wallet.id === DEFAULT_WALLET_ID)?.id ?? wallets[0]?.id ?? DEFAULT_WALLET_ID;
 }
 
+function getNextSortOrder<T extends { sortOrder: number }>(items: T[]): number {
+    if (items.length < 1) {
+        return 0;
+    }
+    const maxSortOrder = Math.max(...items.map((item) => item.sortOrder));
+    return Number.isFinite(maxSortOrder) ? maxSortOrder + 1 : items.length;
+}
+
+function compareBySortOrderNameAndId<T extends { sortOrder: number; name: string; id: string }>(a: T, b: T): number {
+    if (a.sortOrder !== b.sortOrder) {
+        return a.sortOrder - b.sortOrder;
+    }
+
+    const nameComparison = a.name.localeCompare(b.name, "pt-BR", { sensitivity: "base" });
+    if (nameComparison !== 0) {
+        return nameComparison;
+    }
+
+    return a.id.localeCompare(b.id);
+}
+
+function compareCategoriesByTypeParentSort(a: Category, b: Category): number {
+    if (a.type !== b.type) {
+        return a.type.localeCompare(b.type);
+    }
+
+    if (a.parentId === b.parentId) {
+        return compareBySortOrderNameAndId(a, b);
+    }
+
+    if (a.parentId === null) {
+        return -1;
+    }
+    if (b.parentId === null) {
+        return 1;
+    }
+
+    return a.parentId.localeCompare(b.parentId);
+}
+
+function collectCategoryDescendantIds(categories: Category[], rootId: string): Set<string> {
+    const descendants = new Set<string>();
+    const queue = [rootId];
+
+    while (queue.length > 0) {
+        const parentId = queue.shift();
+        if (!parentId) {
+            continue;
+        }
+
+        categories.forEach((category) => {
+            if (category.parentId === parentId && !descendants.has(category.id)) {
+                descendants.add(category.id);
+                queue.push(category.id);
+            }
+        });
+    }
+
+    return descendants;
+}
+
 export function useFinanceStore(): FinanceStoreValue {
     const { user, loading: authLoading } = useAuthListener();
 
@@ -304,6 +365,7 @@ export function useFinanceStore(): FinanceStoreValue {
 
             await persistFinanceFields({
                 wallets: snapshot.wallets,
+                ledgerEntries: snapshot.ledgerEntries,
             });
         },
         [buildSnapshot, persistFinanceFields, setSnapshotState],
@@ -311,15 +373,18 @@ export function useFinanceStore(): FinanceStoreValue {
 
     const addBeneficiary = useCallback(
         async (newBeneficiary: Beneficiary) => {
+            const existingBeneficiary = beneficiariesRef.current.find((item) => item.id === newBeneficiary.id) ?? null;
             const beneficiary = normalizeBeneficiary({
                 ...newBeneficiary,
                 userId: newBeneficiary.userId ?? user?.uid ?? null,
+                sortOrder: existingBeneficiary?.sortOrder ?? newBeneficiary.sortOrder ?? getNextSortOrder(beneficiariesRef.current),
                 createdAt: newBeneficiary.createdAt ?? new Date().toISOString(),
             });
 
-            const nextBeneficiaries = beneficiariesRef.current.some((item) => item.id === beneficiary.id)
+            const nextBeneficiaries = (beneficiariesRef.current.some((item) => item.id === beneficiary.id)
                 ? beneficiariesRef.current.map((item) => (item.id === beneficiary.id ? beneficiary : item))
-                : [...beneficiariesRef.current, beneficiary];
+                : [...beneficiariesRef.current, beneficiary]
+            ).sort(compareBySortOrderNameAndId);
 
             const snapshot = buildSnapshot({ beneficiaries: nextBeneficiaries });
             setSnapshotState(snapshot);
@@ -331,17 +396,28 @@ export function useFinanceStore(): FinanceStoreValue {
     const addCategory = useCallback(
         async (newCategory: Category) => {
             const parent = newCategory.parentId ? categoriesRef.current.find((item) => item.id === newCategory.parentId) : null;
+            const existingCategory = categoriesRef.current.find((item) => item.id === newCategory.id) ?? null;
+            const resolvedParentId = parent?.id ?? null;
+            const resolvedType = parent?.type ?? newCategory.type;
+            const keepsSiblingGroup =
+                existingCategory?.parentId === resolvedParentId &&
+                existingCategory?.type === resolvedType;
+            const siblingGroup = categoriesRef.current.filter(
+                (item) => item.parentId === resolvedParentId && item.type === resolvedType && item.id !== existingCategory?.id,
+            );
             const category = normalizeCategory({
                 ...newCategory,
                 userId: newCategory.userId ?? user?.uid ?? null,
-                parentId: parent?.id ?? null,
-                type: parent?.type ?? newCategory.type,
+                parentId: resolvedParentId,
+                type: resolvedType,
+                sortOrder: keepsSiblingGroup ? existingCategory?.sortOrder ?? newCategory.sortOrder ?? 0 : getNextSortOrder(siblingGroup),
                 createdAt: newCategory.createdAt ?? new Date().toISOString(),
             });
 
-            const nextCategories = categoriesRef.current.some((item) => item.id === category.id)
+            const nextCategories = (categoriesRef.current.some((item) => item.id === category.id)
                 ? categoriesRef.current.map((item) => (item.id === category.id ? category : item))
-                : [...categoriesRef.current, category];
+                : [...categoriesRef.current, category]
+            ).sort(compareCategoriesByTypeParentSort);
 
             const snapshot = buildSnapshot({ categories: nextCategories });
             setSnapshotState(snapshot);
@@ -352,21 +428,247 @@ export function useFinanceStore(): FinanceStoreValue {
 
     const addTag = useCallback(
         async (newTag: Tag) => {
+            const existingTag = tagsRef.current.find((item) => item.id === newTag.id) ?? null;
             const tag = normalizeTag({
                 ...newTag,
                 userId: newTag.userId ?? user?.uid ?? null,
+                sortOrder: existingTag?.sortOrder ?? newTag.sortOrder ?? getNextSortOrder(tagsRef.current),
                 createdAt: newTag.createdAt ?? new Date().toISOString(),
             });
 
-            const nextTags = tagsRef.current.some((item) => item.id === tag.id)
+            const nextTags = (tagsRef.current.some((item) => item.id === tag.id)
                 ? tagsRef.current.map((item) => (item.id === tag.id ? tag : item))
-                : [...tagsRef.current, tag];
+                : [...tagsRef.current, tag]
+            ).sort(compareBySortOrderNameAndId);
 
             const snapshot = buildSnapshot({ tags: nextTags });
             setSnapshotState(snapshot);
             await persistFinanceFields({ tags: snapshot.tags });
         },
         [buildSnapshot, persistFinanceFields, setSnapshotState, user?.uid],
+    );
+
+    const reorderBeneficiaries = useCallback(
+        async (beneficiaryIds: string[]) => {
+            const existingById = new Map(beneficiariesRef.current.map((item) => [item.id, item]));
+            const uniqueOrderedIds: string[] = [];
+            const seen = new Set<string>();
+
+            beneficiaryIds.forEach((beneficiaryId) => {
+                if (seen.has(beneficiaryId) || !existingById.has(beneficiaryId)) {
+                    return;
+                }
+                seen.add(beneficiaryId);
+                uniqueOrderedIds.push(beneficiaryId);
+            });
+
+            if (uniqueOrderedIds.length < 1) {
+                return;
+            }
+
+            const sortedBeneficiaries = [...beneficiariesRef.current].sort(compareBySortOrderNameAndId);
+            const omittedIds = sortedBeneficiaries.map((item) => item.id).filter((id) => !seen.has(id));
+            const finalIds = [...uniqueOrderedIds, ...omittedIds];
+            const nextOrderById = new Map(finalIds.map((id, index) => [id, index]));
+            const nextBeneficiaries = finalIds
+                .map((beneficiaryId) => existingById.get(beneficiaryId))
+                .filter((beneficiary): beneficiary is Beneficiary => Boolean(beneficiary))
+                .map((beneficiary) => ({
+                    ...beneficiary,
+                    sortOrder: nextOrderById.get(beneficiary.id) ?? beneficiary.sortOrder,
+                }));
+
+            const snapshot = buildSnapshot({ beneficiaries: nextBeneficiaries });
+            setSnapshotState(snapshot);
+            await persistFinanceFields({ beneficiaries: snapshot.beneficiaries });
+        },
+        [buildSnapshot, persistFinanceFields, setSnapshotState],
+    );
+
+    const reorderCategories = useCallback(
+        async (categoryIds: string[]) => {
+            const existingById = new Map(categoriesRef.current.map((item) => [item.id, item]));
+            const uniqueOrderedIds: string[] = [];
+            const seen = new Set<string>();
+
+            categoryIds.forEach((categoryId) => {
+                if (seen.has(categoryId) || !existingById.has(categoryId)) {
+                    return;
+                }
+                seen.add(categoryId);
+                uniqueOrderedIds.push(categoryId);
+            });
+
+            const anchorCategory = uniqueOrderedIds.length > 0 ? existingById.get(uniqueOrderedIds[0]) : null;
+            if (!anchorCategory) {
+                return;
+            }
+
+            const siblingCategories = categoriesRef.current
+                .filter((item) => item.type === anchorCategory.type && item.parentId === anchorCategory.parentId)
+                .sort(compareBySortOrderNameAndId);
+            const siblingIdSet = new Set(siblingCategories.map((item) => item.id));
+            const scopedOrderedIds = uniqueOrderedIds.filter((id) => siblingIdSet.has(id));
+            if (scopedOrderedIds.length < 1) {
+                return;
+            }
+
+            const scopedOrderedSet = new Set(scopedOrderedIds);
+            const omittedIds = siblingCategories.map((item) => item.id).filter((id) => !scopedOrderedSet.has(id));
+            const finalIds = [...scopedOrderedIds, ...omittedIds];
+            const nextOrderById = new Map(finalIds.map((id, index) => [id, index]));
+
+            const nextCategories = categoriesRef.current
+                .map((category) => {
+                if (!siblingIdSet.has(category.id)) {
+                    return category;
+                }
+
+                return {
+                    ...category,
+                    sortOrder: nextOrderById.get(category.id) ?? category.sortOrder,
+                };
+                })
+                .sort(compareCategoriesByTypeParentSort);
+
+            const snapshot = buildSnapshot({ categories: nextCategories });
+            setSnapshotState(snapshot);
+            await persistFinanceFields({ categories: snapshot.categories });
+        },
+        [buildSnapshot, persistFinanceFields, setSnapshotState],
+    );
+
+    const reorderTags = useCallback(
+        async (tagIds: string[]) => {
+            const existingById = new Map(tagsRef.current.map((item) => [item.id, item]));
+            const uniqueOrderedIds: string[] = [];
+            const seen = new Set<string>();
+
+            tagIds.forEach((tagId) => {
+                if (seen.has(tagId) || !existingById.has(tagId)) {
+                    return;
+                }
+                seen.add(tagId);
+                uniqueOrderedIds.push(tagId);
+            });
+
+            if (uniqueOrderedIds.length < 1) {
+                return;
+            }
+
+            const sortedTags = [...tagsRef.current].sort(compareBySortOrderNameAndId);
+            const omittedIds = sortedTags.map((item) => item.id).filter((id) => !seen.has(id));
+            const finalIds = [...uniqueOrderedIds, ...omittedIds];
+            const nextOrderById = new Map(finalIds.map((id, index) => [id, index]));
+            const nextTags = finalIds
+                .map((tagId) => existingById.get(tagId))
+                .filter((tag): tag is Tag => Boolean(tag))
+                .map((tag) => ({
+                    ...tag,
+                    sortOrder: nextOrderById.get(tag.id) ?? tag.sortOrder,
+                }));
+
+            const snapshot = buildSnapshot({ tags: nextTags });
+            setSnapshotState(snapshot);
+            await persistFinanceFields({ tags: snapshot.tags });
+        },
+        [buildSnapshot, persistFinanceFields, setSnapshotState],
+    );
+
+    const setBeneficiaryActive = useCallback(
+        async (beneficiaryId: string, isActive: boolean) => {
+            let changed = false;
+            const nextBeneficiaries = beneficiariesRef.current
+                .map((beneficiary) => {
+                    if (beneficiary.id !== beneficiaryId || beneficiary.isActive === isActive) {
+                        return beneficiary;
+                    }
+                    changed = true;
+                    return { ...beneficiary, isActive };
+                })
+                .sort(compareBySortOrderNameAndId);
+
+            if (!changed) {
+                return;
+            }
+
+            const snapshot = buildSnapshot({ beneficiaries: nextBeneficiaries });
+            setSnapshotState(snapshot);
+            await persistFinanceFields({ beneficiaries: snapshot.beneficiaries });
+        },
+        [buildSnapshot, persistFinanceFields, setSnapshotState],
+    );
+
+    const setCategoryActive = useCallback(
+        async (categoryId: string, isActive: boolean) => {
+            const targetCategory = categoriesRef.current.find((category) => category.id === categoryId);
+            if (!targetCategory) {
+                return;
+            }
+
+            if (targetCategory.isSystem && !isActive) {
+                return;
+            }
+
+            const affectedIds = collectCategoryDescendantIds(categoriesRef.current, categoryId);
+            affectedIds.add(categoryId);
+
+            let changed = false;
+            const nextCategories = categoriesRef.current
+                .map((category) => {
+                    if (!affectedIds.has(category.id)) {
+                        return category;
+                    }
+
+                    if (category.isSystem && !isActive) {
+                        return category;
+                    }
+
+                    if (category.isActive === isActive) {
+                        return category;
+                    }
+
+                    changed = true;
+                    return {
+                        ...category,
+                        isActive,
+                    };
+                })
+                .sort(compareCategoriesByTypeParentSort);
+
+            if (!changed) {
+                return;
+            }
+
+            const snapshot = buildSnapshot({ categories: nextCategories });
+            setSnapshotState(snapshot);
+            await persistFinanceFields({ categories: snapshot.categories });
+        },
+        [buildSnapshot, persistFinanceFields, setSnapshotState],
+    );
+
+    const setTagActive = useCallback(
+        async (tagId: string, isActive: boolean) => {
+            let changed = false;
+            const nextTags = tagsRef.current
+                .map((tag) => {
+                    if (tag.id !== tagId || tag.isActive === isActive) {
+                        return tag;
+                    }
+                    changed = true;
+                    return { ...tag, isActive };
+                })
+                .sort(compareBySortOrderNameAndId);
+
+            if (!changed) {
+                return;
+            }
+
+            const snapshot = buildSnapshot({ tags: nextTags });
+            setSnapshotState(snapshot);
+            await persistFinanceFields({ tags: snapshot.tags });
+        },
+        [buildSnapshot, persistFinanceFields, setSnapshotState],
     );
 
     const clearTransactions = useCallback(async () => {
@@ -415,7 +717,9 @@ export function useFinanceStore(): FinanceStoreValue {
                     type: categoryType,
                     icon: getDefaultCategoryIconName(categoryType),
                     color: null,
+                    isActive: true,
                     isSystem: false,
+                    sortOrder: getNextSortOrder(nextCategories.filter((item) => item.parentId === parentId && item.type === categoryType)),
                     createdAt: nowIso,
                 });
                 nextCategories = [...nextCategories, category];
@@ -462,6 +766,7 @@ export function useFinanceStore(): FinanceStoreValue {
                     type: "person",
                     avatarColor: null,
                     isActive: true,
+                    sortOrder: getNextSortOrder(nextBeneficiaries),
                     createdAt: nowIso,
                 });
                 nextBeneficiaries = [...nextBeneficiaries, beneficiary];
@@ -561,8 +866,8 @@ export function useFinanceStore(): FinanceStoreValue {
             const nextLedgerEntries = [...ledgerEntriesRef.current, ...newLedgerEntries];
 
             const snapshot = buildSnapshot({
-                categories: nextCategories,
-                beneficiaries: nextBeneficiaries,
+                categories: [...nextCategories].sort(compareCategoriesByTypeParentSort),
+                beneficiaries: [...nextBeneficiaries].sort(compareBySortOrderNameAndId),
                 transactionGroups: nextGroups,
                 transactions: nextTransactions,
                 ledgerEntries: nextLedgerEntries,
@@ -695,6 +1000,12 @@ export function useFinanceStore(): FinanceStoreValue {
             addBeneficiary,
             addCategory,
             addTag,
+            reorderBeneficiaries,
+            reorderCategories,
+            reorderTags,
+            setBeneficiaryActive,
+            setCategoryActive,
+            setTagActive,
         }),
         [
             addBeneficiary,
@@ -711,6 +1022,12 @@ export function useFinanceStore(): FinanceStoreValue {
             ledgerEntries,
             loading,
             markTransactionAsPaid,
+            reorderBeneficiaries,
+            reorderCategories,
+            reorderTags,
+            setBeneficiaryActive,
+            setCategoryActive,
+            setTagActive,
             setFavoriteWallet,
             setStartBalance,
             storedTransactions,

@@ -1,97 +1,418 @@
-import { TrendingDown, TrendingUp } from "lucide-react";
-import type { TransactionType } from "../../context/FinanceContext";
+import { useMemo, useState } from "react";
+import { Copy, MoveRight, Trash2, TrendingDown, TrendingUp, X } from "lucide-react";
+import type { Beneficiary, Category, Tag, Transaction, TransactionStatus, TransactionType, Wallet } from "../../context/FinanceContext";
+import { useModal } from "../../context/ModalContext";
+import { getCategoryIconComponent } from "../../lib/categoryIcons";
+import { WalletAvatar } from "../common/WalletAvatar";
+import { SingleSelectCombobox, type ComboboxOptionBase } from "./SingleSelectCombobox";
 import { useTransactionForm } from "./useTransactionForm";
 
-export function TransactionForm({ type }: { type?: TransactionType }) {
-    const form = useTransactionForm(type);
+const FIELD_LABEL_CLASS = "text-[11px] uppercase tracking-[0.12em] text-white/50";
+const FIELD_INPUT_CLASS = "rounded-xl border border-white/[0.1] bg-black/35 p-2.5 text-white outline-none transition-colors placeholder:text-white/35 focus:border-white/[0.24]";
 
-    if (form.resolvedType !== "income" && form.resolvedType !== "spending") {
-        return null;
+interface WalletOption extends ComboboxOptionBase {
+    wallet: Wallet;
+}
+
+interface CategoryOption extends ComboboxOptionBase {
+    category: Category;
+    level: 0 | 1;
+    rootCategoryId: string;
+    categoryId: string;
+}
+
+interface BeneficiaryOption extends ComboboxOptionBase {
+    beneficiary: Beneficiary;
+}
+
+function TransactionHeader({ type, isEditing }: { type: TransactionType; isEditing: boolean }) {
+    if (type === "income") {
+        return (
+            <h1 className="flex items-center gap-2 text-2xl font-medium uppercase">
+                <TrendingUp size={32} className="rounded-2xl p-1" strokeWidth={3} />
+                {isEditing ? "Editar receita" : "Nova receita"}
+            </h1>
+        );
+    }
+
+    if (type === "spending") {
+        return (
+            <h1 className="flex items-center gap-2 text-2xl font-medium uppercase">
+                <TrendingDown size={32} className="rounded-2xl p-1" strokeWidth={3} />
+                {isEditing ? "Editar despesa" : "Nova despesa"}
+            </h1>
+        );
     }
 
     return (
-        <div className="p-8 bg-[#1e1e1e] rounded-2xl text-white">
-            <h1 className="text-2xl font-medium uppercase flex gap-2 items-center">
-                {form.resolvedType === "income" ? <TrendingUp size={32} className="p-1 rounded-2xl" strokeWidth={3} /> : <TrendingDown size={32} className="p-1 rounded-2xl" strokeWidth={3} />}
-                {form.resolvedType === "income" ? "Nova receita" : "Nova despesa"}
-            </h1>
+        <h1 className="flex items-center gap-2 text-2xl font-medium uppercase">
+            <MoveRight size={32} className="rounded-2xl p-1" strokeWidth={3} />
+            {isEditing ? "Editar transferencia" : "Nova transferencia"}
+        </h1>
+    );
+}
 
-            <div className="flex flex-col gap-4 my-5">
-                <div className="flex justify-between gap-3">
-                    <input className="bg-neutral-900 p-2.5 rounded-xl flex-1" type="number" placeholder="Valor" value={form.price} onChange={(event) => form.setPrice(event.target.value)} />
-                    <label className="flex items-center gap-2 bg-neutral-900 p-2.5 rounded-xl">
-                        <input type="checkbox" checked={form.checked} onChange={(event) => form.setChecked(event.target.checked)} />
-                        {form.resolvedType === "income" ? "Recebido" : "Pago"}
-                    </label>
-                </div>
+function StatusField({ status, onChange }: { status: TransactionStatus; onChange: (value: TransactionStatus) => void }) {
+    return (
+        <div className="flex flex-col gap-1.5">
+            <span className={FIELD_LABEL_CLASS}>Status</span>
+            <div className="flex rounded-xl border border-white/[0.1] bg-black/35 p-1 gap-1">
+                <button
+                    type="button"
+                    onClick={() => onChange("paid")}
+                    className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                        status === "paid" ? "bg-emerald-500/20 text-emerald-200" : "text-white/65 hover:bg-white/[0.06]"
+                    }`}
+                >
+                    Pago
+                </button>
+                <button
+                    type="button"
+                    onClick={() => onChange("pending")}
+                    className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                        status === "pending" ? "bg-amber-500/20 text-amber-200" : "text-white/65 hover:bg-white/[0.06]"
+                    }`}
+                >
+                    Pendente
+                </button>
+            </div>
+        </div>
+    );
+}
 
-                <input className="bg-neutral-900 p-2.5 rounded-xl" type="text" placeholder="Titulo (ex: Uber, Cliente X)" value={form.name} onChange={(event) => form.setName(event.target.value)} />
-                <textarea className="min-h-20 max-h-40 bg-neutral-900 p-2.5 rounded-xl" placeholder="Descricao" value={form.description} onChange={(event) => form.setDescription(event.target.value)} />
+function DateField({
+    value,
+    onChange,
+    onOffset,
+}: {
+    value: string;
+    onChange: (value: string) => void;
+    onOffset: (offsetInDays: number) => void;
+}) {
+    const dateShortcuts = [
+        { label: "Hoje", offset: 0 },
+        { label: "Ontem", offset: -1 },
+        { label: "Amanha", offset: 1 },
+    ];
 
-                <select className="bg-neutral-900 p-2.5 rounded-xl" value={form.walletId} onChange={(event) => form.setWalletId(event.target.value)}>
-                    {form.wallets.map((wallet) => (
-                        <option key={wallet.id} value={wallet.id}>
-                            {wallet.name}
-                        </option>
-                    ))}
-                </select>
+    return (
+        <div className="flex flex-col gap-2">
+            <label className="flex flex-col gap-1.5">
+                <span className={FIELD_LABEL_CLASS}>Data</span>
+                <input className={FIELD_INPUT_CLASS} type="date" required value={value} onChange={(event) => onChange(event.target.value)} />
+            </label>
+            <div className="flex flex-wrap gap-2">
+                {dateShortcuts.map((shortcut) => (
+                    <button
+                        key={shortcut.label}
+                        type="button"
+                        onClick={() => onOffset(shortcut.offset)}
+                        className="rounded-full border border-white/[0.15] bg-white/[0.03] px-3 py-1 text-xs uppercase tracking-[0.08em] text-white/75 transition-colors hover:bg-white/[0.08]"
+                    >
+                        {shortcut.label}
+                    </button>
+                ))}
+            </div>
+        </div>
+    );
+}
 
-                <select className="bg-neutral-900 p-2.5 rounded-xl" value={form.rootCategoryId} onChange={(event) => form.setRootCategoryId(event.target.value)}>
-                    {form.rootCategories.length === 0 && <option value="">Sem categoria</option>}
-                    {form.rootCategories.map((category) => (
-                        <option key={category.id} value={category.id}>
-                            {category.name}
-                        </option>
-                    ))}
-                </select>
+function CategoryOptionContent({ option }: { option: CategoryOption }) {
+    const Icon = getCategoryIconComponent(option.category.icon, option.category.type);
 
-                <select className="bg-neutral-900 p-2.5 rounded-xl" value={form.subCategoryId} onChange={(event) => form.setSubCategoryId(event.target.value)}>
-                    <option value="">Sem subcategoria</option>
-                    {form.subCategories.map((category) => (
-                        <option key={category.id} value={category.id}>
-                            {category.name}
-                        </option>
-                    ))}
-                </select>
+    return (
+        <div className={`flex items-center gap-2 ${option.level === 1 ? "pl-3" : ""}`}>
+            {option.level === 1 && <span className="h-px w-2 rounded-full bg-white/25" />}
+            <span
+                className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-white/[0.12]"
+                style={{ color: option.category.color ?? "#CBD5E1", backgroundColor: `${option.category.color ?? "#64748B"}22` }}
+            >
+                <Icon size={14} />
+            </span>
+            <span className="truncate">{option.label}</span>
+        </div>
+    );
+}
 
-                <select className="bg-neutral-900 p-2.5 rounded-xl" value={form.beneficiaryId} onChange={(event) => form.setBeneficiaryId(event.target.value)}>
-                    {form.beneficiaries.length === 0 && <option value="">Sem beneficiario</option>}
-                    {form.beneficiaries
-                        .filter((item) => item.isActive)
-                        .map((beneficiary) => (
-                            <option key={beneficiary.id} value={beneficiary.id}>
-                                {beneficiary.name}
-                            </option>
-                        ))}
-                </select>
+function WalletOptionContent({ option }: { option: WalletOption }) {
+    return (
+        <div className="flex items-center gap-2">
+            <WalletAvatar wallet={option.wallet} className="h-7 w-7 rounded-md border border-white/[0.12]" iconSize={14} iconStrokeWidth={1.7} />
+            <span className="truncate">{option.label}</span>
+        </div>
+    );
+}
 
-                <div className="bg-neutral-900 p-2.5 rounded-xl">
-                    <p className="text-sm text-white/50 mb-2">Tags</p>
-                    <div className="flex flex-wrap gap-2">
-                        {form.tags.map((tag) => {
-                            const selected = form.selectedTagIds.includes(tag.id);
-                            return (
-                                <button
-                                    type="button"
-                                    key={tag.id}
-                                    onClick={() => form.toggleTag(tag.id)}
-                                    className={`px-2.5 py-1.5 rounded-full border text-sm ${selected ? "border-white/80 text-white" : "border-white/20 text-white/60"}`}
-                                    style={{ backgroundColor: selected ? `${tag.color ?? "#64748B"}55` : `${tag.color ?? "#64748B"}22` }}
-                                >
-                                    {tag.name}
-                                </button>
-                            );
-                        })}
-                        {form.tags.length === 0 && <p className="text-sm text-white/40">Nenhuma tag cadastrada.</p>}
-                    </div>
-                </div>
+function BeneficiaryOptionContent({ option }: { option: BeneficiaryOption }) {
+    return (
+        <div className="flex items-center gap-2">
+            <span className="inline-flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border border-white/[0.12] bg-white/[0.03]">
+                {option.beneficiary.avatarImage ? (
+                    <img src={option.beneficiary.avatarImage} alt={option.beneficiary.name} className="h-full w-full object-cover" />
+                ) : (
+                    <span className="h-full w-full" style={{ backgroundColor: option.beneficiary.avatarColor ?? "#4B5563" }} />
+                )}
+            </span>
+            <span className="truncate">{option.label}</span>
+        </div>
+    );
+}
 
-                <input className="bg-neutral-900 p-2.5 rounded-xl" type="date" required value={form.date} onChange={(event) => form.setDate(event.target.value)} />
+function TagsField({ tags, selectedTagIds, onToggle }: { tags: Tag[]; selectedTagIds: string[]; onToggle: (tagId: string) => void }) {
+    return (
+        <div className="rounded-xl border border-white/[0.1] bg-black/35 p-2.5">
+            <div className="flex flex-wrap gap-2">
+                {tags.map((tag) => {
+                    const selected = selectedTagIds.includes(tag.id);
+                    return (
+                        <button
+                            type="button"
+                            key={tag.id}
+                            onClick={() => onToggle(tag.id)}
+                            className={`rounded-full border px-2.5 py-1.5 text-sm ${selected ? "border-white/80 text-white" : "border-white/20 text-white/60"}`}
+                            style={{ backgroundColor: selected ? `${tag.color ?? "#64748B"}55` : `${tag.color ?? "#64748B"}22` }}
+                        >
+                            {tag.name}
+                        </button>
+                    );
+                })}
+                {tags.length === 0 && <p className="text-sm text-white/40">Nenhuma tag cadastrada.</p>}
+            </div>
+        </div>
+    );
+}
+
+interface TransactionFormProps {
+    type?: TransactionType;
+    transaction?: Transaction | null;
+}
+
+export function TransactionForm({ type, transaction }: TransactionFormProps) {
+    const { closeModal } = useModal();
+    const [submitting, setSubmitting] = useState(false);
+    const form = useTransactionForm({ type, transaction });
+
+    const walletOptions = useMemo<WalletOption[]>(
+        () =>
+            form.wallets.map((wallet) => ({
+                id: wallet.id,
+                label: wallet.name,
+                searchText: wallet.name,
+                wallet,
+            })),
+        [form.wallets],
+    );
+
+    const categoryOptions = useMemo<CategoryOption[]>(() => {
+        const subCategoriesByRoot = new Map<string, Category[]>();
+
+        for (const category of form.availableCategories) {
+            if (!category.parentId) {
+                continue;
+            }
+            const rootCategories = subCategoriesByRoot.get(category.parentId) ?? [];
+            rootCategories.push(category);
+            subCategoriesByRoot.set(category.parentId, rootCategories);
+        }
+
+        return form.rootCategories.flatMap((rootCategory) => {
+            const rootOption: CategoryOption = {
+                id: `root:${rootCategory.id}`,
+                label: rootCategory.name,
+                searchText: rootCategory.name,
+                category: rootCategory,
+                level: 0,
+                rootCategoryId: rootCategory.id,
+                categoryId: rootCategory.id,
+            };
+
+            const subCategoryOptions = (subCategoriesByRoot.get(rootCategory.id) ?? []).map((subCategory) => ({
+                id: `sub:${subCategory.id}`,
+                label: subCategory.name,
+                searchText: `${subCategory.name} ${rootCategory.name}`,
+                category: subCategory,
+                level: 1 as const,
+                rootCategoryId: rootCategory.id,
+                categoryId: subCategory.id,
+            }));
+
+            return [rootOption, ...subCategoryOptions];
+        });
+    }, [form.availableCategories, form.rootCategories]);
+
+    const selectedCategoryOptionId = form.subCategoryId ? `sub:${form.subCategoryId}` : form.rootCategoryId ? `root:${form.rootCategoryId}` : "";
+
+    const beneficiaryOptions = useMemo<BeneficiaryOption[]>(
+        () =>
+            form.beneficiaries
+                .filter((beneficiary) => beneficiary.isActive || beneficiary.id === form.beneficiaryId)
+                .map((beneficiary) => ({
+                    id: beneficiary.id,
+                    label: beneficiary.name,
+                    searchText: beneficiary.name,
+                    beneficiary,
+                })),
+        [form.beneficiaries, form.beneficiaryId],
+    );
+
+    const handleCategorySelect = (optionId: string) => {
+        const selectedOption = categoryOptions.find((option) => option.id === optionId);
+        if (!selectedOption) {
+            return;
+        }
+
+        form.setRootCategoryId(selectedOption.rootCategoryId);
+        form.setSubCategoryId(optionId.startsWith("sub:") ? selectedOption.categoryId : "");
+    };
+
+    const runAction = async (action: () => Promise<boolean>) => {
+        if (submitting) {
+            return;
+        }
+
+        setSubmitting(true);
+
+        try {
+            const success = await action();
+            if (success) {
+                closeModal();
+                return;
+            }
+        } catch (error) {
+            console.error("Failed to submit transaction form:", error);
+        }
+
+        setSubmitting(false);
+    };
+
+    return (
+        <div className="rounded-2xl border border-white/[0.09] bg-[#131313] p-4 text-white shadow-[0_26px_70px_-38px_rgba(0,0,0,0.95)]">
+            <div className="flex items-start justify-between gap-3">
+                <TransactionHeader type={form.resolvedType} isEditing={form.isEditing} />
+                <button
+                    type="button"
+                    onClick={closeModal}
+                    disabled={submitting}
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-white/[0.12] bg-white/[0.03] text-white/70 transition-colors hover:border-white/[0.22] hover:text-white disabled:cursor-not-allowed disabled:opacity-55"
+                    aria-label="Fechar modal"
+                    title="Fechar"
+                >
+                    <X size={15} />
+                </button>
             </div>
 
-            <button className="default-button py-2 px-6" onClick={form.submit}>
-                Criar transacao
-            </button>
+            <section className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
+                <label className="flex flex-col gap-1.5">
+                    <span className={FIELD_LABEL_CLASS}>Valor</span>
+                    <input
+                        className={FIELD_INPUT_CLASS}
+                        inputMode="numeric"
+                        placeholder="R$ 0,00"
+                        value={form.amountInput}
+                        onChange={(event) => form.setAmountInput(event.target.value)}
+                    />
+                </label>
+
+                <StatusField status={form.status} onChange={form.setStatus} />
+
+                <DateField value={form.date} onChange={form.setDate} onOffset={form.setDateOffset} />
+
+                <SingleSelectCombobox
+                    label="Categoria"
+                    value={selectedCategoryOptionId}
+                    placeholder="Selecione uma categoria"
+                    emptyMessage="Nenhuma categoria disponivel."
+                    options={categoryOptions}
+                    onChange={handleCategorySelect}
+                    renderOptionContent={(option) => <CategoryOptionContent option={option} />}
+                    labelClassName={FIELD_LABEL_CLASS}
+                />
+
+                <SingleSelectCombobox
+                    label="Banco / Carteira"
+                    value={form.walletId}
+                    placeholder="Selecione uma carteira"
+                    emptyMessage="Nenhuma carteira encontrada."
+                    options={walletOptions}
+                    onChange={form.setWalletId}
+                    renderOptionContent={(option) => <WalletOptionContent option={option} />}
+                    labelClassName={FIELD_LABEL_CLASS}
+                />
+
+                <SingleSelectCombobox
+                    label="Beneficiario"
+                    value={form.beneficiaryId}
+                    placeholder="Selecione um beneficiario"
+                    emptyMessage="Nenhum beneficiario encontrado."
+                    options={beneficiaryOptions}
+                    onChange={form.setBeneficiaryId}
+                    renderOptionContent={(option) => <BeneficiaryOptionContent option={option} />}
+                    labelClassName={FIELD_LABEL_CLASS}
+                />
+
+                <label className="flex flex-col gap-1.5 md:col-span-2">
+                    <span className={FIELD_LABEL_CLASS}>Descricao</span>
+                    <input
+                        className={FIELD_INPUT_CLASS}
+                        placeholder="Descricao da transacao"
+                        value={form.description}
+                        onChange={(event) => form.setDescription(event.target.value)}
+                    />
+                </label>
+
+                <div className="flex flex-col gap-1.5 md:col-span-2">
+                    <p className={FIELD_LABEL_CLASS}>Tags</p>
+                    <TagsField tags={form.tags} selectedTagIds={form.selectedTagIds} onToggle={form.toggleTag} />
+                </div>
+            </section>
+
+            <div className="mt-5 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                    {form.isEditing && (
+                        <>
+                            <button
+                                type="button"
+                                onClick={() => void runAction(form.remove)}
+                                disabled={submitting}
+                                className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-red-400/25 bg-red-500/10 text-red-200 transition-colors hover:border-red-400/45 hover:text-red-100 disabled:cursor-not-allowed disabled:opacity-60"
+                                aria-label="Excluir transacao"
+                                title="Excluir transacao"
+                            >
+                                <Trash2 size={15} />
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => void runAction(form.duplicate)}
+                                disabled={submitting}
+                                className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-white/[0.12] bg-white/[0.03] text-white/70 transition-colors hover:border-white/[0.24] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                                aria-label="Duplicar transacao"
+                                title="Duplicar transacao"
+                            >
+                                <Copy size={15} />
+                            </button>
+                        </>
+                    )}
+                </div>
+
+                <div className="flex items-center gap-2">
+                    <button
+                        type="button"
+                        onClick={closeModal}
+                        disabled={submitting}
+                        className="inline-flex min-w-24 items-center justify-center rounded-xl border border-white/[0.12] bg-white/[0.03] px-4 py-2 text-sm font-medium text-white/70 transition-colors hover:border-white/[0.2] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                        Cancelar
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => void runAction(form.submit)}
+                        disabled={submitting}
+                        className="inline-flex min-w-28 items-center justify-center rounded-xl border border-emerald-400/35 bg-emerald-500/15 px-4 py-2 text-sm font-semibold text-emerald-100 transition-colors hover:border-emerald-400/55 hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                        {submitting ? "Processando..." : "Concluir"}
+                    </button>
+                </div>
+            </div>
         </div>
     );
 }

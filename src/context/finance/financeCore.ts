@@ -1,4 +1,6 @@
 import { getDefaultCategoryIconName, normalizeCategoryIconName } from "../../lib/categoryIcons";
+import { formatLocalDateInput, getLocalTodayDate, parseAppDate } from "../../lib/localDate";
+import { DEFAULT_WALLET_COLOR, DEFAULT_WALLET_ICON } from "../../lib/walletVisual";
 
 export type TransactionType = "income" | "spending" | "transfer";
 export type TransactionGroupType = "income" | "expense" | "transfer";
@@ -112,6 +114,7 @@ export interface Beneficiary {
     avatarColor: string | null;
     avatarImage: string | null;
     isActive: boolean;
+    sortOrder: number;
     createdAt: string;
 }
 
@@ -123,7 +126,9 @@ export interface Category {
     type: CategoryType;
     icon: string;
     color: string | null;
+    isActive: boolean;
     isSystem: boolean;
+    sortOrder: number;
     createdAt: string;
 }
 
@@ -132,6 +137,8 @@ export interface Tag {
     userId: string | null;
     name: string;
     color: string | null;
+    isActive: boolean;
+    sortOrder: number;
     createdAt: string;
 }
 
@@ -211,12 +218,12 @@ export const DEFAULT_INCOME_CATEGORY_ID = "system-category-income-other";
 export const DEFAULT_WALLET: Wallet = {
     id: DEFAULT_WALLET_ID,
     name: "Carteira Principal",
-    icon: "/Nubank.png",
+    icon: DEFAULT_WALLET_ICON,
     type: "checking",
     balance: 0,
     initialBalance: 0,
     currency: "BRL",
-    color: "#3B82F6",
+    color: DEFAULT_WALLET_COLOR,
     isActive: true,
     createdAt: new Date().toISOString(),
 };
@@ -266,6 +273,12 @@ function asNumber(value: unknown, fallback: number): number {
     return Number.isFinite(numeric) ? numeric : fallback;
 }
 
+function asSortOrder(value: unknown, fallback: number): number {
+    const safeFallback = Number.isFinite(fallback) ? fallback : 0;
+    const numeric = Math.round(asNumber(value, safeFallback));
+    return Number.isFinite(numeric) ? Math.max(0, numeric) : Math.max(0, Math.round(safeFallback));
+}
+
 function asBoolean(value: unknown, fallback: boolean): boolean {
     return typeof value === "boolean" ? value : fallback;
 }
@@ -275,11 +288,15 @@ function asArray(value: unknown): unknown[] {
 }
 
 function asDateString(value: unknown, fallback: string): string {
-    const parsed = typeof value === "string" ? new Date(value) : new Date(NaN);
-    if (Number.isNaN(parsed.getTime())) {
+    if (typeof value !== "string") {
         return fallback;
     }
-    return parsed.toISOString().slice(0, 10);
+
+    const parsed = parseAppDate(value);
+    if (!parsed) {
+        return fallback;
+    }
+    return formatLocalDateInput(parsed);
 }
 
 function asDateTimeString(value: unknown, fallback: string): string {
@@ -322,8 +339,24 @@ function roundToCents(value: number): number {
     return Math.round(value * 100) / 100;
 }
 
+function compareBySortOrderNameAndId(
+    a: Pick<Category | Beneficiary | Tag, "sortOrder" | "name" | "id">,
+    b: Pick<Category | Beneficiary | Tag, "sortOrder" | "name" | "id">,
+): number {
+    if (a.sortOrder !== b.sortOrder) {
+        return a.sortOrder - b.sortOrder;
+    }
+
+    const nameComparison = a.name.localeCompare(b.name, "pt-BR", { sensitivity: "base" });
+    if (nameComparison !== 0) {
+        return nameComparison;
+    }
+
+    return a.id.localeCompare(b.id);
+}
+
 function getTodayDate(): string {
-    return new Date().toISOString().slice(0, 10);
+    return getLocalTodayDate();
 }
 
 function getNowIso(): string {
@@ -447,7 +480,7 @@ export function normalizeWallet(wallet: WalletInput): Wallet {
         balance,
         initialBalance,
         currency: asString(wallet.currency, "BRL").toUpperCase(),
-        color: asString(wallet.color, "#3B82F6"),
+        color: asString(wallet.color, DEFAULT_WALLET_COLOR),
         isActive: asBoolean(wallet.isActive, true),
         createdAt: asDateTimeString(wallet.createdAt, getNowIso()),
     };
@@ -462,6 +495,7 @@ export function normalizeBeneficiary(beneficiary: BeneficiaryInput): Beneficiary
         avatarColor: asNullableString(beneficiary.avatarColor, null),
         avatarImage: asNullableString(beneficiary.avatarImage, null),
         isActive: asBoolean(beneficiary.isActive, true),
+        sortOrder: asSortOrder(beneficiary.sortOrder, 0),
         createdAt: asDateTimeString(beneficiary.createdAt, getNowIso()),
     };
 }
@@ -476,7 +510,9 @@ export function normalizeCategory(category: CategoryInput): Category {
         type: resolvedType,
         icon: normalizeCategoryIconName(asNullableString(category.icon, null), resolvedType),
         color: asNullableString(category.color, null),
+        isActive: asBoolean(category.isActive, true),
         isSystem: asBoolean(category.isSystem, false),
+        sortOrder: asSortOrder(category.sortOrder, 0),
         createdAt: asDateTimeString(category.createdAt, getNowIso()),
     };
 }
@@ -487,6 +523,8 @@ export function normalizeTag(tag: TagInput): Tag {
         userId: asNullableString(tag.userId, null),
         name: asString(tag.name, "Tag"),
         color: asNullableString(tag.color, null),
+        isActive: asBoolean(tag.isActive, true),
+        sortOrder: asSortOrder(tag.sortOrder, 0),
         createdAt: asDateTimeString(tag.createdAt, getNowIso()),
     };
 }
@@ -820,7 +858,7 @@ export function createFinanceSnapshot(
 }
 
 function buildSystemCategories(now: string): Category[] {
-    return SYSTEM_CATEGORY_SEED.map((item) =>
+    return SYSTEM_CATEGORY_SEED.map((item, index) =>
         normalizeCategory({
             id: item.id,
             userId: null,
@@ -829,7 +867,9 @@ function buildSystemCategories(now: string): Category[] {
             type: item.type,
             icon: item.icon,
             color: item.color,
+            isActive: true,
             isSystem: true,
+            sortOrder: index,
             createdAt: now,
         }),
     );
@@ -855,6 +895,7 @@ function ensureSystemCategories(categoriesById: Map<string, Category>, now: stri
                     userId: null,
                     parentId: systemCategory.parentId,
                     type: systemCategory.type,
+                    isActive: true,
                 },
             );
             changed = true;
@@ -901,7 +942,14 @@ function findOrCreateCategory(
         type: params.type,
         icon: getDefaultCategoryIconName(params.type),
         color: null,
+        isActive: true,
         isSystem: false,
+        sortOrder: Math.max(
+            0,
+            ...Array.from(params.categoriesById.values())
+                .filter((item) => item.type === params.type && item.parentId === params.parentId)
+                .map((item) => item.sortOrder),
+        ) + 1,
         createdAt: params.now,
     });
 
@@ -940,6 +988,7 @@ function ensureDefaultBeneficiary(beneficiariesById: Map<string, Beneficiary>, u
             avatarColor: "#4B5563",
             avatarImage: null,
             isActive: true,
+            sortOrder: Math.max(0, ...Array.from(beneficiariesById.values()).map((item) => item.sortOrder)) + 1,
             createdAt: now,
         }),
     );
@@ -970,6 +1019,7 @@ function findOrCreateBeneficiary(
         avatarColor: null,
         avatarImage: null,
         isActive: true,
+        sortOrder: Math.max(0, ...Array.from(beneficiariesById.values()).map((item) => item.sortOrder)) + 1,
         createdAt: now,
     });
 
@@ -1162,7 +1212,7 @@ export function normalizeFinanceSnapshot(rawFinance: unknown, userId: string | n
             balance: asNumber(rawWallet.balance, asNumber(rawWallet.initialBalance, asNumber(rawWallet.startBalance, 0))),
             initialBalance: asNumber(rawWallet.initialBalance, asNumber(rawWallet.startBalance, 0)),
             currency: asString(rawWallet.currency, "BRL"),
-            color: asString(rawWallet.color, "#3B82F6"),
+            color: asString(rawWallet.color, DEFAULT_WALLET_COLOR),
             isActive: asBoolean(rawWallet.isActive, true),
             createdAt: asDateTimeString(rawWallet.createdAt, now),
         });
@@ -1198,26 +1248,36 @@ export function normalizeFinanceSnapshot(rawFinance: unknown, userId: string | n
     }
 
     const categoriesById = new Map<string, Category>();
-    categoriesRaw.forEach((rawCategory) => {
+    categoriesRaw.forEach((rawCategory, index) => {
         if (!isRecord(rawCategory) || typeof rawCategory.id !== "string") {
             changed = true;
             return;
         }
 
         const rawIcon = asNullableString(rawCategory.icon, null);
+        const normalizedRawIcon = rawIcon ?? undefined;
+        const rawCategorySortOrder = rawCategory.sortOrder;
+        const hasCategorySortOrder = Number.isFinite(asNumber(rawCategorySortOrder, Number.NaN));
+        const rawCategoryIsActive = rawCategory.isActive;
+        const hasCategoryIsActive = typeof rawCategoryIsActive === "boolean";
         const normalizedCategory = normalizeCategory({
             id: rawCategory.id,
             userId: asNullableString(rawCategory.userId, userId),
             parentId: asNullableString(rawCategory.parentId, null),
             name: asString(rawCategory.name, "Sem categoria"),
             type: asCategoryType(rawCategory.type, "expense"),
-            icon: rawIcon,
+            icon: normalizedRawIcon,
             color: asNullableString(rawCategory.color, null),
+            isActive: hasCategoryIsActive ? rawCategoryIsActive : true,
             isSystem: asBoolean(rawCategory.isSystem, false),
+            sortOrder: hasCategorySortOrder ? asNumber(rawCategorySortOrder, index) : index,
             createdAt: asDateTimeString(rawCategory.createdAt, now),
         });
 
         if (rawIcon !== normalizedCategory.icon) {
+            changed = true;
+        }
+        if (!hasCategorySortOrder || !hasCategoryIsActive) {
             changed = true;
         }
 
@@ -1239,13 +1299,15 @@ export function normalizeFinanceSnapshot(rawFinance: unknown, userId: string | n
     }
 
     const beneficiariesById = new Map<string, Beneficiary>();
-    beneficiariesRaw.forEach((rawBeneficiary) => {
+    beneficiariesRaw.forEach((rawBeneficiary, index) => {
         if (!isRecord(rawBeneficiary) || typeof rawBeneficiary.id !== "string") {
             changed = true;
             return;
         }
 
         const rawAvatarImage = asNullableString(rawBeneficiary.avatarImage, null);
+        const rawBeneficiarySortOrder = rawBeneficiary.sortOrder;
+        const hasBeneficiarySortOrder = Number.isFinite(asNumber(rawBeneficiarySortOrder, Number.NaN));
         const normalizedBeneficiary = normalizeBeneficiary({
             id: rawBeneficiary.id,
             userId: asNullableString(rawBeneficiary.userId, userId),
@@ -1254,10 +1316,14 @@ export function normalizeFinanceSnapshot(rawFinance: unknown, userId: string | n
             avatarColor: asNullableString(rawBeneficiary.avatarColor, null),
             avatarImage: rawAvatarImage,
             isActive: asBoolean(rawBeneficiary.isActive, true),
+            sortOrder: hasBeneficiarySortOrder ? asNumber(rawBeneficiarySortOrder, index) : index,
             createdAt: asDateTimeString(rawBeneficiary.createdAt, now),
         });
 
         if (rawAvatarImage !== normalizedBeneficiary.avatarImage) {
+            changed = true;
+        }
+        if (!hasBeneficiarySortOrder) {
             changed = true;
         }
 
@@ -1279,19 +1345,28 @@ export function normalizeFinanceSnapshot(rawFinance: unknown, userId: string | n
     }
 
     const tagsById = new Map<string, Tag>();
-    tagsRaw.forEach((rawTag) => {
+    tagsRaw.forEach((rawTag, index) => {
         if (!isRecord(rawTag) || typeof rawTag.id !== "string") {
             changed = true;
             return;
         }
 
+        const rawTagSortOrder = rawTag.sortOrder;
+        const hasTagSortOrder = Number.isFinite(asNumber(rawTagSortOrder, Number.NaN));
+        const rawTagIsActive = rawTag.isActive;
+        const hasTagIsActive = typeof rawTagIsActive === "boolean";
         const normalizedTag = normalizeTag({
             id: rawTag.id,
             userId: asNullableString(rawTag.userId, userId),
             name: asString(rawTag.name, "Tag"),
             color: asNullableString(rawTag.color, null),
+            isActive: hasTagIsActive ? rawTagIsActive : true,
+            sortOrder: hasTagSortOrder ? asNumber(rawTagSortOrder, index) : index,
             createdAt: asDateTimeString(rawTag.createdAt, now),
         });
+        if (!hasTagSortOrder || !hasTagIsActive) {
+            changed = true;
+        }
 
         if (tagsById.has(normalizedTag.id)) {
             changed = true;
@@ -1581,23 +1656,26 @@ export function normalizeFinanceSnapshot(rawFinance: unknown, userId: string | n
     }
 
     const normalizedCategories = Array.from(categoriesById.values()).sort((a, b) => {
-        if (a.type === b.type) {
-            if (a.parentId === b.parentId) {
-                return a.name.localeCompare(b.name);
-            }
-            if (a.parentId === null) {
-                return -1;
-            }
-            if (b.parentId === null) {
-                return 1;
-            }
-            return a.parentId.localeCompare(b.parentId);
+        if (a.type !== b.type) {
+            return a.type.localeCompare(b.type);
         }
-        return a.type.localeCompare(b.type);
+
+        if (a.parentId === b.parentId) {
+            return compareBySortOrderNameAndId(a, b);
+        }
+
+        if (a.parentId === null) {
+            return -1;
+        }
+        if (b.parentId === null) {
+            return 1;
+        }
+
+        return a.parentId.localeCompare(b.parentId);
     });
 
-    const normalizedBeneficiaries = Array.from(beneficiariesById.values()).sort((a, b) => a.name.localeCompare(b.name));
-    const normalizedTags = Array.from(tagsById.values()).sort((a, b) => a.name.localeCompare(b.name));
+    const normalizedBeneficiaries = Array.from(beneficiariesById.values()).sort(compareBySortOrderNameAndId);
+    const normalizedTags = Array.from(tagsById.values()).sort(compareBySortOrderNameAndId);
 
     return {
         snapshot: createFinanceSnapshot(

@@ -32,7 +32,7 @@ export function CategoryIconPicker({ value, categoryType, onChange }: CategoryIc
     const hasMoreIcons = visibleCount < filteredIconNames.length;
 
     return (
-        <div className="rounded-lg border border-white/10 bg-neutral-900/70 p-3 ">
+        <div className="rounded-lg border border-white/10 bg-black/35 p-3 ">
             <div className="mb-2 flex items-center justify-between">
                 <p className="text-left text-xs uppercase tracking-[0.12em] text-white/50">Icone da categoria</p>
                 <div className="flex items-center gap-2 rounded-md border border-white/10 bg-black/20 px-2 py-1">
@@ -52,7 +52,7 @@ export function CategoryIconPicker({ value, categoryType, onChange }: CategoryIc
                 />
             </label>
 
-            <div className="max-h-[200px] overflow-auto rounded-md border border-white/5 bg-black/20 p-2">
+            <div className="max-h-[110px] overflow-auto rounded-md border border-white/5 bg-black/20 p-2">
                 <div className="grid grid-cols-6 gap-2 sm:grid-cols-8 md:grid-cols-10">
                     {visibleIcons.map((iconName) => {
                         const Icon = getCategoryIconComponent(iconName, categoryType);

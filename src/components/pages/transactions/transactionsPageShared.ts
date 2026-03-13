@@ -1,4 +1,5 @@
 import type { Transaction, TransactionStatus } from "../../../context/FinanceContext";
+import { parseAppDate } from "../../../lib/localDate";
 
 export type SortField = "date" | "value" | "status" | "category" | "beneficiary";
 export type SortDirection = "asc" | "desc";
@@ -71,7 +72,7 @@ export const SORT_DEFAULT_DIRECTION: Record<SortField, SortDirection> = {
     beneficiary: "asc",
 };
 
-export const SELECT_CLASS = "w-full rounded-xl border border-white/[0.08] bg-black/25 px-3 py-2 text-sm text-white outline-none transition-colors focus:border-white/[0.24]";
+export const SELECT_CLASS = "w-full rounded-full border border-white/[0.08] bg-black/25 px-3 py-2 text-sm text-white outline-none transition-colors focus:border-white/[0.24]";
 export const INPUT_CLASS = "w-full rounded-xl border border-white/[0.08] bg-black/25 px-3 py-2 text-sm text-white outline-none transition-colors focus:border-white/[0.24]";
 
 function padMonthPart(value: number): string {
@@ -83,9 +84,8 @@ export function getCurrentMonthKey(referenceDate = new Date()): string {
 }
 
 export function getTransactionMonthKey(dateValue: string): string {
-    const parsedDate = new Date(dateValue);
-
-    if (Number.isNaN(parsedDate.getTime())) {
+    const parsedDate = parseAppDate(dateValue);
+    if (!parsedDate) {
         return getCurrentMonthKey();
     }
 

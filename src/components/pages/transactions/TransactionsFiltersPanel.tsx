@@ -1,11 +1,74 @@
 import { AnimatePresence, motion } from "framer-motion";
-import { FunnelPlus, Search, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, FunnelPlus, Search, X } from "lucide-react";
 import type { TransactionStatus, Wallet } from "../../../context/FinanceContext";
 import { INPUT_CLASS, SELECT_CLASS, STATUS_LABELS, STATUS_ORDER, type SelectOption, type TagOption } from "./transactionsPageShared";
 
+function getCurrentMonthKey(): string {
+    const now = new Date();
+    const month = String(now.getMonth() + 1).padStart(2, "0");
+    return `${now.getFullYear()}-${month}`;
+}
+
+function shiftMonth(monthKey: string, offset: number): string {
+    const [yearPart, monthPart] = monthKey.split("-");
+    const year = Number(yearPart);
+    const month = Number(monthPart);
+
+    if (!Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12) {
+        return getCurrentMonthKey();
+    }
+
+    const shifted = new Date(year, month - 1 + offset, 1);
+    const shiftedMonth = String(shifted.getMonth() + 1).padStart(2, "0");
+    return `${shifted.getFullYear()}-${shiftedMonth}`;
+}
+
+interface MonthYearSelectorProps {
+    selectedMonth: string;
+    onMonthChange: (value: string) => void;
+}
+
+function MonthYearSelector({ selectedMonth, onMonthChange }: MonthYearSelectorProps) {
+    return (
+        <div className="inline-flex items-center gap-1 rounded-full border border-white/[0.12] bg-neutral-900 px-1 py-1">
+            <button
+                type="button"
+                onClick={() => onMonthChange(shiftMonth(selectedMonth, -1))}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-transparent text-white/80 transition-colors hover:border-white/[0.16] hover:bg-white/[0.06] hover:text-white"
+                aria-label="Mes anterior"
+                title="Mes anterior"
+            >
+                <ChevronLeft size={16} />
+            </button>
+            <label htmlFor="transactions-month-selector" className="sr-only">
+                Mes e ano
+            </label>
+            <input
+                id="transactions-month-selector"
+                type="month"
+                value={selectedMonth}
+                onChange={(event) => {
+                    if (event.target.value) {
+                        onMonthChange(event.target.value);
+                    }
+                }}
+                className="rounded-full border border-white/[0.08] bg-black/25 px-3 py-1.5 text-sm text-white outline-none transition-colors focus:border-white/[0.24] [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:invert"
+            />
+            <button
+                type="button"
+                onClick={() => onMonthChange(shiftMonth(selectedMonth, 1))}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-transparent text-white/80 transition-colors hover:border-white/[0.16] hover:bg-white/[0.06] hover:text-white"
+                aria-label="Proximo mes"
+                title="Proximo mes"
+            >
+                <ChevronRight size={16} />
+            </button>
+        </div>
+    );
+}
+
 interface TransactionsFiltersPanelProps {
     selectedMonth: string;
-    monthOptions: SelectOption[];
     showAdvancedFilters: boolean;
     searchQuery: string;
     selectedCategoryKey: string;
@@ -39,7 +102,6 @@ interface TransactionsFiltersPanelProps {
 
 export function TransactionsFiltersPanel({
     selectedMonth,
-    monthOptions,
     showAdvancedFilters,
     searchQuery,
     selectedCategoryKey,
@@ -77,15 +139,7 @@ export function TransactionsFiltersPanel({
                     <div className="text-left">
                         <h1 className="text-2xl font-semibold text-white">Transações</h1>
                     </div>
-                    <div>
-                        <select value={selectedMonth} onChange={(event) => onMonthChange(event.target.value)} className={SELECT_CLASS}>
-                            {monthOptions.map((option) => (
-                                <option key={option.value} value={option.value}>
-                                    {option.label}
-                                </option>
-                            ))}
-                        </select>
-                    </div>
+                    <MonthYearSelector selectedMonth={selectedMonth} onMonthChange={onMonthChange} />
                 </div>
                 <div className="flex justify-between gap-3">
                     <div className="w-full">

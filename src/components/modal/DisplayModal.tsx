@@ -9,7 +9,7 @@ export function DisplayModal() {
             {modal && (
                 <>
                     <motion.div
-                        className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[5]"
+                        className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[90]"
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
@@ -17,7 +17,7 @@ export function DisplayModal() {
                     />
 
                     <motion.div
-                        className="fixed inset-0 flex justify-center items-center z-10 text-white"
+                        className="fixed inset-0 flex justify-center items-center z-[100] text-white"
                         initial={{ opacity: 0, y: -200 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: 50 }}

@@ -1,8 +1,9 @@
-import { ArrowDownRight, ArrowUpRight, MoveRight, UserRound, Wallet as WalletIcon } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, MoveRight, UserRound } from "lucide-react";
 import { useModal } from "../../context/ModalContext";
 import { type Transaction, useFinanceWallets } from "../../context/FinanceContext";
+import { WalletAvatar } from "../common/WalletAvatar";
 import { EditTransaction } from "../modal/EditTransaction";
-import { formatCurrencyBRL, formatTransactionDate, getTransactionTypeMeta, isDefaultWallet, resolveTransactionWallet } from "../transactions/transactionView";
+import { formatCurrencyBRL, formatTransactionDate, getTransactionTypeMeta, resolveTransactionWallet } from "../transactions/transactionView";
 
 export function MiniTransactionBlock({ transaction }: { transaction: Transaction }) {
     const { openModal } = useModal();
@@ -10,6 +11,17 @@ export function MiniTransactionBlock({ transaction }: { transaction: Transaction
     const wallet = resolveTransactionWallet(wallets, transaction.inWallet);
 
     const typeMeta = getTransactionTypeMeta(transaction.type);
+
+    function getCategoryDisplayLabel(transaction: Transaction): string {
+        const categoryLabel = transaction.category.label;
+        if (!transaction.category.parentLabel) {
+            return categoryLabel;
+        }
+
+        const parts = categoryLabel.split("/");
+        const subcategoryLabel = parts[parts.length - 1]?.trim();
+        return subcategoryLabel || categoryLabel;
+    }
 
     return (
         <button
@@ -27,9 +39,7 @@ export function MiniTransactionBlock({ transaction }: { transaction: Transaction
                     <span className="truncate text-[14px] text-neutral-400">{wallet.name}</span>
                 </div>
                 <div>
-                    <span
-                        className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] ${typeMeta.badgeClass}`}
-                    >
+                    <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] ${typeMeta.badgeClass}`}>
                         {transaction.type === "income" ? <ArrowUpRight size={12} /> : transaction.type === "transfer" ? <MoveRight size={12} /> : <ArrowDownRight size={12} />}
                         {typeMeta.label}
                     </span>
@@ -38,17 +48,13 @@ export function MiniTransactionBlock({ transaction }: { transaction: Transaction
             <div className="flex w-full gap-2">
                 <div>
                     <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/[0.08] bg-black/30">
-                        {isDefaultWallet(wallet.id) ? (
-                            <WalletIcon className="text-neutral-200" size={20} strokeWidth={1.5} />
-                        ) : (
-                            <img src={wallet.icon} alt="Wallet Icon" className="h-8 w-8 rounded-lg object-cover" />
-                        )}
+                        <WalletAvatar wallet={wallet} className="h-8 w-8 rounded-lg" iconSize={16} iconStrokeWidth={1.6} />
                     </div>
                 </div>
                 <div className="flex justify-between items-center w-full">
                     <div className="flex flex-col text-left">
-                        <p className="truncate text-sm font-semibold text-white">{transaction.category.label}</p>
-                        <p className="truncate text-xs text-neutral-400">{transaction.description || "Sem descricao"}</p>
+                        <p className="truncate text-sm font-semibold text-white">{transaction.description || "Sem descricao"}</p>
+                        <p className="truncate text-xs text-neutral-400"> {getCategoryDisplayLabel(transaction)}</p>
                     </div>
                     <div className="flex flex-col text-right pr-1">
                         <span className={`text-sm font-semibold ${typeMeta.amountColorClass}`}>R$ {formatCurrencyBRL(transaction.value)}</span>
