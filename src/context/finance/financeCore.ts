@@ -1,3 +1,5 @@
+import { getDefaultCategoryIconName, normalizeCategoryIconName } from "../../lib/categoryIcons";
+
 export type TransactionType = "income" | "spending" | "transfer";
 export type TransactionGroupType = "income" | "expense" | "transfer";
 export type TransactionMode = "single" | "installment" | "recurring";
@@ -6,22 +8,16 @@ export type WalletType = "checking" | "savings" | "cash" | "investment";
 export type BeneficiaryType = "person" | "cost_center" | "pet" | "other";
 export type CategoryType = "income" | "expense";
 
-export interface Transaction {
+export interface TransactionEntity {
     id: string;
     groupId: string;
     type: TransactionType;
     value: number;
     date: string;
     inWallet: string;
-    category: {
-        principal: string;
-        sub: string | null;
-    };
     categoryId: string | null;
-    beneficiary: string;
     beneficiaryId: string | null;
     tagIds: string[];
-    tags: Tag[];
     description: string;
     status: TransactionStatus;
     installmentNumber: number | null;
@@ -31,6 +27,23 @@ export interface Transaction {
         atualizado_em: string | null;
     };
 }
+
+export interface ResolvedTransactionCategory {
+    id: string | null;
+    label: string;
+    parentLabel: string | null;
+    icon: string;
+    color: string | null;
+    type: CategoryType;
+}
+
+export interface TransactionListItem extends TransactionEntity {
+    category: ResolvedTransactionCategory;
+    beneficiary: string;
+    tags: Tag[];
+}
+
+export type Transaction = TransactionListItem;
 
 export interface StoredTransaction {
     id: string;
@@ -97,6 +110,7 @@ export interface Beneficiary {
     name: string;
     type: BeneficiaryType;
     avatarColor: string | null;
+    avatarImage: string | null;
     isActive: boolean;
     createdAt: string;
 }
@@ -107,7 +121,7 @@ export interface Category {
     parentId: string | null;
     name: string;
     type: CategoryType;
-    icon: string | null;
+    icon: string;
     color: string | null;
     isSystem: boolean;
     createdAt: string;
@@ -212,7 +226,7 @@ interface SystemCategorySeed {
     parentId: string | null;
     name: string;
     type: CategoryType;
-    icon: string | null;
+    icon: string;
     color: string | null;
 }
 
@@ -446,20 +460,21 @@ export function normalizeBeneficiary(beneficiary: BeneficiaryInput): Beneficiary
         name: asString(beneficiary.name, DEFAULT_BENEFICIARY_NAME),
         type: asBeneficiaryType(beneficiary.type),
         avatarColor: asNullableString(beneficiary.avatarColor, null),
+        avatarImage: asNullableString(beneficiary.avatarImage, null),
         isActive: asBoolean(beneficiary.isActive, true),
         createdAt: asDateTimeString(beneficiary.createdAt, getNowIso()),
     };
 }
 
 export function normalizeCategory(category: CategoryInput): Category {
-    const fallbackType = asCategoryType(category.type, "expense");
+    const resolvedType = asCategoryType(category.type, "expense");
     return {
         id: asString(category.id, `category-${Date.now()}`),
         userId: asNullableString(category.userId, null),
         parentId: asNullableString(category.parentId, null),
         name: asString(category.name, "Sem categoria"),
-        type: asCategoryType(category.type, fallbackType),
-        icon: asNullableString(category.icon, null),
+        type: resolvedType,
+        icon: normalizeCategoryIconName(asNullableString(category.icon, null), resolvedType),
         color: asNullableString(category.color, null),
         isSystem: asBoolean(category.isSystem, false),
         createdAt: asDateTimeString(category.createdAt, getNowIso()),
@@ -697,7 +712,7 @@ export function toTransactionList(
     beneficiaries: Beneficiary[],
     tags: Tag[],
     transactionTags: TransactionTag[],
-): Transaction[] {
+): TransactionListItem[] {
     const groupsById = new Map(transactionGroups?.map((group) => [group.id, group]));
     const categoriesById = new Map(categories.map((category) => [category.id, category]));
     const beneficiariesById = new Map(beneficiaries.map((beneficiary) => [beneficiary.id, beneficiary]));
@@ -716,6 +731,7 @@ export function toTransactionList(
     return transactions.map((transaction) => {
         const group = groupsById.get(transaction.groupId);
         const groupType = group?.type ?? "expense";
+        const fallbackCategoryType = toCategoryTypeFromGroupType(groupType);
         const category = group?.categoryId ? categoriesById.get(group.categoryId) : null;
         const parentCategory = category?.parentId ? categoriesById.get(category.parentId) : null;
         const beneficiary = group?.beneficiaryId ? beneficiariesById.get(group.beneficiaryId) : null;
@@ -725,25 +741,38 @@ export function toTransactionList(
             .map((tagId) => tagsById.get(tagId))
             .filter((tag): tag is Tag => Boolean(tag));
 
-        const principalCategory = parentCategory?.name ?? category?.name ?? group?.categoryName ?? "Sem categoria";
-        const subCategory = parentCategory ? category?.name ?? group?.subcategoryName ?? null : group?.subcategoryName ?? null;
+        const fallbackPrincipal = group?.categoryName?.trim() || "Sem categoria";
+        const fallbackSub = group?.subcategoryName?.trim() || null;
+        const fallbackLabel = fallbackSub ? `${fallbackPrincipal} / ${fallbackSub}` : fallbackPrincipal;
 
-        return {
+        const resolvedCategory: ResolvedTransactionCategory = category
+            ? {
+                  id: category.id,
+                  label: parentCategory ? `${parentCategory.name} / ${category.name}` : category.name,
+                  parentLabel: parentCategory?.name ?? null,
+                  icon: normalizeCategoryIconName(category.icon, category.type),
+                  color: category.color,
+                  type: category.type,
+              }
+            : {
+                  id: null,
+                  label: fallbackLabel,
+                  parentLabel: fallbackSub ? fallbackPrincipal : null,
+                  icon: normalizeCategoryIconName(null, null),
+                  color: null,
+                  type: fallbackCategoryType,
+              };
+
+        const transactionEntity: TransactionEntity = {
             id: transaction.id,
             groupId: transaction.groupId,
             type: toTransactionType(groupType),
             value: roundToCents(transaction.amount),
             date: transaction.scheduledDate,
             inWallet: group?.sourceWalletId ?? DEFAULT_WALLET_ID,
-            category: {
-                principal: principalCategory,
-                sub: subCategory,
-            },
-            categoryId: group?.categoryId ?? null,
-            beneficiary: beneficiary?.name ?? group?.beneficiaryName ?? DEFAULT_BENEFICIARY_NAME,
+            categoryId: resolvedCategory.id,
             beneficiaryId: group?.beneficiaryId ?? null,
             tagIds,
-            tags: resolvedTags,
             description: group?.title ?? "Transacao",
             status: transaction.status,
             installmentNumber: transaction.installmentNumber,
@@ -752,6 +781,13 @@ export function toTransactionList(
                 criado_em: transaction.createdAt,
                 atualizado_em: transaction.paidAt,
             },
+        };
+
+        return {
+            ...transactionEntity,
+            category: resolvedCategory,
+            beneficiary: beneficiary?.name ?? group?.beneficiaryName ?? DEFAULT_BENEFICIARY_NAME,
+            tags: resolvedTags,
         };
     });
 }
@@ -863,7 +899,7 @@ function findOrCreateCategory(
         parentId: params.parentId,
         name: params.name,
         type: params.type,
-        icon: null,
+        icon: getDefaultCategoryIconName(params.type),
         color: null,
         isSystem: false,
         createdAt: params.now,
@@ -902,6 +938,7 @@ function ensureDefaultBeneficiary(beneficiariesById: Map<string, Beneficiary>, u
             name: DEFAULT_BENEFICIARY_NAME,
             type: "person",
             avatarColor: "#4B5563",
+            avatarImage: null,
             isActive: true,
             createdAt: now,
         }),
@@ -931,6 +968,7 @@ function findOrCreateBeneficiary(
         name,
         type: "person",
         avatarColor: null,
+        avatarImage: null,
         isActive: true,
         createdAt: now,
     });
@@ -1166,17 +1204,22 @@ export function normalizeFinanceSnapshot(rawFinance: unknown, userId: string | n
             return;
         }
 
+        const rawIcon = asNullableString(rawCategory.icon, null);
         const normalizedCategory = normalizeCategory({
             id: rawCategory.id,
             userId: asNullableString(rawCategory.userId, userId),
             parentId: asNullableString(rawCategory.parentId, null),
             name: asString(rawCategory.name, "Sem categoria"),
             type: asCategoryType(rawCategory.type, "expense"),
-            icon: asNullableString(rawCategory.icon, null),
+            icon: rawIcon,
             color: asNullableString(rawCategory.color, null),
             isSystem: asBoolean(rawCategory.isSystem, false),
             createdAt: asDateTimeString(rawCategory.createdAt, now),
         });
+
+        if (rawIcon !== normalizedCategory.icon) {
+            changed = true;
+        }
 
         if (categoriesById.has(normalizedCategory.id)) {
             changed = true;
@@ -1202,15 +1245,21 @@ export function normalizeFinanceSnapshot(rawFinance: unknown, userId: string | n
             return;
         }
 
+        const rawAvatarImage = asNullableString(rawBeneficiary.avatarImage, null);
         const normalizedBeneficiary = normalizeBeneficiary({
             id: rawBeneficiary.id,
             userId: asNullableString(rawBeneficiary.userId, userId),
             name: asString(rawBeneficiary.name, DEFAULT_BENEFICIARY_NAME),
             type: asBeneficiaryType(rawBeneficiary.type),
             avatarColor: asNullableString(rawBeneficiary.avatarColor, null),
+            avatarImage: rawAvatarImage,
             isActive: asBoolean(rawBeneficiary.isActive, true),
             createdAt: asDateTimeString(rawBeneficiary.createdAt, now),
         });
+
+        if (rawAvatarImage !== normalizedBeneficiary.avatarImage) {
+            changed = true;
+        }
 
         if (beneficiariesById.has(normalizedBeneficiary.id)) {
             changed = true;

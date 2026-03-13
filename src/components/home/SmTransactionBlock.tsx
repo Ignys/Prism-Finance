@@ -47,7 +47,7 @@ export function MiniTransactionBlock({ transaction }: { transaction: Transaction
                 </div>
                 <div className="flex justify-between items-center w-full">
                     <div className="flex flex-col text-left">
-                        <p className="truncate text-sm font-semibold text-white">{transaction.category.principal}</p>
+                        <p className="truncate text-sm font-semibold text-white">{transaction.category.label}</p>
                         <p className="truncate text-xs text-neutral-400">{transaction.description || "Sem descricao"}</p>
                     </div>
                     <div className="flex flex-col text-right pr-1">

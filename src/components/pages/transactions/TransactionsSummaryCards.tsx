@@ -1,37 +1,47 @@
-import { currencyFormatter, type TransactionsSummary } from "./transactionsPageShared";
+import { currencyFormatter, type TransactionsSummary, type TransactionsTabKey } from "./transactionsPageShared";
 
 interface TransactionsSummaryCardsProps {
+    activeTab: TransactionsTabKey;
     summary: TransactionsSummary;
 }
 
-export function TransactionsSummaryCards({ summary }: TransactionsSummaryCardsProps) {
+const SUMMARY_COPY: Record<TransactionsTabKey, { paid: string; pending: string; total: string }> = {
+    income: {
+        paid: "Receitas recebidas",
+        pending: "Receitas pendentes",
+        total: "Receitas totais",
+    },
+    spending: {
+        paid: "Despesas pagas",
+        pending: "Despesas pendentes",
+        total: "Despesas totais",
+    },
+    transfer: {
+        paid: "Transferências efetuadas",
+        pending: "Transferências pendentes",
+        total: "Transferências totais",
+    },
+};
+
+export function TransactionsSummaryCards({ activeTab, summary }: TransactionsSummaryCardsProps) {
+    const copy = SUMMARY_COPY[activeTab];
+
     return (
-        <section className="flex flex-col gap-2 w-1/6 ">
-            <div className="rounded-2xl border relative overflow-hidden border-white/[0.08] bg-[#111111] p-4 text-left">
-                <div className="pointer-events-none absolute -left-20 -top-20 h-36 w-36 rounded-full bg-neutral-700/10 blur-3xl" />
-                <div className="pointer-events-none absolute -bottom-20 -right-20 h-40 w-40 rounded-full bg-neutral-500/10 blur-3xl" />
-                <p className="text-[11px] uppercase tracking-[0.14em] text-white/38">Transações exibidas</p>
-                <p className="mt-1 text-xl font-semibold text-white">{summary.count}</p>
-            </div>
-            <div className="rounded-2xl border relative overflow-hidden border-white/[0.08] bg-[#111111] p-4 text-left">
-                <div className="pointer-events-none absolute -left-20 -top-20 h-36 w-36 rounded-full bg-teal-700/10 blur-3xl" />
-                <div className="pointer-events-none absolute -bottom-20 -right-20 h-40 w-40 rounded-full bg-emerald-500/10 blur-3xl" />
-                <p className="text-[11px] uppercase tracking-[0.14em] text-white/38">Entradas</p>
-                <p className="mt-1 text-xl font-semibold text-emerald-300">{currencyFormatter.format(summary.income)}</p>
-            </div>
-            <div className="rounded-2xl border relative overflow-hidden border-white/[0.08] bg-[#111111] p-4 text-left">
-                <div className="pointer-events-none absolute -left-20 -top-20 h-36 w-36 rounded-full bg-rose-700/10 blur-3xl" />
-                <div className="pointer-events-none absolute -bottom-20 -right-20 h-40 w-40 rounded-full bg-red-500/10 blur-3xl" />
-                <p className="text-[11px] uppercase tracking-[0.14em] text-white/38">Saídas</p>
-                <p className="mt-1 text-xl font-semibold text-red-300">{currencyFormatter.format(summary.spending)}</p>
-            </div>
-            <div className="rounded-2xl border relative overflow-hidden border-white/[0.08] bg-[#111111] p-4 text-left">
-                <div className="pointer-events-none absolute -left-20 -top-20 h-36 w-36 rounded-full bg-yellow-700/10 blur-3xl" />
-                <div className="pointer-events-none absolute -bottom-20 -right-20 h-40 w-40 rounded-full bg-amber-500/10 blur-3xl" />
-                <p className="text-[11px] uppercase tracking-[0.14em] text-white/38">Pendentes</p>
-                <p className="mt-1 text-xl font-semibold text-amber-200">{currencyFormatter.format(summary.pending)}</p>
-                {summary.transfer > 0 && <p className="mt-0.5 text-xs text-white/45">Transferências: {currencyFormatter.format(summary.transfer)}</p>}
-            </div>
+        <section className="grid gap-2 sm:grid-cols-3 2xl:grid-cols-1">
+            <SummaryCard title={`${copy.paid} (${summary.paid.count})`} amount={summary.paid.amount} glowColor="bg-emerald-400/20" text="text-emerald-200"/>
+            <SummaryCard title={`${copy.pending} (${summary.pending.count})`} amount={summary.pending.amount} glowColor="bg-amber-400/20" text="text-yellow-200" />
+            <SummaryCard title={`${copy.total} (${summary.total.count})`} amount={summary.total.amount} glowColor="bg-neutral-300/10" text="text-white" />
         </section>
+
+    );
+}
+
+function SummaryCard({ title, amount, glowColor, text }: { title: string; amount: number, glowColor: string, text?: string }) {
+    return (
+        <div className="relative overflow-hidden rounded-2xl border border-white/[0.08] bg-[#111111] p-4 text-left">
+            <div className={`pointer-events-none absolute -bottom-30 -right-20 h-40 w-40 rounded-full ${glowColor} blur-3xl`} />
+            <p className="text-[10px] uppercase tracking-[0.14em] text-white/38">{title}</p>
+            <p className={`mt-1 text-xl font-semibold ${text || `text-white`}`}>{currencyFormatter.format(amount)}</p>
+        </div>
     );
 }

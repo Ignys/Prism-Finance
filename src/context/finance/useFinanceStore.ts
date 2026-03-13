@@ -46,6 +46,7 @@ import {
     roundToCents,
     toCategoryTypeFromGroupType,
 } from "./helpers";
+import { getDefaultCategoryIconName } from "../../lib/categoryIcons";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === "object" && value !== null;
@@ -412,7 +413,7 @@ export function useFinanceStore(): FinanceStoreValue {
                     parentId,
                     name,
                     type: categoryType,
-                    icon: null,
+                    icon: getDefaultCategoryIconName(categoryType),
                     color: null,
                     isSystem: false,
                     createdAt: nowIso,
@@ -573,6 +574,39 @@ export function useFinanceStore(): FinanceStoreValue {
         [buildSnapshot, persistFullSnapshot, setSnapshotState, user?.uid],
     );
 
+    const markTransactionAsPaid = useCallback(
+        async (transaction: Transaction) => {
+            const transactionToUpdate = storedTransactionsRef.current.find((item) => item.id === transaction.id);
+            if (!transactionToUpdate || transactionToUpdate.status !== "pending") {
+                return;
+            }
+
+            const group = transactionGroupsRef.current.find((item) => item.id === transactionToUpdate.groupId);
+            if (!group) {
+                return;
+            }
+
+            const nowIso = new Date().toISOString();
+            const nextTransaction = normalizeStoredTransaction({
+                ...transactionToUpdate,
+                status: "paid",
+                paidAt: nowIso,
+            });
+
+            const nextTransactions = storedTransactionsRef.current.map((item) => (item.id === transactionToUpdate.id ? nextTransaction : item));
+            const nextLedgerEntries = ledgerEntriesRef.current.filter((item) => item.transactionId !== transactionToUpdate.id);
+            nextLedgerEntries.push(...createLedgerEntriesForPaidTransaction(nextTransaction, group));
+
+            const snapshot = buildSnapshot({
+                transactions: nextTransactions,
+                ledgerEntries: nextLedgerEntries,
+            });
+            setSnapshotState(snapshot);
+            await persistFullSnapshot(snapshot);
+        },
+        [buildSnapshot, persistFullSnapshot, setSnapshotState],
+    );
+
     const deleteTransaction = useCallback(
         async (transaction: Transaction) => {
             const transactionToDelete = storedTransactionsRef.current.find((item) => item.id === transaction.id);
@@ -654,6 +688,7 @@ export function useFinanceStore(): FinanceStoreValue {
             setFavoriteWallet,
             updateFinance,
             addTransaction,
+            markTransactionAsPaid,
             deleteTransaction,
             clearTransactions,
             addWallet,
@@ -675,6 +710,7 @@ export function useFinanceStore(): FinanceStoreValue {
             favoriteWalletId,
             ledgerEntries,
             loading,
+            markTransactionAsPaid,
             setFavoriteWallet,
             setStartBalance,
             storedTransactions,

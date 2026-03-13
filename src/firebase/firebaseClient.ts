@@ -4,6 +4,7 @@ import { getAuth, Auth } from "firebase/auth";
 import { getFirestore, Firestore } from "firebase/firestore";
 
 interface ImportMetaEnv {
+  DEV: any;
   VITE_APIKEY: string;
   VITE_AUTHDOMAIN: string;
   VITE_PROJECTID: string;

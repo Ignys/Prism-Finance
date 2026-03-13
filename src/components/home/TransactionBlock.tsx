@@ -30,7 +30,7 @@ export function TransactionBlock({ transaction }: { transaction: Transaction }) 
                 <p className="text-xl font-medium">
                     <span className={typeMeta.amountColorClass}>R$ {formatCurrencyBRL(transaction.value)}</span>
                 </p>
-                <p className="text-lg">{transaction.category.principal}</p>
+                <p className="text-lg">{transaction.category.label}</p>
                 <p className="text-lg text-neutral-300">{formatTransactionDate(transaction.date, "dd/MM/yyyy")}</p>
             </div>
             <div className=" flex flex-col text-right gap-2">

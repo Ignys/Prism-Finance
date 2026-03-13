@@ -1,141 +1,294 @@
-import { AnimatePresence, motion } from "framer-motion";
-import { ArrowDownRight, ArrowUpRight, Check, CircleDashed, MoveRight, Pencil, Trash2, User, UserRound, Wallet as WalletIcon, X } from "lucide-react";
+import { useMemo } from "react";
+import { ArrowDown, ArrowUp, Circle, Check, Pencil, Trash2, Wallet as WalletIcon } from "lucide-react";
 import type { Transaction, Wallet } from "../../../context/FinanceContext";
+import { getCategoryIconComponent } from "../../../lib/categoryIcons";
 import { formatCurrencyBRL, formatTransactionDate, getTransactionTypeMeta, isDefaultWallet, resolveTransactionWallet } from "../../transactions/transactionView";
-import { STATUS_BADGE_CLASS, STATUS_LABELS, getTransactionCategoryLabel } from "./transactionsPageShared";
+import {
+    buildSortMode,
+    getSortDirection,
+    getSortField,
+    SORT_DEFAULT_DIRECTION,
+    STATUS_BADGE_CLASS,
+    STATUS_LABELS,
+    getTransactionCategoryLabel,
+    type SortField,
+    type SortMode,
+    type TransactionsTabKey,
+} from "./transactionsPageShared";
 
 interface TransactionsListPanelProps {
+    activeTab: TransactionsTabKey;
+    incomeTransactions: Transaction[];
+    spendingTransactions: Transaction[];
+    transferTransactions: Transaction[];
+    wallets: Wallet[];
+    sortMode: SortMode;
+    onTabChange: (tab: TransactionsTabKey) => void;
+    onSortModeChange: (sortMode: SortMode) => void;
+    onEdit: (transaction: Transaction) => void;
+    onConfirmPayment: (transaction: Transaction) => void;
+    onDelete: (transaction: Transaction) => void;
+}
+
+interface TabConfig {
+    key: TransactionsTabKey;
+    label: string;
     transactions: Transaction[];
+    emptyMessage: string;
+}
+
+interface TransactionsTableProps {
+    tabs: TabConfig[];
+    activeTab: TransactionsTabKey;
     wallets: Wallet[];
+    sortMode: SortMode;
+    onTabChange: (tab: TransactionsTabKey) => void;
+    onSortModeChange: (sortMode: SortMode) => void;
     onEdit: (transaction: Transaction) => void;
+    onConfirmPayment: (transaction: Transaction) => void;
     onDelete: (transaction: Transaction) => void;
 }
 
-function getTransactionTypeIcon(type: Transaction["type"]) {
-    if (type === "income") {
-        return <ArrowUpRight size={12} />;
-    }
-
-    if (type === "transfer") {
-        return <MoveRight size={12} />;
-    }
-
-    return <ArrowDownRight size={12} />;
+interface SortableHeaderProps {
+    label: string;
+    field: SortField;
+    sortMode: SortMode;
+    align?: "left" | "right";
+    onSortModeChange: (sortMode: SortMode) => void;
 }
 
-function getTransactionStatusIcon(status: Transaction["status"]) {
-    if (status === "pending") {
-        return <CircleDashed size={12} />;
+function getAriaSort(field: SortField, sortMode: SortMode): "ascending" | "descending" | "none" {
+    if (getSortField(sortMode) !== field) {
+        return "none";
     }
 
-    if (status === "paid") {
-        return <Check size={12} />;
-    }
-
-    if (status === "cancelled") {
-        return <X size={12} />;
-    }
-
-    if (status === "skipped") {
-        return <X size={12} />;
-    }
+    return getSortDirection(sortMode) === "asc" ? "ascending" : "descending";
 }
 
-function TransactionCard({
-    transaction,
-    wallets,
-    index,
-    onEdit,
-    onDelete,
-}: {
-    transaction: Transaction;
-    wallets: Wallet[];
-    index: number;
-    onEdit: (transaction: Transaction) => void;
-    onDelete: (transaction: Transaction) => void;
-}) {
-    const wallet = resolveTransactionWallet(wallets, transaction.inWallet);
-    const typeMeta = getTransactionTypeMeta(transaction.type);
+function SortableHeader({ label, field, sortMode, align = "left", onSortModeChange }: SortableHeaderProps) {
+    const active = getSortField(sortMode) === field;
+    const direction = getSortDirection(sortMode);
+    const ariaSort = getAriaSort(field, sortMode);
+
+    const handleClick = () => {
+        if (!active) {
+            onSortModeChange(buildSortMode(field, SORT_DEFAULT_DIRECTION[field]));
+            return;
+        }
+
+        onSortModeChange(buildSortMode(field, direction === "asc" ? "desc" : "asc"));
+    };
+
+    const Icon = !active ? Circle : direction === "asc" ? ArrowUp : ArrowDown;
 
     return (
-        <motion.article
-            layout
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            transition={{ duration: 0.18, delay: Math.min(index, 6) * 0.02, ease: "easeOut" }}
-            className="mb-2 rounded-xl border border-white/[0.08] bg-white/[0.02] p-3 last:mb-0"
+        <th
+            aria-sort={ariaSort}
+            className={`border-b border-white/[0.08] px-3 py-2 text-[11px] uppercase tracking-[0.08em] text-white/45 ${align === "right" ? "text-right" : "text-left"}`}
         >
-            <div className="flex min-w-0 flex-1 gap-3">
-                {isDefaultWallet(wallet.id) ? (
-                    <div className="flex h-15 w-15 items-center justify-center rounded-xl border border-white/10 bg-black/35">
-                        <WalletIcon size={25} className="text-white/80" strokeWidth={1.6} />
-                    </div>
-                ) : (
-                    <img src={wallet.icon} alt={wallet.name} className="h-15 w-15 rounded-xl border border-white/10 object-cover" />
-                )}
-                <div className="flex-1">
-                    <div className="flex flex-col gap-1.5">
-                        {/* HEADER */}
-                        <section className="flex justify-between items-center w-full">
-                            <span
-                                className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] border-neutral-500 text-neutral-300 bg-neutral-800 `}
-                            >
-                                <UserRound size={12} />
-                                {transaction.beneficiary}
-                            </span>
-                            <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] ${STATUS_BADGE_CLASS[transaction.status]}`}>
-                                {getTransactionStatusIcon(transaction.status)}
-                                {STATUS_LABELS[transaction.status]}
-                            </span>
-                        </section>
-                        {/* BODY */}
-                        <div className="flex justify-between px-0.5 ">
-                            {/* LEFT */}
-                            <div className="flex flex-col items-start gap-px">
-                                <p className="truncate text-[15px] font-semibold text-white">{transaction.description || "Sem descricao"}</p>
-                                <p className="truncate text-sm text-white/55 ">{getTransactionCategoryLabel(transaction)}</p>
-                            </div>
-
-                            {/* RIGHT */}
-                            <div className="flex flex-col items-end text-right">
-                                <p className={`text-lg font-semibold ${typeMeta.amountColorClass}`}>R$ {formatCurrencyBRL(transaction.value)}</p>
-                                <p className="text-xs uppercase tracking-[0.08em] text-white/45">{formatTransactionDate(transaction.date, "dd/MM/yyyy")}</p>
-                            </div>
-                        </div>
-                        {/* TAGS */}
-                        {transaction.tags.length > 0 && (
-                            <div className="mt-1 flex justify-end gap-1">
-                                {transaction.tags.map((tag) => (
-                                    <span
-                                        key={`${transaction.id}-${tag.id}`}
-                                        className="rounded-full  px-3 py-0.5 text-[12px] border border-white/10 text-white/50"
-                                        style={{ backgroundColor: `${tag.color ?? "#64748B"}2B` }}
-                                    >
-                                        {tag.name}
-                                    </span>
-                                ))}
-                            </div>
-                        )}
-                    </div>
-                </div>
-            </div>
-        </motion.article>
+            <button
+                type="button"
+                onClick={handleClick}
+                className={`inline-flex w-full items-center gap-1.5 transition-colors hover:text-white/80 ${align === "right" ? "justify-end" : "justify-start"}`}
+            >
+                <span className="uppercase">{label}</span>
+                <Icon size={12} className={active ? "text-white/80" : "text-white/35"} />
+            </button>
+        </th>
     );
 }
 
-export function TransactionsListPanel({ transactions, wallets, onEdit, onDelete }: TransactionsListPanelProps) {
+function TransactionsTable({
+    tabs,
+    activeTab,
+    wallets,
+    sortMode,
+    onTabChange,
+    onSortModeChange,
+    onEdit,
+    onConfirmPayment,
+    onDelete,
+}: TransactionsTableProps) {
+    const activeTabConfig = tabs.find((tab) => tab.key === activeTab) ?? tabs[0];
+    const transactions = activeTabConfig?.transactions ?? [];
+
     return (
         <section className="rounded-2xl border border-white/[0.08] bg-[#111111] p-3 shadow-[0_24px_60px_-32px_rgba(0,0,0,0.9)]">
-            {transactions.length < 1 ? (
-                <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] px-3 py-8 text-center text-sm text-white/55">Nenhuma transacao encontrada para os filtros selecionados.</div>
-            ) : (
-                <AnimatePresence initial={false} mode="popLayout">
-                    {transactions.map((transaction, index) => (
-                        <TransactionCard key={transaction.id} transaction={transaction} wallets={wallets} index={index} onEdit={onEdit} onDelete={onDelete} />
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-end gap-1 overflow-x-auto pb-1">
+                    {tabs.map((tab) => (
+                        <button
+                            key={tab.key}
+                            type="button"
+                            onClick={() => onTabChange(tab.key)}
+                            className={`rounded-t-xl border px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.08em] transition-colors ${
+                                activeTab === tab.key
+                                    ? "border-white/[0.24] bg-white/[0.08] text-white"
+                                    : "border-white/[0.1] bg-white/[0.03] text-white/60 hover:border-white/[0.2] hover:text-white/85"
+                            }`}
+                        >
+                            {tab.label}
+                        </button>
                     ))}
-                </AnimatePresence>
+                </div>
+                <span className="rounded-full border border-white/[0.12] bg-white/[0.03] px-2.5 py-1 text-xs text-white/60">{transactions.length} itens</span>
+            </div>
+
+            {transactions.length < 1 ? (
+                <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] px-3 py-6 text-center text-sm text-white/55">{activeTabConfig.emptyMessage}</div>
+            ) : (
+                <div>
+                    <table className="w-full border-separate border-spacing-0 text-sm text-white/85">
+                        <thead>
+                            <tr>
+                                <th className="border-b border-white/[0.08] px-3 py-2 text-left text-[11px] uppercase tracking-[0.08em] text-white/45">Carteira</th>
+                                <SortableHeader label="Status" field="status" sortMode={sortMode} onSortModeChange={onSortModeChange} />
+                                <SortableHeader label="Data" field="date" sortMode={sortMode} onSortModeChange={onSortModeChange} />
+                                <th className="border-b border-white/[0.08] px-3 py-2 text-left text-[11px] uppercase tracking-[0.08em] text-white/45">Descricao</th>
+                                <SortableHeader label="Categoria" field="category" sortMode={sortMode} onSortModeChange={onSortModeChange} />
+                                <SortableHeader label="Beneficiario" field="beneficiary" sortMode={sortMode} onSortModeChange={onSortModeChange} />
+                                <SortableHeader label="Valor" field="value" sortMode={sortMode} align="right" onSortModeChange={onSortModeChange} />
+                                <th className="border-b border-white/[0.08] px-3 py-2 text-right text-[11px] uppercase tracking-[0.08em] text-white/45">Acoes</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {transactions.map((transaction) => {
+                                const wallet = resolveTransactionWallet(wallets, transaction.inWallet);
+                                const typeMeta = getTransactionTypeMeta(transaction.type);
+                                const CategoryIcon = getCategoryIconComponent(transaction.category.icon, transaction.category.type);
+                                const categoryColor = transaction.category.color ?? "#9CA3AF";
+                                const categoryBackground = `${categoryColor}22`;
+
+                                return (
+                                    <tr key={transaction.id} className="odd:bg-white/[0.01]">
+                                        <td className="border-b border-white/[0.04] px-3 py-2.5">
+                                            <div className="flex items-center gap-2">
+                                                <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-white/[0.1] bg-black/30">
+                                                    {isDefaultWallet(wallet.id) ? (
+                                                        <WalletIcon size={16} className="text-white/75" strokeWidth={1.8} />
+                                                    ) : (
+                                                        <img src={wallet.icon} alt={wallet.name} className="h-5 w-5 rounded-md object-cover" />
+                                                    )}
+                                                </span>
+                                                <span className="max-w-[150px] truncate text-white/70">{wallet.name}</span>
+                                            </div>
+                                        </td>
+                                        <td className="border-b border-white/[0.04] px-3 py-2.5">
+                                            <span
+                                                className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] ${STATUS_BADGE_CLASS[transaction.status]}`}
+                                            >
+                                                {STATUS_LABELS[transaction.status]}
+                                            </span>
+                                        </td>
+                                        <td className="border-b border-white/[0.04] px-3 py-2.5 text-white/70">{formatTransactionDate(transaction.date, "dd/MM/yyyy")}</td>
+                                        <td className="border-b border-white/[0.04] px-3 py-2.5 font-medium text-white">{transaction.description || "Sem descricao"}</td>
+                                        <td className="border-b border-white/[0.04] px-3 py-2.5 text-white/70">
+                                            <div className="flex items-center gap-2">
+                                                <span
+                                                    className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-white/[0.1]"
+                                                    style={{ color: categoryColor, backgroundColor: categoryBackground }}
+                                                >
+                                                    <CategoryIcon size={14} />
+                                                </span>
+                                                <span>{getTransactionCategoryLabel(transaction)}</span>
+                                            </div>
+                                        </td>
+                                        <td className="border-b border-white/[0.04] px-3 py-2.5 text-white/70">{transaction.beneficiary || "-"}</td>
+                                        <td className={`border-b border-white/[0.04] px-3 py-2.5 text-right font-semibold ${typeMeta.amountColorClass}`}>R$ {formatCurrencyBRL(transaction.value)}</td>
+                                        <td className="border-b border-white/[0.04] px-3 py-2.5">
+                                            <div className="flex justify-end gap-1">
+                                                {transaction.status === "pending" && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => onConfirmPayment(transaction)}
+                                                        className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-emerald-400/25 bg-emerald-500/10 text-emerald-200 transition-colors hover:border-emerald-400/45 hover:text-emerald-100"
+                                                        aria-label="Confirmar pagamento"
+                                                        title="Confirmar pagamento"
+                                                    >
+                                                        <Check size={14} />
+                                                    </button>
+                                                )}
+                                                <button
+                                                    type="button"
+                                                    onClick={() => onEdit(transaction)}
+                                                    className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-white/[0.12] bg-white/[0.03] text-white/70 transition-colors hover:border-white/[0.22] hover:text-white"
+                                                    aria-label="Editar transacao"
+                                                    title="Editar transacao"
+                                                >
+                                                    <Pencil size={14} />
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => onDelete(transaction)}
+                                                    className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-red-400/25 bg-red-500/10 text-red-200 transition-colors hover:border-red-400/45 hover:text-red-100"
+                                                    aria-label="Excluir transacao"
+                                                    title="Excluir transacao"
+                                                >
+                                                    <Trash2 size={14} />
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                );
+                            })}
+                        </tbody>
+                    </table>
+                </div>
             )}
         </section>
+    );
+}
+
+export function TransactionsListPanel({
+    activeTab,
+    incomeTransactions,
+    spendingTransactions,
+    transferTransactions,
+    wallets,
+    sortMode,
+    onTabChange,
+    onSortModeChange,
+    onEdit,
+    onConfirmPayment,
+    onDelete,
+}: TransactionsListPanelProps) {
+    const tabs = useMemo<TabConfig[]>(
+        () => [
+            {
+                key: "income",
+                label: "Receitas",
+                transactions: incomeTransactions,
+                emptyMessage: "Nenhuma receita neste mes para os filtros selecionados.",
+            },
+            {
+                key: "spending",
+                label: "Despesas",
+                transactions: spendingTransactions,
+                emptyMessage: "Nenhuma despesa neste mes para os filtros selecionados.",
+            },
+            {
+                key: "transfer",
+                label: "Transferencias",
+                transactions: transferTransactions,
+                emptyMessage: "Nenhuma transferencia neste mes para os filtros selecionados.",
+            },
+        ],
+        [incomeTransactions, spendingTransactions, transferTransactions],
+    );
+
+    return (
+        <div className="flex flex-col gap-3">
+            <TransactionsTable
+                tabs={tabs}
+                activeTab={activeTab}
+                wallets={wallets}
+                sortMode={sortMode}
+                onTabChange={onTabChange}
+                onSortModeChange={onSortModeChange}
+                onEdit={onEdit}
+                onConfirmPayment={onConfirmPayment}
+                onDelete={onDelete}
+            />
+        </div>
     );
 }

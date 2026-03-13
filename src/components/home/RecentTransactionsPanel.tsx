@@ -4,10 +4,9 @@ import { MiniTransactionBlock } from "./SmTransactionBlock";
 
 interface RecentTransactionsPanelProps {
     transactions: Transaction[];
-    onExampleSubmit: () => void;
 }
 
-export function RecentTransactionsPanel({ transactions, onExampleSubmit }: RecentTransactionsPanelProps) {
+export function RecentTransactionsPanel({ transactions }: RecentTransactionsPanelProps) {
     return (
         <section className="w-1/4">
             <div className="relative overflow-hidden rounded-2xl border border-white/[0.08] bg-[#111111] p-4 shadow-[0_24px_60px_-32px_rgba(0,0,0,0.9)]">
@@ -15,23 +14,17 @@ export function RecentTransactionsPanel({ transactions, onExampleSubmit }: Recen
                 <div className="pointer-events-none absolute -bottom-24 -right-16 h-36 w-36 rounded-full bg-emerald-500/10 blur-3xl" />
 
                 <div className="relative mb-3 flex items-center justify-between gap-3">
-                    <p className="text-left text-lg font-medium text-white">Ultimas transacoes</p>
+                    <p className="text-left text-lg font-medium text-white">Últimas transações
+                    </p>
 
                     <div className="space-x-1">
-                        <button
-                            type="button"
-                            onClick={onExampleSubmit}
-                            className="cursor-pointer rounded-full border border-white/[0.09] bg-white/[0.04] px-2.5 py-1 text-xs font-medium text-neutral-300"
-                        >
-                            Transacao de exemplo
-                        </button>
                         <span className="rounded-full border border-white/[0.09] bg-white/[0.04] px-2.5 py-1 text-xs font-medium text-neutral-300">{transactions.length}</span>
                     </div>
                 </div>
 
                 <div className="relative space-y-2">
                     {transactions.length < 1 ? (
-                        <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-6 text-center text-sm text-neutral-400">Nenhuma transacao por enquanto.</div>
+                        <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-6 text-center text-sm text-neutral-400">Nenhuma transação registrada</div>
                     ) : (
                         <AnimatePresence initial={false} mode="popLayout">
                             {transactions.map((transaction) => (

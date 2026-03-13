@@ -29,6 +29,7 @@ export interface FinanceActionsValue {
     setFavoriteWallet: (walletId: string) => Promise<void>;
     updateFinance: (newFinance: FinanceSnapshot) => Promise<void>;
     addTransaction: (newTransaction: TransactionDraft) => Promise<void>;
+    markTransactionAsPaid: (transaction: Transaction) => Promise<void>;
     deleteTransaction: (transaction: Transaction) => Promise<void>;
     clearTransactions: () => Promise<void>;
     addWallet: (newWallet: Wallet) => Promise<void>;

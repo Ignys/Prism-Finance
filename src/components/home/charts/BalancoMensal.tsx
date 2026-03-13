@@ -24,6 +24,7 @@ export function BalancoMensal() {
 
     const spending = currentMonthTransactions
         .filter((tx) => tx.type === "spending")
+        .filter((t) => !t.status || t.status !== "cancelled")
         .reduce((sum, tx) => sum + tx.value, 0);
 
     const balance = incomes - spending;
@@ -141,11 +142,15 @@ export function BalancoMensal() {
 
     return (
         <div className="relative w-full overflow-hidden rounded-2xl border border-white/[0.08] bg-[#111111] p-5 shadow-[0_24px_60px_-32px_rgba(0,0,0,0.9)]">
-            <div className="pointer-events-none absolute -left-20 -top-24 h-44 w-44 rounded-full bg-emerald-500/10 blur-3xl" />
-            <div className="pointer-events-none absolute -bottom-24 -right-20 h-44 w-44 rounded-full bg-red-500/10 blur-3xl" />
+            <div className={`pointer-events-none absolute -left-20 -top-24 h-44 w-44 rounded-full  blur-3xl ${
+                            balance >= 0 ? " bg-emerald-400/[0.10]" : " bg-red-500/[0.08]"
+                        }`} />
+            <div className={`pointer-events-none absolute -bottom-24 -right-20 h-44 w-44 rounded-full  blur-3xl ${
+                            balance >= 0 ? " bg-emerald-400/[0.10]" : " bg-red-500/[0.08]"
+                        }`} />
 
             <div className="relative mb-5 flex items-center justify-between gap-3">
-                <p className="text-lg font-medium text-white">Balanco mensal</p>
+                <p className="text-lg font-medium text-white">Balanço mensal</p>
                 <span className="rounded-full border border-white/[0.09] bg-white/[0.04] px-3 py-1 text-xs uppercase tracking-[0.12em] text-neutral-300">
                     {monthLabel}
                 </span>

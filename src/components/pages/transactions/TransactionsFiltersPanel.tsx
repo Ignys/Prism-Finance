@@ -1,22 +1,11 @@
 import { AnimatePresence, motion } from "framer-motion";
-import { Filter, Search, X } from "lucide-react";
+import { FunnelPlus, Search, X } from "lucide-react";
 import type { TransactionStatus, Wallet } from "../../../context/FinanceContext";
-import {
-    INPUT_CLASS,
-    QUICK_FILTER_LABELS,
-    QUICK_FILTER_ORDER,
-    SELECT_CLASS,
-    STATUS_LABELS,
-    STATUS_ORDER,
-    type QuickTypeFilter,
-    type SelectOption,
-    type SortMode,
-    type TagOption,
-} from "./transactionsPageShared";
+import { INPUT_CLASS, SELECT_CLASS, STATUS_LABELS, STATUS_ORDER, type SelectOption, type TagOption } from "./transactionsPageShared";
 
 interface TransactionsFiltersPanelProps {
-    quickFilter: QuickTypeFilter;
-    sortMode: SortMode;
+    selectedMonth: string;
+    monthOptions: SelectOption[];
     showAdvancedFilters: boolean;
     searchQuery: string;
     selectedCategoryKey: string;
@@ -28,7 +17,6 @@ interface TransactionsFiltersPanelProps {
     dateTo: string;
     minAmount: string;
     maxAmount: string;
-    quickFilterCounts: Record<QuickTypeFilter, number>;
     categoryOptions: SelectOption[];
     beneficiaryOptions: string[];
     tagOptions: TagOption[];
@@ -36,8 +24,7 @@ interface TransactionsFiltersPanelProps {
     hasAdvancedFilters: boolean;
     onToggleAdvancedFilters: () => void;
     onClearAdvancedFilters: () => void;
-    onQuickFilterChange: (filter: QuickTypeFilter) => void;
-    onSortModeChange: (sortMode: SortMode) => void;
+    onMonthChange: (value: string) => void;
     onSearchQueryChange: (value: string) => void;
     onCategoryChange: (value: string) => void;
     onWalletChange: (value: string) => void;
@@ -51,8 +38,8 @@ interface TransactionsFiltersPanelProps {
 }
 
 export function TransactionsFiltersPanel({
-    quickFilter,
-    sortMode,
+    selectedMonth,
+    monthOptions,
     showAdvancedFilters,
     searchQuery,
     selectedCategoryKey,
@@ -64,7 +51,6 @@ export function TransactionsFiltersPanel({
     dateTo,
     minAmount,
     maxAmount,
-    quickFilterCounts,
     categoryOptions,
     beneficiaryOptions,
     tagOptions,
@@ -72,8 +58,7 @@ export function TransactionsFiltersPanel({
     hasAdvancedFilters,
     onToggleAdvancedFilters,
     onClearAdvancedFilters,
-    onQuickFilterChange,
-    onSortModeChange,
+    onMonthChange,
     onSearchQueryChange,
     onCategoryChange,
     onWalletChange,
@@ -86,26 +71,44 @@ export function TransactionsFiltersPanel({
     onTagToggle,
 }: TransactionsFiltersPanelProps) {
     return (
-        <section className="relative overflow-hidden rounded-2xl border border-white/[0.08] bg-[#111111] p-4 shadow-[0_24px_60px_-32px_rgba(0,0,0,0.9)]">
-            <div className="pointer-events-none absolute -left-20 -top-20 h-36 w-36 rounded-full bg-sky-500/10 blur-3xl" />
-            <div className="pointer-events-none absolute -bottom-20 -right-20 h-40 w-40 rounded-full bg-emerald-500/10 blur-3xl" />
-
+        <section className="pt-1 ">
             <div className="relative flex flex-col gap-4">
-                <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center justify-between gap-3">
                     <div className="text-left">
-                        <p className="text-lg font-medium text-white">Transacoes</p>
+                        <h1 className="text-2xl font-semibold text-white">Transações</h1>
                     </div>
-
+                    <div>
+                        <select value={selectedMonth} onChange={(event) => onMonthChange(event.target.value)} className={SELECT_CLASS}>
+                            {monthOptions.map((option) => (
+                                <option key={option.value} value={option.value}>
+                                    {option.label}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+                </div>
+                <div className="flex justify-between gap-3">
+                    <div className="w-full">
+                        <div className="relative w-full">
+                            <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-white/40" />
+                            <input
+                                type="text"
+                                value={searchQuery}
+                                onChange={(event) => onSearchQueryChange(event.target.value)}
+                                placeholder="Buscar por descrição, beneficiário, categoria, carteira ou tag"
+                                className="w-full rounded-xl border border-white/[0.08] bg-black/25 py-2 pl-9 pr-3 text-sm text-white outline-none transition-colors placeholder:text-white/30 focus:border-white/[0.24] focus:bg-black/40"
+                            />
+                        </div>
+                    </div>
                     <div className="flex flex-wrap gap-2">
                         <button
                             type="button"
                             onClick={onToggleAdvancedFilters}
                             className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-white/[0.12] bg-white/[0.04] px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.05em] text-white/75 transition-all hover:border-white/[0.2] hover:bg-white/[0.08]"
                         >
-                            <Filter size={14} />
-                            {showAdvancedFilters ? "Ocultar avancados" : "Mostrar avancados"}
+                            <FunnelPlus size={14} />
+                            {showAdvancedFilters ? "Ocultar" : "Mostrar"}
                         </button>
-
                         {hasAdvancedFilters && (
                             <button
                                 type="button"
@@ -117,46 +120,6 @@ export function TransactionsFiltersPanel({
                             </button>
                         )}
                     </div>
-                </div>
-
-                <div className="flex flex-wrap gap-2">
-                    {QUICK_FILTER_ORDER.map((filterType) => {
-                        const isActive = quickFilter === filterType;
-                        return (
-                            <button
-                                key={filterType}
-                                type="button"
-                                onClick={() => onQuickFilterChange(filterType)}
-                                className={[
-                                    "inline-flex cursor-pointer items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.05em] transition-all",
-                                    isActive ? "border-white/[0.24] bg-white/[0.11] text-white" : "border-white/[0.1] bg-white/[0.02] text-white/65 hover:border-white/[0.2] hover:text-white",
-                                ].join(" ")}
-                            >
-                                {QUICK_FILTER_LABELS[filterType]}
-                                <span className="rounded-full border border-white/[0.14] bg-black/25 px-2 py-0.5 text-[10px]">{quickFilterCounts[filterType]}</span>
-                            </button>
-                        );
-                    })}
-                </div>
-
-                <div className="grid gap-2 md:grid-cols-[1fr_220px]">
-                    <label className="relative">
-                        <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-white/40" />
-                        <input
-                            type="text"
-                            value={searchQuery}
-                            onChange={(event) => onSearchQueryChange(event.target.value)}
-                            placeholder="Buscar por descricao, beneficiario, categoria, carteira ou tag"
-                            className={`${INPUT_CLASS} pl-9`}
-                        />
-                    </label>
-
-                    <select value={sortMode} onChange={(event) => onSortModeChange(event.target.value as SortMode)} className={SELECT_CLASS}>
-                        <option value="date-desc">Mais recentes</option>
-                        <option value="date-asc">Mais antigas</option>
-                        <option value="value-desc">Maior valor</option>
-                        <option value="value-asc">Menor valor</option>
-                    </select>
                 </div>
 
                 <AnimatePresence initial={false}>

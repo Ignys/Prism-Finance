@@ -9,9 +9,7 @@ import "./lib/chart";
 const LoginPage = lazy(() => import("./components/pages/Login").then((module) => ({ default: module.LoginPage })));
 const HomePage = lazy(() => import("./components/pages/Home").then((module) => ({ default: module.HomePage })));
 const BalancePage = lazy(() => import("./components/pages/Balance").then((module) => ({ default: module.BalancePage })));
-const BeneficiariesPage = lazy(() => import("./components/pages/Beneficiaries").then((module) => ({ default: module.BeneficiariesPage })));
-const CategoriesPage = lazy(() => import("./components/pages/Categories").then((module) => ({ default: module.CategoriesPage })));
-const TagsPage = lazy(() => import("./components/pages/Tags").then((module) => ({ default: module.TagsPage })));
+const RegistryPage = lazy(() => import("./components/pages/Registry").then((module) => ({ default: module.RegistryPage })));
 const TransactionsPage = lazy(() => import("./components/pages/TransactionsPage").then((module) => ({ default: module.TransactionsPage })));
 
 function App() {
@@ -50,9 +48,7 @@ function MainApp() {
 
     if (currentPage === "transactions") page = <TransactionsPage />;
     if (currentPage === "balance") page = <BalancePage />;
-    if (currentPage === "beneficiaries") page = <BeneficiariesPage />;
-    if (currentPage === "categories") page = <CategoriesPage />;
-    if (currentPage === "tags") page = <TagsPage />;
+    if (currentPage === "registry" || currentPage === "beneficiaries" || currentPage === "categories" || currentPage === "tags") page = <RegistryPage />;
 
     return <Suspense fallback={<LoadingPage />}>{page}</Suspense>;
 }
