@@ -142,7 +142,11 @@ function CategoryItem({ category, children, onEdit, onReorder }: CategoryItemPro
                 <span className="inline-flex cursor-grab text-white/35 active:cursor-grabbing">
                     <GripVertical size={15} />
                 </span>
-                <button type="button" onClick={() => onEdit(category.id)} className="flex min-w-0 flex-1 items-center justify-between gap-2 text-left">
+                <button
+                    type="button"
+                    onClick={() => onEdit(category.id)}
+                    className="flex min-w-0 flex-1 cursor-pointer items-center justify-between gap-2 rounded-md px-1 py-1 text-left transition-colors hover:bg-white/[0.05]"
+                >
                     <div className="flex min-w-0 items-center gap-2">
                         <div
                             className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-white/10"
@@ -175,7 +179,7 @@ function CategoryItem({ category, children, onEdit, onReorder }: CategoryItemPro
                                         <button
                                             type="button"
                                             onClick={() => onEdit(child.id)}
-                                            className="flex min-w-0 flex-1 items-center justify-between gap-2 rounded-md px-1 py-1 text-left text-sm text-white/80 transition-colors hover:bg-white/[0.05]"
+                                            className="flex min-w-0 flex-1 cursor-pointer items-center justify-between gap-2 rounded-md px-1 py-1 text-left text-sm text-white/80 transition-colors hover:bg-white/[0.05] hover:text-white"
                                         >
                                             <span className="flex min-w-0 items-center gap-2">
                                                 <ChildIcon size={14} className="text-white/70" />

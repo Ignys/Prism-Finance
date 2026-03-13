@@ -73,7 +73,11 @@ function TagCard({ tag, onEdit }: { tag: FinanceTag; onEdit: () => void }) {
                 <GripVertical size={15} className="cursor-grab active:cursor-grabbing" />
             </span>
 
-            <button type="button" onClick={onEdit} className="flex min-w-0 flex-1 items-center justify-between gap-2 text-left">
+            <button
+                type="button"
+                onClick={onEdit}
+                className="flex min-w-0 flex-1 cursor-pointer items-center justify-between gap-2 rounded-md px-1 py-1 text-left transition-colors hover:bg-white/[0.05]"
+            >
                 <div className="flex min-w-0 items-center gap-2">
                     <span
                         className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-white/10"

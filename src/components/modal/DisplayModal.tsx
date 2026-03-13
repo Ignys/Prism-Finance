@@ -1,8 +1,22 @@
 import { AnimatePresence, motion } from "framer-motion";
+import { useEffect } from "react";
 import { useModal } from "../../context/ModalContext";
 
 export function DisplayModal() {
     const { modal } = useModal();
+
+    useEffect(() => {
+        const previousOverflow = document.body.style.overflow;
+        if (modal) {
+            document.body.style.overflow = "hidden";
+        } else {
+            document.body.style.overflow = previousOverflow;
+        }
+
+        return () => {
+            document.body.style.overflow = previousOverflow;
+        };
+    }, [modal]);
 
     return (
         <AnimatePresence>
