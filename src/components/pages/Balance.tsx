@@ -1,10 +1,20 @@
 import { motion } from "framer-motion";
 import { Pencil, Plus, Star } from "lucide-react";
-import { DEFAULT_WALLET_ID, useFinanceActions, useFinanceFavoriteWallet, useFinanceSummary, useFinanceWallets } from "../../context/FinanceContext";
+import {
+    DEFAULT_WALLET_ID,
+    useFinanceActions,
+    useFinanceCreditCardInvoices,
+    useFinanceCreditCards,
+    useFinanceFavoriteCreditCard,
+    useFinanceFavoriteWallet,
+    useFinanceSummary,
+    useFinanceWallets,
+} from "../../context/FinanceContext";
 import { useModal } from "../../context/ModalContext";
 import { WalletAvatar } from "../common/WalletAvatar";
 import { AuthShell } from "../layout/AuthShell";
 import { BalanceModal } from "../modal/BalanceModal";
+import { CreditCardModal } from "../modal/CreditCardModal";
 
 const currencyFormatter = new Intl.NumberFormat("pt-BR", {
     style: "currency",
@@ -14,15 +24,24 @@ const currencyFormatter = new Intl.NumberFormat("pt-BR", {
 
 export function BalancePage() {
     const wallets = useFinanceWallets();
+    const creditCards = useFinanceCreditCards();
+    const creditCardInvoices = useFinanceCreditCardInvoices();
     const summary = useFinanceSummary();
     const favoriteWalletId = useFinanceFavoriteWallet();
-    const { setFavoriteWallet } = useFinanceActions();
+    const favoriteCreditCardId = useFinanceFavoriteCreditCard();
+    const { setFavoriteWallet, setFavoriteCreditCard } = useFinanceActions();
     const { openModal } = useModal();
     const favoriteWallet = wallets.find((wallet) => wallet.id === favoriteWalletId) ?? wallets[0] ?? null;
+    const favoriteCreditCard = creditCards.find((card) => card.id === favoriteCreditCardId) ?? creditCards[0] ?? null;
+    const totalCreditLimit = creditCards.reduce((sum, card) => sum + card.limit, 0);
+    const totalOpenInvoices = creditCardInvoices.reduce((sum, invoice) => sum + Math.max(0, invoice.totalAmount - invoice.paidAmount), 0);
 
     const metrics = [
         { label: "Saldo total", value: currencyFormatter.format(summary.balance) },
-        { label: "Favorita", value: favoriteWallet?.name ?? "Nenhuma" },
+        { label: "Carteira favorita", value: favoriteWallet?.name ?? "Nenhuma" },
+        { label: "Cartao favorito", value: favoriteCreditCard?.name ?? "Nenhum" },
+        { label: "Limite total", value: currencyFormatter.format(totalCreditLimit) },
+        { label: "Faturas abertas", value: currencyFormatter.format(totalOpenInvoices) },
     ];
 
     return (
@@ -103,6 +122,84 @@ export function BalancePage() {
                             })}
                         </div>
                     </div>
+
+                    <div className="relative mt-3 overflow-hidden rounded-2xl border border-white/[0.08] bg-[#111111] p-4 shadow-[0_24px_60px_-32px_rgba(0,0,0,0.9)]">
+                        <div className="pointer-events-none absolute -right-12 -top-10 h-36 w-36 rounded-full bg-amber-500/12 blur-3xl" />
+                        <div className="pointer-events-none absolute -bottom-20 -left-20 h-40 w-40 rounded-full bg-orange-500/10 blur-3xl" />
+
+                        <div className="relative flex flex-wrap items-center justify-between gap-3">
+                            <div className="text-left">
+                                <p className="text-lg font-medium text-white">Seus cartoes de credito</p>
+                            </div>
+
+                            <button
+                                type="button"
+                                onClick={() => openModal(<CreditCardModal mode="create" />)}
+                                className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-white/[0.1] bg-white/[0.04] px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.05em] text-white/80 transition-all hover:border-white/[0.18] hover:bg-white/[0.08]"
+                            >
+                                <Plus size={14} />
+                                Criar cartao
+                            </button>
+                        </div>
+
+                        <div className="relative mt-4 space-y-2">
+                            {creditCards.length < 1 && <p className="rounded-xl border border-white/[0.08] bg-white/[0.03] p-3 text-sm text-white/55">Nenhum cartao cadastrado.</p>}
+                            {creditCards.map((creditCard, index) => {
+                                const isFavorite = creditCard.id === favoriteCreditCardId;
+                                const openAmount = creditCardInvoices
+                                    .filter((invoice) => invoice.creditCardId === creditCard.id)
+                                    .reduce((sum, invoice) => sum + Math.max(0, invoice.totalAmount - invoice.paidAmount), 0);
+
+                                return (
+                                    <motion.article
+                                        key={creditCard.id}
+                                        initial={{ opacity: 0, y: 14 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        transition={{ duration: 0.22, delay: index * 0.03, ease: "easeOut" }}
+                                        className="flex items-center justify-between gap-3 rounded-xl border border-white/[0.06] bg-white/[0.02] p-3"
+                                    >
+                                        <div className="flex min-w-0 items-center gap-3">
+                                            <WalletAvatar wallet={creditCard} className="h-14 w-14 rounded-xl border border-white/10" iconSize={30} iconStrokeWidth={1.7} />
+
+                                            <div className="min-w-0 text-left">
+                                                <p className="truncate text-[15px] font-medium text-white">{creditCard.name}</p>
+                                                <p className="text-sm font-normal text-white/60">
+                                                    Limite: {currencyFormatter.format(creditCard.limit)} - Aberto: {currencyFormatter.format(openAmount)}
+                                                </p>
+                                                <p className="text-xs text-white/45">
+                                                    Fechamento: dia {creditCard.closingDay} - Vencimento: dia {creditCard.dueDay}
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex items-center gap-2">
+                                            <button
+                                                type="button"
+                                                onClick={() => openModal(<CreditCardModal mode="edit" creditCardId={creditCard.id} />)}
+                                                className="inline-flex items-center gap-2 rounded-full border border-white/[0.12] bg-white/[0.03] px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.04em] text-white/70 transition-all hover:border-white/[0.2] hover:text-white"
+                                            >
+                                                <Pencil size={14} />
+                                                Editar
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => void setFavoriteCreditCard(creditCard.id)}
+                                                className={[
+                                                    "inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.04em] transition-all",
+                                                    isFavorite
+                                                        ? "border-amber-200/35 bg-amber-300/10 text-amber-200"
+                                                        : "border-white/[0.12] bg-white/[0.03] text-white/70 hover:border-white/[0.2] hover:text-white",
+                                                ].join(" ")}
+                                            >
+                                                <Star size={14} className={isFavorite ? "fill-amber-200 text-amber-200" : ""} />
+                                                {isFavorite ? "Favorito" : "Marcar favorito"}
+                                            </button>
+                                        </div>
+                                    </motion.article>
+                                );
+                            })}
+                        </div>
+                    </div>
                 </section>
 
                 <aside className="w-full space-y-2 lg:w-[34%]">
@@ -123,3 +220,4 @@ export function BalancePage() {
         </AuthShell>
     );
 }
+

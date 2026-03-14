@@ -52,7 +52,7 @@ function TransactionHeader({ type, isEditing }: { type: TransactionType; isEditi
     );
 }
 
-function StatusField({ status, onChange }: { status: TransactionStatus; onChange: (value: TransactionStatus) => void }) {
+function StatusField({ status, onChange, disabled = false }: { status: TransactionStatus; onChange: (value: TransactionStatus) => void; disabled?: boolean }) {
     return (
         <div className="flex flex-col gap-1.5">
             <span className={FIELD_LABEL_CLASS}>Status</span>
@@ -60,6 +60,7 @@ function StatusField({ status, onChange }: { status: TransactionStatus; onChange
                 <button
                     type="button"
                     onClick={() => onChange("paid")}
+                    disabled={disabled}
                     className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
                         status === "paid" ? "bg-emerald-500/20 text-emerald-200" : "text-white/65 hover:bg-white/[0.06]"
                     }`}
@@ -69,6 +70,7 @@ function StatusField({ status, onChange }: { status: TransactionStatus; onChange
                 <button
                     type="button"
                     onClick={() => onChange("pending")}
+                    disabled={disabled}
                     className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
                         status === "pending" ? "bg-amber-500/20 text-amber-200" : "text-white/65 hover:bg-white/[0.06]"
                     }`}
@@ -158,7 +160,7 @@ function BeneficiaryOptionContent({ option }: { option: BeneficiaryOption }) {
     );
 }
 
-function TagsField({ tags, selectedTagIds, onToggle }: { tags: Tag[]; selectedTagIds: string[]; onToggle: (tagId: string) => void }) {
+function TagsField({ tags, selectedTagIds, onToggle, readOnly = false }: { tags: Tag[]; selectedTagIds: string[]; onToggle: (tagId: string) => void; readOnly?: boolean }) {
     return (
         <div className="rounded-xl border border-white/[0.1] bg-black/35 p-2.5">
             <div className="flex flex-wrap gap-2">
@@ -169,6 +171,7 @@ function TagsField({ tags, selectedTagIds, onToggle }: { tags: Tag[]; selectedTa
                             type="button"
                             key={tag.id}
                             onClick={() => onToggle(tag.id)}
+                            disabled={readOnly}
                             className={`rounded-full border px-2.5 py-1.5 text-sm ${selected ? "border-white/80 text-white" : "border-white/20 text-white/60"}`}
                             style={{ backgroundColor: selected ? `${tag.color ?? "#64748B"}55` : `${tag.color ?? "#64748B"}22` }}
                         >
@@ -185,12 +188,13 @@ function TagsField({ tags, selectedTagIds, onToggle }: { tags: Tag[]; selectedTa
 interface TransactionFormProps {
     type?: TransactionType;
     transaction?: Transaction | null;
+    mode?: "default" | "invoice_payment_edit";
 }
 
-export function TransactionForm({ type, transaction }: TransactionFormProps) {
+export function TransactionForm({ type, transaction, mode = "default" }: TransactionFormProps) {
     const { closeModal } = useModal();
     const [submitting, setSubmitting] = useState(false);
-    const form = useTransactionForm({ type, transaction });
+    const form = useTransactionForm({ type, transaction, mode });
 
     const walletOptions = useMemo<WalletOption[]>(
         () =>
@@ -310,34 +314,55 @@ export function TransactionForm({ type, transaction }: TransactionFormProps) {
                         placeholder="R$ 0,00"
                         value={form.amountInput}
                         onChange={(event) => form.setAmountInput(event.target.value)}
+                        disabled={form.isInvoicePaymentEdit}
                     />
                 </label>
 
-                <StatusField status={form.status} onChange={form.setStatus} />
+                <StatusField status={form.status} onChange={form.setStatus} disabled={form.isInvoicePaymentEdit} />
 
                 <DateField value={form.date} onChange={form.setDate} onOffset={form.setDateOffset} />
 
-                <SingleSelectCombobox
-                    label="Categoria"
-                    value={selectedCategoryOptionId}
-                    placeholder="Selecione uma categoria"
-                    emptyMessage="Nenhuma categoria disponivel."
-                    options={categoryOptions}
-                    onChange={handleCategorySelect}
-                    renderOptionContent={(option) => <CategoryOptionContent option={option} />}
-                    labelClassName={FIELD_LABEL_CLASS}
-                />
+                {form.isInvoicePaymentEdit ? (
+                    <div className="flex flex-col gap-1.5">
+                        <span className={FIELD_LABEL_CLASS}>Categoria</span>
+                        <div className={`${FIELD_INPUT_CLASS} text-white/75`}>{transaction?.category.label ?? "Sem categoria"}</div>
+                    </div>
+                ) : (
+                    <SingleSelectCombobox
+                        label="Categoria"
+                        value={selectedCategoryOptionId}
+                        placeholder="Selecione uma categoria"
+                        emptyMessage="Nenhuma categoria disponivel."
+                        options={categoryOptions}
+                        onChange={handleCategorySelect}
+                        renderOptionContent={(option) => <CategoryOptionContent option={option} />}
+                        labelClassName={FIELD_LABEL_CLASS}
+                    />
+                )}
 
-                <SingleSelectCombobox
-                    label="Banco / Carteira"
-                    value={form.walletId}
-                    placeholder="Selecione uma carteira"
-                    emptyMessage="Nenhuma carteira encontrada."
-                    options={walletOptions}
-                    onChange={form.setWalletId}
-                    renderOptionContent={(option) => <WalletOptionContent option={option} />}
-                    labelClassName={FIELD_LABEL_CLASS}
-                />
+                {form.isInvoicePaymentEdit ? (
+                    <div className="flex flex-col gap-1.5">
+                        <span className={FIELD_LABEL_CLASS}>Carteira</span>
+                        <div className={FIELD_INPUT_CLASS}>
+                            {walletOptions.find((option) => option.id === form.walletId) ? (
+                                <WalletOptionContent option={walletOptions.find((option) => option.id === form.walletId)!} />
+                            ) : (
+                                <span className="text-white/45">Carteira removida</span>
+                            )}
+                        </div>
+                    </div>
+                ) : (
+                    <SingleSelectCombobox
+                        label="Carteira"
+                        value={form.walletId}
+                        placeholder="Selecione uma carteira"
+                        emptyMessage="Nenhuma carteira encontrada."
+                        options={walletOptions}
+                        onChange={form.setWalletId}
+                        renderOptionContent={(option) => <WalletOptionContent option={option} />}
+                        labelClassName={FIELD_LABEL_CLASS}
+                    />
+                )}
 
                 <SingleSelectCombobox
                     label="Beneficiario"
@@ -362,7 +387,7 @@ export function TransactionForm({ type, transaction }: TransactionFormProps) {
 
                 <div className="flex flex-col gap-1.5 md:col-span-2">
                     <p className={FIELD_LABEL_CLASS}>Tags</p>
-                    <TagsField tags={form.tags} selectedTagIds={form.selectedTagIds} onToggle={form.toggleTag} />
+                    <TagsField tags={form.tags} selectedTagIds={form.selectedTagIds} onToggle={form.toggleTag} readOnly={form.isInvoicePaymentEdit} />
                 </div>
             </section>
 
@@ -380,16 +405,18 @@ export function TransactionForm({ type, transaction }: TransactionFormProps) {
                             >
                                 <Trash2 size={15} />
                             </button>
-                            <button
-                                type="button"
-                                onClick={() => void runAction(form.duplicate)}
-                                disabled={submitting}
-                                className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-white/[0.12] bg-white/[0.03] text-white/70 transition-colors hover:border-white/[0.24] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
-                                aria-label="Duplicar transacao"
-                                title="Duplicar transacao"
-                            >
-                                <Copy size={15} />
-                            </button>
+                            {!form.isInvoicePaymentEdit && (
+                                <button
+                                    type="button"
+                                    onClick={() => void runAction(form.duplicate)}
+                                    disabled={submitting}
+                                    className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-white/[0.12] bg-white/[0.03] text-white/70 transition-colors hover:border-white/[0.24] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                                    aria-label="Duplicar transacao"
+                                    title="Duplicar transacao"
+                                >
+                                    <Copy size={15} />
+                                </button>
+                            )}
                         </>
                     )}
                 </div>
@@ -416,3 +443,4 @@ export function TransactionForm({ type, transaction }: TransactionFormProps) {
         </div>
     );
 }
+

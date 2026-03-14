@@ -1,30 +1,36 @@
 import { lazy, Suspense, useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { ArrowLeftRight, FolderKanban, Home, Wallet } from "lucide-react";
+import { ArrowLeftRight, FolderKanban, Home, ReceiptText, Wallet } from "lucide-react";
 import {
     type Category,
     type TransactionDraft,
     type TransactionStatus,
     useFinanceActions,
     useFinanceCategories,
+    useFinanceCreditCardInvoices,
+    useFinanceCreditCards,
+    useFinanceFavoriteCreditCard,
     useFinanceFavoriteWallet,
     useFinanceSummary,
     useFinanceTransactions,
     useFinanceWallets,
 } from "../../context/FinanceContext";
+import { buildCreditCardInvoiceId, resolveCreditCardInvoiceCycle } from "../../context/financeTypes";
 import { useModal } from "../../context/ModalContext";
 import { AppPage, usePage } from "../../context/PageContext";
-import { formatLocalDateInput } from "../../lib/localDate";
+import { formatLocalDateInput, getLocalTodayDate } from "../../lib/localDate";
 
 const AddIncome = lazy(() => import("../modal/AddIncome").then((module) => ({ default: module.AddIncome })));
 const AddSpending = lazy(() => import("../modal/AddSpending").then((module) => ({ default: module.AddSpending })));
+const AddCardSpending = lazy(() => import("../modal/AddCardSpending").then((module) => ({ default: module.AddCardSpending })));
 
 const iconSize = 20;
 
 const NAV_ITEMS: { label: string; page: AppPage; icon: React.ReactNode }[] = [
-    { label: "Inicio", page: "home", icon: <Home size={iconSize} /> },
+    { label: "Início", page: "home", icon: <Home size={iconSize} /> },
     { label: "Carteiras", page: "balance", icon: <Wallet size={iconSize} /> },
-    { label: "Transacoes", page: "transactions", icon: <ArrowLeftRight size={iconSize} /> },
+    { label: "Transações", page: "transactions", icon: <ArrowLeftRight size={iconSize} /> },
+    { label: "Fatura", page: "statement", icon: <ReceiptText size={iconSize} /> },
     { label: "Cadastros", page: "registry", icon: <FolderKanban size={iconSize} /> },
 ];
 
@@ -42,7 +48,7 @@ const METRIC_ITEMS: {
 const TEST_TRANSACTION_MARKER = "[prism-test-transaction]";
 const TEST_TRANSACTION_STATUSES: TransactionStatus[] = ["paid", "pending", "cancelled"];
 
-function buildTestTransactions(categories: Category[], walletId: string): TransactionDraft[] {
+function buildWalletTestTransactions(categories: Category[], walletId: string): TransactionDraft[] {
     const systemCategories = categories.filter((category) => category.isSystem);
     const eligibleCategories = (systemCategories.length > 0 ? systemCategories : categories).filter(
         (category) => category.type === "income" || category.type === "expense",
@@ -70,10 +76,39 @@ function buildTestTransactions(categories: Category[], walletId: string): Transa
     });
 }
 
-function renderLazyModal(modalType: "income" | "spending") {
+function buildCardInvoiceTestTransactions(params: { categories: Category[]; walletId: string; cardId: string; invoiceId: string }): TransactionDraft[] {
+    const { categories, walletId, cardId, invoiceId } = params;
+    const systemCategories = categories.filter((category) => category.isSystem);
+    const eligibleExpenseCategories = (systemCategories.length > 0 ? systemCategories : categories).filter((category) => category.type === "expense");
+    const referenceDate = new Date();
+
+    return eligibleExpenseCategories.map((category, index) => {
+        const scheduledDate = new Date(referenceDate);
+        scheduledDate.setDate(referenceDate.getDate() - index);
+        const status = TEST_TRANSACTION_STATUSES[index % TEST_TRANSACTION_STATUSES.length];
+        const amount = Number((85 + (index + 1) * 29.5).toFixed(2));
+
+        return {
+            type: "spending",
+            amount,
+            scheduledDate: formatLocalDateInput(scheduledDate),
+            inWallet: walletId,
+            paymentMethod: "credit_card",
+            creditCardId: cardId,
+            invoiceId,
+            categoryId: category.id,
+            beneficiary: "Compra de teste",
+            description: `${TEST_TRANSACTION_MARKER} Compra cartao ${index + 1} - ${category.name}`,
+            status,
+            notes: TEST_TRANSACTION_MARKER,
+        };
+    });
+}
+
+function renderLazyModal(modalType: "income" | "spending" | "card_spending") {
     return (
         <Suspense fallback={<div className="rounded-lg bg-neutral-900 p-6 text-sm">Carregando...</div>}>
-            {modalType === "income" ? <AddIncome /> : <AddSpending />}
+            {modalType === "income" ? <AddIncome /> : modalType === "spending" ? <AddSpending /> : <AddCardSpending />}
         </Suspense>
     );
 }
@@ -81,9 +116,12 @@ function renderLazyModal(modalType: "income" | "spending") {
 export function Header() {
     const summary = useFinanceSummary();
     const wallets = useFinanceWallets();
+    const creditCards = useFinanceCreditCards();
+    const creditCardInvoices = useFinanceCreditCardInvoices();
     const categories = useFinanceCategories();
     const transactions = useFinanceTransactions();
     const favoriteWalletId = useFinanceFavoriteWallet();
+    const favoriteCreditCardId = useFinanceFavoriteCreditCard();
     const { addTransaction, deleteTransaction } = useFinanceActions();
     const { goToPage, currentPage } = usePage();
     const { openModal } = useModal();
@@ -93,7 +131,44 @@ export function Header() {
 
     const resolvedWalletId = wallets.some((wallet) => wallet.id === favoriteWalletId) ? favoriteWalletId : (wallets[0]?.id ?? "default");
     const seededTransactions = useMemo(() => transactions.filter((transaction) => transaction.description.startsWith(TEST_TRANSACTION_MARKER)), [transactions]);
-    const testTransactions = useMemo(() => buildTestTransactions(categories, resolvedWalletId), [categories, resolvedWalletId]);
+    const walletTestTransactions = useMemo(() => buildWalletTestTransactions(categories, resolvedWalletId), [categories, resolvedWalletId]);
+    const resolvedFavoriteCard = useMemo(
+        () => creditCards.find((card) => card.id === favoriteCreditCardId) ?? creditCards[0] ?? null,
+        [creditCards, favoriteCreditCardId],
+    );
+    const openFavoriteInvoiceId = useMemo(() => {
+        if (!resolvedFavoriteCard) {
+            return null;
+        }
+
+        const openCycle = resolveCreditCardInvoiceCycle(getLocalTodayDate(), resolvedFavoriteCard.closingDay, resolvedFavoriteCard.dueDay);
+        return buildCreditCardInvoiceId(resolvedFavoriteCard.id, openCycle.cycleKey);
+    }, [resolvedFavoriteCard]);
+    const cardInvoiceTestTransactions = useMemo(() => {
+        if (!resolvedFavoriteCard || !openFavoriteInvoiceId) {
+            return [];
+        }
+
+        return buildCardInvoiceTestTransactions({
+            categories,
+            walletId: resolvedWalletId,
+            cardId: resolvedFavoriteCard.id,
+            invoiceId: openFavoriteInvoiceId,
+        });
+    }, [categories, openFavoriteInvoiceId, resolvedFavoriteCard, resolvedWalletId]);
+    const testTransactions = useMemo(() => [...walletTestTransactions, ...cardInvoiceTestTransactions], [cardInvoiceTestTransactions, walletTestTransactions]);
+    const openInvoiceAmount = useMemo(() => {
+        if (!openFavoriteInvoiceId) {
+            return 0;
+        }
+
+        const openInvoice = creditCardInvoices.find((invoice) => invoice.id === openFavoriteInvoiceId) ?? null;
+        if (!openInvoice) {
+            return 0;
+        }
+
+        return openInvoice.totalAmount;
+    }, [creditCardInvoices, openFavoriteInvoiceId]);
 
     async function removeSeededTransactions() {
         for (const transaction of seededTransactions) {
@@ -134,7 +209,12 @@ export function Header() {
         }
     }
 
-    const normalizedPage: AppPage = currentPage === "beneficiaries" || currentPage === "categories" || currentPage === "tags" ? "registry" : currentPage;
+    const normalizedPage: AppPage =
+        currentPage === "beneficiaries" || currentPage === "categories" || currentPage === "tags"
+            ? "registry"
+            : currentPage === "spending" || currentPage === "income"
+              ? "transactions"
+              : currentPage;
     const indicatorTarget = hoveredNav ?? NAV_ITEMS.find((item) => item.page === normalizedPage)?.label ?? null;
 
     return (
@@ -221,6 +301,28 @@ export function Header() {
                             </div>
                         );
                     })}
+                    <div className="mx-0.5 h-5 w-px bg-white/[0.06]" />
+                    <div className="group relative flex cursor-pointer items-center gap-2 rounded-[9px] border border-transparent px-5 py-1.5 transition-all duration-200 hover:border-white/[0.08] hover:bg-white/[0.05]">
+                        <div className="flex flex-col gap-px transition-opacity duration-150 group-hover:opacity-0">
+                            <span className="whitespace-nowrap text-[12px] font-light uppercase tracking-[0.2em] text-white/30">Fatura</span>
+                            <span className="whitespace-nowrap text-[15px] font-normal text-white/85" style={{ fontFamily: "'Azeret Mono', monospace" }}>
+                                R$ {openInvoiceAmount.toFixed(2)}
+                            </span>
+                        </div>
+
+                        <button
+                            type="button"
+                            onClick={() => openModal(renderLazyModal("card_spending"))}
+                            title="Adicionar gasto no cartao"
+                            className={[
+                                "absolute inset-0 flex w-full cursor-pointer items-center justify-center gap-[5px] rounded-[9px]",
+                                "border-none bg-white/[0.08] text-[11px] font-semibold uppercase tracking-[0.06em] text-white/70",
+                                "opacity-0 backdrop-blur-sm transition-opacity duration-[180ms] group-hover:opacity-100",
+                            ].join(" ")}
+                        >
+                            Adicionar
+                        </button>
+                    </div>
                     {import.meta.env.DEV && (
                         <>
                             <div className="mx-0.5 h-5 w-px bg-white/[0.06]" />
@@ -231,7 +333,7 @@ export function Header() {
                                     disabled={isSeedingTransactions || isClearingSeededTransactions || testTransactions.length === 0}
                                     className="rounded-md px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.06em] text-amber-100 transition-colors hover:bg-amber-400/15 disabled:cursor-not-allowed disabled:text-amber-100/40"
                                 >
-                                    {isSeedingTransactions ? "Gerando..." : "Popular testes"}
+                                    {isSeedingTransactions ? "Gerando..." : "Criar testes"}
                                 </button>
                                 <button
                                     type="button"
@@ -249,3 +351,4 @@ export function Header() {
         </header>
     );
 }
+

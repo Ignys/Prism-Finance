@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Check, ChevronsUpDown, Search } from "lucide-react";
+import { ChevronsUpDown, Search } from "lucide-react";
 import { normalizeComparisonText } from "../../context/finance/helpers";
 
 export interface ComboboxOptionBase {
@@ -95,7 +95,7 @@ export function SingleSelectCombobox<T extends ComboboxOptionBase>({
                 className="flex w-full items-center justify-between rounded-xl border border-white/[0.1] bg-black/35 px-3 py-2.5 text-left text-sm text-white transition-colors hover:border-white/[0.2]"
             >
                 <div className="min-w-0 flex-1">{selectedOption ? renderOptionContent(selectedOption) : <span className="text-white/40">{placeholder}</span>}</div>
-                <ChevronsUpDown size={15} className="shrink-0 text-white/55" />
+                <ChevronsUpDown size={15} className="ml-2 shrink-0 text-white/55" />
             </button>
 
             {isOpen && (
@@ -106,7 +106,7 @@ export function SingleSelectCombobox<T extends ComboboxOptionBase>({
                             ref={searchInputRef}
                             value={query}
                             onChange={(event) => setQuery(event.target.value)}
-                            placeholder="Buscar..."
+                            placeholder="Buscar"
                             className="w-full rounded-lg border border-white/[0.1] bg-black/45 py-2 pl-8 pr-2 text-sm text-white outline-none transition-colors placeholder:text-white/35 focus:border-white/[0.25]"
                         />
                     </div>
@@ -124,7 +124,6 @@ export function SingleSelectCombobox<T extends ComboboxOptionBase>({
                                     }`}
                                 >
                                     <div className="min-w-0 flex-1">{renderOptionContent(option)}</div>
-                                    {selected && <Check size={14} className="ml-2 shrink-0 text-emerald-300" />}
                                 </button>
                             );
                         })}

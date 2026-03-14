@@ -1,6 +1,15 @@
 export {
+    buildInvoicePaymentNote,
+    buildCreditCardInvoiceId,
     calculateFinanceSummary,
     createFinanceSnapshot,
+    getCreditCardInvoiceMonthKey,
+    getMonthKeyFromDateValue,
     normalizeFinanceSnapshot,
+    parseInvoicePaymentNote,
+    parseCreditCardInvoiceId,
+    resolveCreditCardInvoiceCycle,
+    resolveCreditCardInvoiceCycleFromCycleKey,
+    resolveOpenCreditCardInvoiceCycle,
     toTransactionList,
 } from "./financeCore";

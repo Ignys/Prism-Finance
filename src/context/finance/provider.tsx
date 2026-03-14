@@ -4,7 +4,10 @@ import {
     FinanceActionsContext,
     FinanceBeneficiariesContext,
     FinanceCategoriesContext,
+    FinanceCreditCardInvoicesContext,
+    FinanceCreditCardsContext,
     FinanceFavoriteWalletContext,
+    FinanceFavoriteCreditCardContext,
     FinanceLedgerEntriesContext,
     FinanceSessionContext,
     FinanceStoredTransactionsContext,
@@ -46,6 +49,7 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
             addTransaction: store.addTransaction,
             markTransactionAsPaid: store.markTransactionAsPaid,
             deleteTransaction: store.deleteTransaction,
+            updateInvoicePaymentTransaction: store.updateInvoicePaymentTransaction,
             clearTransactions: store.clearTransactions,
             addWallet: store.addWallet,
             addBeneficiary: store.addBeneficiary,
@@ -57,6 +61,9 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
             setBeneficiaryActive: store.setBeneficiaryActive,
             setCategoryActive: store.setCategoryActive,
             setTagActive: store.setTagActive,
+            addCreditCard: store.addCreditCard,
+            setFavoriteCreditCard: store.setFavoriteCreditCard,
+            payCreditCardInvoice: store.payCreditCardInvoice,
         }),
         [
             store.addBeneficiary,
@@ -66,6 +73,7 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
             store.addWallet,
             store.clearTransactions,
             store.deleteTransaction,
+            store.updateInvoicePaymentTransaction,
             store.markTransactionAsPaid,
             store.reorderBeneficiaries,
             store.reorderCategories,
@@ -75,6 +83,9 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
             store.setCategoryActive,
             store.setTagActive,
             store.setStartBalance,
+            store.addCreditCard,
+            store.setFavoriteCreditCard,
+            store.payCreditCardInvoice,
             store.updateFinance,
         ],
     );
@@ -82,27 +93,33 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
     return (
         <FinanceSessionContext.Provider value={sessionValue}>
             <FinanceFavoriteWalletContext.Provider value={store.favoriteWalletId}>
-                <FinanceWalletsContext.Provider value={store.wallets}>
-                    <FinanceBeneficiariesContext.Provider value={store.beneficiaries}>
-                        <FinanceCategoriesContext.Provider value={store.categories}>
-                            <FinanceTagsContext.Provider value={store.tags}>
-                                <FinanceTransactionGroupsContext.Provider value={store.transactionGroups}>
-                                    <FinanceStoredTransactionsContext.Provider value={store.storedTransactions}>
-                                        <FinanceTransactionTagsContext.Provider value={store.transactionTags}>
-                                            <FinanceLedgerEntriesContext.Provider value={store.ledgerEntries}>
-                                                <FinanceTransactionsContext.Provider value={store.transactions}>
-                                                    <FinanceSummaryContext.Provider value={summaryValue}>
-                                                        <FinanceActionsContext.Provider value={actionsValue}>{children}</FinanceActionsContext.Provider>
-                                                    </FinanceSummaryContext.Provider>
-                                                </FinanceTransactionsContext.Provider>
-                                            </FinanceLedgerEntriesContext.Provider>
-                                        </FinanceTransactionTagsContext.Provider>
-                                    </FinanceStoredTransactionsContext.Provider>
-                                </FinanceTransactionGroupsContext.Provider>
-                            </FinanceTagsContext.Provider>
-                        </FinanceCategoriesContext.Provider>
-                    </FinanceBeneficiariesContext.Provider>
-                </FinanceWalletsContext.Provider>
+                <FinanceFavoriteCreditCardContext.Provider value={store.favoriteCreditCardId}>
+                    <FinanceWalletsContext.Provider value={store.wallets}>
+                        <FinanceCreditCardsContext.Provider value={store.creditCards}>
+                            <FinanceCreditCardInvoicesContext.Provider value={store.creditCardInvoices}>
+                                <FinanceBeneficiariesContext.Provider value={store.beneficiaries}>
+                                    <FinanceCategoriesContext.Provider value={store.categories}>
+                                        <FinanceTagsContext.Provider value={store.tags}>
+                                            <FinanceTransactionGroupsContext.Provider value={store.transactionGroups}>
+                                                <FinanceStoredTransactionsContext.Provider value={store.storedTransactions}>
+                                                    <FinanceTransactionTagsContext.Provider value={store.transactionTags}>
+                                                        <FinanceLedgerEntriesContext.Provider value={store.ledgerEntries}>
+                                                            <FinanceTransactionsContext.Provider value={store.transactions}>
+                                                                <FinanceSummaryContext.Provider value={summaryValue}>
+                                                                    <FinanceActionsContext.Provider value={actionsValue}>{children}</FinanceActionsContext.Provider>
+                                                                </FinanceSummaryContext.Provider>
+                                                            </FinanceTransactionsContext.Provider>
+                                                        </FinanceLedgerEntriesContext.Provider>
+                                                    </FinanceTransactionTagsContext.Provider>
+                                                </FinanceStoredTransactionsContext.Provider>
+                                            </FinanceTransactionGroupsContext.Provider>
+                                        </FinanceTagsContext.Provider>
+                                    </FinanceCategoriesContext.Provider>
+                                </FinanceBeneficiariesContext.Provider>
+                            </FinanceCreditCardInvoicesContext.Provider>
+                        </FinanceCreditCardsContext.Provider>
+                    </FinanceWalletsContext.Provider>
+                </FinanceFavoriteCreditCardContext.Provider>
             </FinanceFavoriteWalletContext.Provider>
         </FinanceSessionContext.Provider>
     );

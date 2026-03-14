@@ -1,7 +1,8 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { type Transaction, useFinanceActions, useFinanceTransactions, useFinanceWallets } from "../../context/FinanceContext";
 import { normalizeComparisonText } from "../../context/finance/helpers";
 import { useModal } from "../../context/ModalContext";
+import { usePage } from "../../context/PageContext";
 import { AuthShell } from "../layout/AuthShell";
 import { ConfirmActionModal } from "../modal/ConfirmActionModal";
 import { EditTransaction } from "../modal/EditTransaction";
@@ -29,8 +30,16 @@ export function TransactionsPage() {
     const wallets = useFinanceWallets();
     const { deleteTransaction, markTransactionAsPaid } = useFinanceActions();
     const { openModal } = useModal();
+    const { consumePendingNavigation } = usePage();
     const [filters, setFilters] = useState<TransactionsFilterState>(INITIAL_FILTER_STATE);
     const [activeTab, setActiveTab] = useState<TransactionsTabKey>("income");
+
+    useEffect(() => {
+        const pendingNavigation = consumePendingNavigation();
+        if (pendingNavigation?.page === "transactions") {
+            setActiveTab(pendingNavigation.tab);
+        }
+    }, [consumePendingNavigation]);
 
     const {
         selectedMonth,
@@ -84,22 +93,27 @@ export function TransactionsPage() {
         return next;
     }, [wallets]);
 
+    const nonCreditCardTransactions = useMemo(
+        () => transactions.filter((transaction) => !(transaction.type === "spending" && transaction.paymentMethod === "credit_card")),
+        [transactions],
+    );
+
     const categoryOptions = useMemo<SelectOption[]>(() => {
         const categoryMap = new Map<string, string>();
 
-        transactions.forEach((transaction) => {
+        nonCreditCardTransactions.forEach((transaction) => {
             categoryMap.set(getTransactionCategoryKey(transaction), getTransactionCategoryLabel(transaction));
         });
 
         return Array.from(categoryMap.entries())
             .map(([value, label]) => ({ value, label }))
             .sort((a, b) => a.label.localeCompare(b.label, "pt-BR"));
-    }, [transactions]);
+    }, [nonCreditCardTransactions]);
 
     const tagOptions = useMemo<TagOption[]>(() => {
         const tagMap = new Map<string, TagOption>();
 
-        transactions.forEach((transaction) => {
+        nonCreditCardTransactions.forEach((transaction) => {
             transaction.tags.forEach((tag) => {
                 if (!tagMap.has(tag.id)) {
                     tagMap.set(tag.id, {
@@ -112,13 +126,15 @@ export function TransactionsPage() {
         });
 
         return Array.from(tagMap.values()).sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
-    }, [transactions]);
+    }, [nonCreditCardTransactions]);
 
     const beneficiaryOptions = useMemo(() => {
-        const beneficiaries = Array.from(new Set(transactions.map((transaction) => transaction.beneficiary.trim()).filter((beneficiary) => beneficiary.length > 0)));
+        const beneficiaries = Array.from(
+            new Set(nonCreditCardTransactions.map((transaction) => transaction.beneficiary.trim()).filter((beneficiary) => beneficiary.length > 0)),
+        );
         beneficiaries.sort((a, b) => a.localeCompare(b, "pt-BR"));
         return beneficiaries;
-    }, [transactions]);
+    }, [nonCreditCardTransactions]);
 
     const hasAdvancedFilters = hasActiveAdvancedFilters(filters);
 
@@ -127,7 +143,7 @@ export function TransactionsPage() {
         const minValue = parseNumberish(minAmount);
         const maxValue = parseNumberish(maxAmount);
 
-        return transactions.filter((transaction) => {
+        return nonCreditCardTransactions.filter((transaction) => {
             if (selectedCategoryKey !== "all" && getTransactionCategoryKey(transaction) !== selectedCategoryKey) {
                 return false;
             }
@@ -182,7 +198,7 @@ export function TransactionsPage() {
         selectedStatus,
         selectedTagIds,
         selectedWalletId,
-        transactions,
+        nonCreditCardTransactions,
         walletNameById,
     ]);
 
@@ -245,11 +261,16 @@ export function TransactionsPage() {
 
     const handleDeleteTransaction = (transaction: Transaction) => {
         const transactionLabel = getTransactionDisplayLabel(transaction);
+        const isInvoicePayment = transaction.systemKind === "invoice_payment";
 
         openModal(
             <ConfirmActionModal
                 title="Excluir transacao?"
-                description={`Essa acao remove "${transactionLabel}" em definitivo.`}
+                description={
+                    isInvoicePayment
+                        ? `Essa acao remove \"${transactionLabel}\" e reverte o pagamento vinculado na fatura.`
+                        : `Essa acao remove \"${transactionLabel}\" em definitivo.`
+                }
                 confirmLabel="Excluir"
                 tone="danger"
                 onConfirm={() => deleteTransaction(transaction)}

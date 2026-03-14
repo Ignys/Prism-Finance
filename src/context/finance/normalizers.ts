@@ -1,4 +1,6 @@
 export {
+    normalizeCreditCard,
+    normalizeCreditCardInvoice,
     findDefaultCategoryId,
     normalizeBeneficiary,
     normalizeCategory,

@@ -1,18 +1,25 @@
 import { ChangeEvent, useEffect, useMemo, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
-import { type Wallet, useFinanceActions, useFinanceWallets } from "../../context/FinanceContext";
+import { type CreditCard, useFinanceActions, useFinanceCreditCards, useFinanceWallets } from "../../context/FinanceContext";
 import { useModal } from "../../context/ModalContext";
 import { extractCurrencyDigits, formatCurrencyFromDigits, parseCurrencyDigitsToNumber } from "../../lib/currencyMask";
-import { DEFAULT_WALLET_COLOR, DEFAULT_WALLET_ICON, isDefaultWalletIcon, normalizeWalletColor, normalizeWalletIcon } from "../../lib/walletVisual";
+import {
+    DEFAULT_CREDIT_CARD_ICON,
+    DEFAULT_WALLET_COLOR,
+    isDefaultCreditCardIcon,
+    isDefaultWalletIcon,
+    normalizeWalletColor,
+    normalizeWalletIcon,
+} from "../../lib/walletVisual";
 import { WalletAvatar } from "../common/WalletAvatar";
 
 const MAX_IMAGE_SIZE_BYTES = 350 * 1024;
 const MAX_IMAGE_DIMENSION = 320;
 
-interface AddWalletProps {
+interface AddCreditCardProps {
     mode?: "create" | "edit";
-    walletId?: string;
-    initialWallet?: Wallet;
+    creditCardId?: string;
+    initialCreditCard?: CreditCard;
 }
 
 function estimateDataUrlBytes(dataUrl: string): number {
@@ -92,33 +99,45 @@ function parseAmountInput(value: string): number {
     return parseCurrencyDigitsToNumber(extractCurrencyDigits(value));
 }
 
+function parseDay(value: string): number {
+    const parsed = Math.round(Number(value));
+    if (!Number.isFinite(parsed)) {
+        return 1;
+    }
+    return Math.min(31, Math.max(1, parsed));
+}
+
 const FIELD_LABEL_CLASS = "text-[11px] uppercase tracking-[0.12em] text-white/50";
 const FIELD_INPUT_CLASS =
     "w-full rounded-xl border border-white/[0.12] bg-black/35 px-3 py-2.5 text-sm text-white outline-none transition-colors placeholder:text-white/35 focus:border-white/[0.24]";
 const SECONDARY_BUTTON_CLASS =
     "rounded-lg border border-white/[0.18] px-3 py-2 text-xs font-medium uppercase tracking-[0.08em] text-white/75 transition-colors hover:border-white/[0.28] hover:bg-white/[0.08]";
 
-export function AddWallet({ mode = "create", walletId, initialWallet }: AddWalletProps) {
+export function AddCreditCard({ mode = "create", creditCardId, initialCreditCard }: AddCreditCardProps) {
+    const creditCards = useFinanceCreditCards();
     const wallets = useFinanceWallets();
-    const { addWallet } = useFinanceActions();
+    const { addCreditCard } = useFinanceActions();
     const { closeModal } = useModal();
 
-    const editingWallet = useMemo(() => {
+    const editingCreditCard = useMemo(() => {
         if (mode !== "edit") {
             return null;
         }
-        if (initialWallet) {
-            return initialWallet;
+        if (initialCreditCard) {
+            return initialCreditCard;
         }
-        if (!walletId) {
+        if (!creditCardId) {
             return null;
         }
-        return wallets.find((wallet) => wallet.id === walletId) ?? null;
-    }, [initialWallet, mode, walletId, wallets]);
+        return creditCards.find((card) => card.id === creditCardId) ?? null;
+    }, [creditCardId, creditCards, initialCreditCard, mode]);
 
     const [name, setName] = useState("");
-    const [initialBalanceInput, setInitialBalanceInput] = useState("");
-    const [walletColor, setWalletColor] = useState(DEFAULT_WALLET_COLOR);
+    const [limitInput, setLimitInput] = useState("");
+    const [closingDayInput, setClosingDayInput] = useState("10");
+    const [dueDayInput, setDueDayInput] = useState("15");
+    const [bankWalletId, setBankWalletId] = useState<string>("");
+    const [cardColor, setCardColor] = useState(DEFAULT_WALLET_COLOR);
     const [customIcon, setCustomIcon] = useState<string | null>(null);
     const [iconUrlInput, setIconUrlInput] = useState("");
     const [uploadError, setUploadError] = useState("");
@@ -127,16 +146,19 @@ export function AddWallet({ mode = "create", walletId, initialWallet }: AddWalle
 
     useEffect(() => {
         if (mode === "edit") {
-            if (!editingWallet) {
+            if (!editingCreditCard) {
                 return;
             }
 
-            const normalizedIcon = normalizeWalletIcon(editingWallet.icon);
-            const usingDefaultIcon = isDefaultWalletIcon(normalizedIcon);
+            const normalizedIcon = normalizeWalletIcon(editingCreditCard.icon);
+            const usingDefaultIcon = isDefaultWalletIcon(normalizedIcon) || isDefaultCreditCardIcon(normalizedIcon);
 
-            setName(editingWallet.name);
-            setInitialBalanceInput(formatAmountInputFromValue(editingWallet.initialBalance));
-            setWalletColor(normalizeWalletColor(editingWallet.color));
+            setName(editingCreditCard.name);
+            setLimitInput(formatAmountInputFromValue(editingCreditCard.limit));
+            setClosingDayInput(String(editingCreditCard.closingDay));
+            setDueDayInput(String(editingCreditCard.dueDay));
+            setBankWalletId(editingCreditCard.bankWalletId ?? "");
+            setCardColor(normalizeWalletColor(editingCreditCard.color));
             setCustomIcon(usingDefaultIcon ? null : normalizedIcon);
             setIconUrlInput(!usingDefaultIcon && /^https?:\/\//i.test(normalizedIcon) ? normalizedIcon : "");
             setUploadError("");
@@ -145,24 +167,27 @@ export function AddWallet({ mode = "create", walletId, initialWallet }: AddWalle
         }
 
         setName("");
-        setInitialBalanceInput("");
-        setWalletColor(DEFAULT_WALLET_COLOR);
+        setLimitInput("");
+        setClosingDayInput("10");
+        setDueDayInput("15");
+        setBankWalletId(wallets[0]?.id ?? "");
+        setCardColor(DEFAULT_WALLET_COLOR);
         setCustomIcon(null);
         setIconUrlInput("");
         setUploadError("");
         setSubmitError("");
-    }, [editingWallet, mode]);
+    }, [editingCreditCard, mode, wallets]);
 
-    const isEditMode = mode === "edit" && Boolean(editingWallet);
-    const canSubmit = mode !== "edit" || Boolean(editingWallet);
+    const isEditMode = mode === "edit" && Boolean(editingCreditCard);
+    const canSubmit = mode !== "edit" || Boolean(editingCreditCard);
     const normalizedName = name.trim();
-    const resolvedColor = normalizeWalletColor(walletColor);
-    const resolvedIcon = customIcon ?? DEFAULT_WALLET_ICON;
+    const resolvedColor = normalizeWalletColor(cardColor);
+    const resolvedIcon = customIcon ?? DEFAULT_CREDIT_CARD_ICON;
 
-    const previewWallet = useMemo<Pick<Wallet, "icon" | "name" | "color">>(
+    const previewCard = useMemo<Pick<CreditCard, "icon" | "name" | "color">>(
         () => ({
             icon: resolvedIcon,
-            name: normalizedName || "Carteira",
+            name: normalizedName || "Cartao",
             color: resolvedColor,
         }),
         [normalizedName, resolvedColor, resolvedIcon],
@@ -215,40 +240,37 @@ export function AddWallet({ mode = "create", walletId, initialWallet }: AddWalle
         }
 
         if (!normalizedName) {
-            setSubmitError("Informe o nome da carteira.");
+            setSubmitError("Informe o nome do cartao.");
             return;
         }
 
-        if (!initialBalanceInput.trim()) {
-            setSubmitError("Informe o saldo inicial da carteira.");
+        if (!limitInput.trim()) {
+            setSubmitError("Informe o limite do cartao.");
             return;
         }
 
-        const initialBalance = parseAmountInput(initialBalanceInput);
-        if (!Number.isFinite(initialBalance)) {
-            setSubmitError("Saldo inicial invalido.");
+        const limit = parseAmountInput(limitInput);
+        if (!Number.isFinite(limit) || limit < 0) {
+            setSubmitError("Limite invalido.");
             return;
         }
 
-        if (initialBalance < 0) {
-            setSubmitError("Saldo inicial nao pode ser negativo.");
-            return;
-        }
+        const closingDay = parseDay(closingDayInput);
+        const dueDay = parseDay(dueDayInput);
 
         setSubmitError("");
 
-        const targetWallet = editingWallet;
-        await addWallet({
-            id: targetWallet?.id ?? uuidv4(),
+        await addCreditCard({
+            id: editingCreditCard?.id ?? uuidv4(),
             name: normalizedName,
             icon: resolvedIcon,
-            type: targetWallet?.type ?? "checking",
-            balance: initialBalance,
-            initialBalance,
-            currency: targetWallet?.currency ?? "BRL",
             color: resolvedColor,
-            isActive: targetWallet?.isActive ?? true,
-            createdAt: targetWallet?.createdAt ?? new Date().toISOString(),
+            limit,
+            closingDay,
+            dueDay,
+            bankWalletId: bankWalletId.trim() || null,
+            isActive: editingCreditCard?.isActive ?? true,
+            createdAt: editingCreditCard?.createdAt ?? new Date().toISOString(),
         });
 
         closeModal();
@@ -256,7 +278,7 @@ export function AddWallet({ mode = "create", walletId, initialWallet }: AddWalle
 
     return (
         <div className="rounded-2xl border border-white/[0.09] bg-[#131313] p-5 text-white shadow-[0_26px_70px_-38px_rgba(0,0,0,0.95)]">
-            <h2 className="text-2xl font-medium uppercase">{isEditMode ? "Editar carteira" : "Nova carteira"}</h2>
+            <h2 className="text-2xl font-medium uppercase">{isEditMode ? "Editar cartao" : "Novo cartao"}</h2>
 
             <form
                 className="mt-4 flex flex-col gap-4"
@@ -265,42 +287,83 @@ export function AddWallet({ mode = "create", walletId, initialWallet }: AddWalle
                     void handleSubmit();
                 }}
             >
-                {mode === "edit" && !editingWallet && (
-                    <p className="rounded-lg border border-amber-400/25 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">Carteira nao encontrada.</p>
+                {mode === "edit" && !editingCreditCard && (
+                    <p className="rounded-lg border border-amber-400/25 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">Cartao nao encontrado.</p>
                 )}
 
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                    <label className="flex flex-col gap-1.5">
-                        <span className={FIELD_LABEL_CLASS}>Nome da carteira</span>
-                        <input
-                            id="wallet-name"
-                            type="text"
-                            value={name}
-                            onChange={(event) => setName(event.target.value)}
-                            className={FIELD_INPUT_CLASS}
-                            placeholder="Ex: Carteira do Banco X"
-                            maxLength={70}
-                        />
-                    </label>
+                <label className="flex flex-col gap-1.5">
+                    <span className={FIELD_LABEL_CLASS}>Nome do cartao</span>
+                    <input
+                        id="credit-card-name"
+                        type="text"
+                        value={name}
+                        onChange={(event) => setName(event.target.value)}
+                        className={FIELD_INPUT_CLASS}
+                        placeholder="Ex: Cartao Principal"
+                        maxLength={70}
+                    />
+                </label>
 
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
                     <label className="flex flex-col gap-1.5">
-                        <span className={FIELD_LABEL_CLASS}>Saldo inicial</span>
+                        <span className={FIELD_LABEL_CLASS}>Limite</span>
                         <input
-                            id="wallet-balance"
+                            id="credit-card-limit"
                             inputMode="numeric"
-                            value={initialBalanceInput}
-                            onChange={(event) => setInitialBalanceInput(formatCurrencyFromDigits(extractCurrencyDigits(event.target.value)))}
+                            value={limitInput}
+                            onChange={(event) => setLimitInput(formatCurrencyFromDigits(extractCurrencyDigits(event.target.value)))}
                             className={FIELD_INPUT_CLASS}
                             placeholder="R$ 0,00"
                         />
                     </label>
+                    <label className="flex flex-col gap-1.5">
+                        <span className={FIELD_LABEL_CLASS}>Fechamento</span>
+                        <input
+                            id="credit-card-closing"
+                            type="number"
+                            value={closingDayInput}
+                            onChange={(event) => setClosingDayInput(event.target.value)}
+                            className={FIELD_INPUT_CLASS}
+                            min="1"
+                            max="31"
+                        />
+                    </label>
+                    <label className="flex flex-col gap-1.5">
+                        <span className={FIELD_LABEL_CLASS}>Vencimento</span>
+                        <input
+                            id="credit-card-due"
+                            type="number"
+                            value={dueDayInput}
+                            onChange={(event) => setDueDayInput(event.target.value)}
+                            className={FIELD_INPUT_CLASS}
+                            min="1"
+                            max="31"
+                        />
+                    </label>
                 </div>
+
+                <label className="flex flex-col gap-1.5">
+                    <span className={FIELD_LABEL_CLASS}>Banco (carteira vinculada)</span>
+                    <select
+                        id="credit-card-wallet"
+                        value={bankWalletId}
+                        onChange={(event) => setBankWalletId(event.target.value)}
+                        className={`${FIELD_INPUT_CLASS} appearance-none`}
+                    >
+                        <option value="">Sem vinculo</option>
+                        {wallets.map((wallet) => (
+                            <option key={wallet.id} value={wallet.id}>
+                                {wallet.name}
+                            </option>
+                        ))}
+                    </select>
+                </label>
 
                 <div className="rounded-xl border border-white/[0.1] bg-black/35 p-3">
                     <div className="mb-3 flex items-center gap-3">
-                        <WalletAvatar wallet={previewWallet} className="h-14 w-14 rounded-xl border border-white/[0.12]" iconSize={26} iconStrokeWidth={1.7} />
+                        <WalletAvatar wallet={previewCard} className="h-14 w-14 rounded-xl border border-white/[0.12]" iconSize={26} iconStrokeWidth={1.7} />
                         <div>
-                            <p className="text-sm font-medium text-white">Icone da carteira (opcional)</p>
+                            <p className="text-sm font-medium text-white">Icone do cartao (opcional)</p>
                             <p className="text-xs text-white/50">Upload local processado (max 320px) ou URL externa.</p>
                         </div>
                     </div>
@@ -309,7 +372,7 @@ export function AddWallet({ mode = "create", walletId, initialWallet }: AddWalle
                         <label className="flex flex-col gap-1.5">
                             <span className={FIELD_LABEL_CLASS}>Upload</span>
                             <input
-                                id="wallet-file-upload"
+                                id="credit-card-file-upload"
                                 type="file"
                                 accept="image/*"
                                 onChange={handleFileUpload}
@@ -321,7 +384,7 @@ export function AddWallet({ mode = "create", walletId, initialWallet }: AddWalle
                         <label className="flex flex-col gap-1.5">
                             <span className={FIELD_LABEL_CLASS}>URL da imagem</span>
                             <input
-                                id="wallet-url-input"
+                                id="credit-card-url-input"
                                 type="text"
                                 value={iconUrlInput}
                                 onChange={(event) => setIconUrlInput(event.target.value)}
@@ -342,18 +405,18 @@ export function AddWallet({ mode = "create", walletId, initialWallet }: AddWalle
                 </div>
 
                 <div className="rounded-xl border border-white/[0.1] bg-black/35 p-3">
-                    <p className={`${FIELD_LABEL_CLASS} mb-2`}>Cor da carteira</p>
+                    <p className={`${FIELD_LABEL_CLASS} mb-2`}>Cor do cartao</p>
                     <div className="flex items-center gap-3">
                         <input
                             type="color"
-                            value={walletColor}
-                            onChange={(event) => setWalletColor(event.target.value)}
+                            value={cardColor}
+                            onChange={(event) => setCardColor(event.target.value)}
                             className="h-10 w-14 rounded-lg border border-white/[0.16] bg-black/40 p-1"
                         />
                         <input
                             type="text"
-                            value={walletColor}
-                            onChange={(event) => setWalletColor(event.target.value)}
+                            value={cardColor}
+                            onChange={(event) => setCardColor(event.target.value)}
                             className={FIELD_INPUT_CLASS}
                             placeholder={DEFAULT_WALLET_COLOR}
                         />
@@ -376,7 +439,7 @@ export function AddWallet({ mode = "create", walletId, initialWallet }: AddWalle
                         disabled={!canSubmit || isProcessingUpload}
                         className="inline-flex min-w-32 items-center justify-center rounded-xl border border-emerald-400/35 bg-emerald-500/15 px-4 py-2 text-sm font-semibold text-emerald-100 transition-colors hover:border-emerald-400/55 hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-60"
                     >
-                        {isEditMode ? "Salvar alteracoes" : "Criar carteira"}
+                        {isEditMode ? "Salvar alteracoes" : "Criar cartao"}
                     </button>
                 </div>
             </form>

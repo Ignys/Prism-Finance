@@ -1,10 +1,13 @@
 import { useMemo, useState } from "react";
 import { ChartOptions, TooltipItem } from "chart.js";
 import { Doughnut } from "react-chartjs-2";
-import { useFinanceCategories, useFinanceTransactions } from "../../../context/FinanceContext";
-import { getCategoryIconComponent } from "../../../lib/categoryIcons";
+
+
 import { motion } from "framer-motion";
-import { parseAppDate } from "../../../lib/localDate";
+import { useFinanceCategories, useFinanceTransactions } from "../../../../context/FinanceContext";
+import { parseAppDate } from "../../../../lib/localDate";
+import { getCategoryIconComponent } from "../../../../lib/categoryIcons";
+
 
 type BreakdownMode = "category" | "category-with-subcategories";
 
@@ -38,7 +41,11 @@ export function GastosPorCategoria() {
         return transactionDate.getMonth() === currentMonth && transactionDate.getFullYear() === currentYear;
     });
 
-    const spendingTransactions = currentMonthTransactions.filter((tx) => tx.type === "spending").filter((t) => !t.status || t.status !== "cancelled");
+    const isIncludedStatus = (status: string | null | undefined) => status === "paid" || status === "pending";
+    const spendingTransactions = currentMonthTransactions
+        .filter((tx) => tx.type === "spending")
+        .filter((tx) => tx.paymentMethod !== "credit_card")
+        .filter((tx) => isIncludedStatus(tx.status));
 
     const categoriesById = useMemo(() => new Map(categories.map((category) => [category.id, category])), [categories]);
 

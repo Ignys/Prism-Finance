@@ -12,6 +12,9 @@ interface UserDocumentData {
 
 const FINANCE_KEYS = [
     "wallets",
+    "creditCards",
+    "creditCardInvoices",
+    "favoriteCreditCardId",
     "transactionGroups",
     "transactions",
     "ledgerEntries",
@@ -49,6 +52,18 @@ function buildFinancePayload(fields: FinanceFieldsUpdate): UserFieldUpdate {
 
     if (fields.wallets !== undefined) {
         financePayload.wallets = fields.wallets;
+    }
+
+    if (fields.creditCards !== undefined) {
+        financePayload.creditCards = fields.creditCards;
+    }
+
+    if (fields.creditCardInvoices !== undefined) {
+        financePayload.creditCardInvoices = fields.creditCardInvoices;
+    }
+
+    if (fields.favoriteCreditCardId !== undefined) {
+        financePayload.favoriteCreditCardId = fields.favoriteCreditCardId;
     }
 
     if (fields.transactionGroups !== undefined) {
@@ -155,6 +170,8 @@ export async function updateUserField(uid: string, fieldName: string, value: unk
 
 interface FinanceFieldsUpdate {
     wallets?: unknown[];
+    creditCards?: unknown[];
+    creditCardInvoices?: unknown[];
     transactionGroups?: unknown[];
     transactions?: unknown[];
     ledgerEntries?: unknown[];
@@ -163,6 +180,7 @@ interface FinanceFieldsUpdate {
     tags?: unknown[];
     transactionTags?: unknown[];
     favoriteWalletId?: string;
+    favoriteCreditCardId?: string | null;
 }
 
 export async function mergeFinanceFields(uid: string, fields: FinanceFieldsUpdate): Promise<void> {

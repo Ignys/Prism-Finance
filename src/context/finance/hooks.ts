@@ -3,7 +3,11 @@ import {
     createFinanceSnapshot,
     type Beneficiary,
     type Category,
+    type CreditCard,
+    type CreditCardInvoice,
     type FinanceSnapshot,
+    type InvoiceStatus,
+    type PaymentMethod,
     type ResolvedTransactionCategory,
     type Tag,
     type Transaction,
@@ -11,6 +15,7 @@ import {
     type TransactionDraft,
     type TransactionListItem,
     type TransactionStatus,
+    type TransactionSystemKind,
     type TransactionTag,
     type TransactionType,
     type Wallet,
@@ -19,7 +24,10 @@ import {
     FinanceActionsContext,
     FinanceBeneficiariesContext,
     FinanceCategoriesContext,
+    FinanceCreditCardInvoicesContext,
+    FinanceCreditCardsContext,
     FinanceFavoriteWalletContext,
+    FinanceFavoriteCreditCardContext,
     FinanceLedgerEntriesContext,
     FinanceSessionContext,
     FinanceStoredTransactionsContext,
@@ -36,7 +44,11 @@ import type { FinanceContextType } from "./contextTypes";
 export type {
     Beneficiary,
     Category,
+    CreditCard,
+    CreditCardInvoice,
     FinanceSnapshot,
+    InvoiceStatus,
+    PaymentMethod,
     ResolvedTransactionCategory,
     Tag,
     Transaction,
@@ -44,6 +56,7 @@ export type {
     TransactionDraft,
     TransactionListItem,
     TransactionStatus,
+    TransactionSystemKind,
     TransactionTag,
     TransactionType,
     Wallet,
@@ -57,8 +70,20 @@ export function useFinanceFavoriteWallet() {
     return useRequiredContext(FinanceFavoriteWalletContext, "useFinanceFavoriteWallet");
 }
 
+export function useFinanceFavoriteCreditCard() {
+    return useRequiredContext(FinanceFavoriteCreditCardContext, "useFinanceFavoriteCreditCard");
+}
+
 export function useFinanceWallets() {
     return useRequiredContext(FinanceWalletsContext, "useFinanceWallets");
+}
+
+export function useFinanceCreditCards() {
+    return useRequiredContext(FinanceCreditCardsContext, "useFinanceCreditCards");
+}
+
+export function useFinanceCreditCardInvoices() {
+    return useRequiredContext(FinanceCreditCardInvoicesContext, "useFinanceCreditCardInvoices");
 }
 
 export function useFinanceBeneficiaries() {
@@ -104,7 +129,10 @@ export function useFinanceActions() {
 export function useFinance(): FinanceContextType {
     const { user, loading } = useFinanceSession();
     const favoriteWalletId = useFinanceFavoriteWallet();
+    const favoriteCreditCardId = useFinanceFavoriteCreditCard();
     const wallets = useFinanceWallets();
+    const creditCards = useFinanceCreditCards();
+    const creditCardInvoices = useFinanceCreditCardInvoices();
     const beneficiaries = useFinanceBeneficiaries();
     const categories = useFinanceCategories();
     const tags = useFinanceTags();
@@ -120,8 +148,20 @@ export function useFinance(): FinanceContextType {
         if (!user) {
             return null;
         }
-        return createFinanceSnapshot(wallets, transactionGroups, storedTransactions, ledgerEntries, beneficiaries, categories, tags, transactionTags);
-    }, [beneficiaries, categories, ledgerEntries, storedTransactions, tags, transactionGroups, transactionTags, user, wallets]);
+        return createFinanceSnapshot(
+            wallets,
+            creditCards,
+            creditCardInvoices,
+            favoriteCreditCardId,
+            transactionGroups,
+            storedTransactions,
+            ledgerEntries,
+            beneficiaries,
+            categories,
+            tags,
+            transactionTags,
+        );
+    }, [beneficiaries, categories, creditCardInvoices, creditCards, favoriteCreditCardId, ledgerEntries, storedTransactions, tags, transactionGroups, transactionTags, user, wallets]);
 
     return useMemo(
         () => ({
@@ -130,6 +170,9 @@ export function useFinance(): FinanceContextType {
             finance,
             favoriteWalletId,
             wallets,
+            favoriteCreditCardId,
+            creditCards,
+            creditCardInvoices,
             beneficiaries,
             categories,
             tags,
@@ -139,6 +182,23 @@ export function useFinance(): FinanceContextType {
             balance,
             ...actions,
         }),
-        [actions, balance, beneficiaries, categories, despesas, favoriteWalletId, finance, loading, receitas, tags, transactions, user, wallets],
+        [
+            actions,
+            balance,
+            beneficiaries,
+            categories,
+            creditCardInvoices,
+            creditCards,
+            despesas,
+            favoriteCreditCardId,
+            favoriteWalletId,
+            finance,
+            loading,
+            receitas,
+            tags,
+            transactions,
+            user,
+            wallets,
+        ],
     );
 }

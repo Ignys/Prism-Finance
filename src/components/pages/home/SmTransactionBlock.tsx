@@ -1,14 +1,17 @@
 import { ArrowDownRight, ArrowUpRight, MoveRight, UserRound } from "lucide-react";
-import { useModal } from "../../context/ModalContext";
-import { type Transaction, useFinanceWallets } from "../../context/FinanceContext";
-import { WalletAvatar } from "../common/WalletAvatar";
-import { EditTransaction } from "../modal/EditTransaction";
-import { formatCurrencyBRL, formatTransactionDate, getTransactionTypeMeta, resolveTransactionWallet } from "../transactions/transactionView";
+import { useModal } from "../../../context/ModalContext";
+import { type Transaction, useFinanceCreditCards, useFinanceWallets } from "../../../context/FinanceContext";
+import { WalletAvatar } from "../../common/WalletAvatar";
+import { EditTransaction } from "../../modal/EditTransaction";
+import { formatCurrencyBRL, formatTransactionDate, getTransactionTypeMeta, resolveTransactionWallet } from "../../transactions/transactionView";
 
 export function MiniTransactionBlock({ transaction }: { transaction: Transaction }) {
     const { openModal } = useModal();
     const wallets = useFinanceWallets();
+    const creditCards = useFinanceCreditCards();
     const wallet = resolveTransactionWallet(wallets, transaction.inWallet);
+    const creditCard = transaction.creditCardId ? creditCards.find((card) => card.id === transaction.creditCardId) : null;
+    const paymentSource = transaction.paymentMethod === "credit_card" && creditCard ? creditCard : wallet;
 
     const typeMeta = getTransactionTypeMeta(transaction.type);
 
@@ -36,7 +39,7 @@ export function MiniTransactionBlock({ transaction }: { transaction: Transaction
                         {transaction.beneficiary}
                     </span>
                     <div className="size-0.5 bg-neutral-400 rounded-full"></div>
-                    <span className="truncate text-[14px] text-neutral-400">{wallet.name}</span>
+                    <span className="truncate text-[14px] text-neutral-400">{paymentSource.name}</span>
                 </div>
                 <div>
                     <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] ${typeMeta.badgeClass}`}>
@@ -48,11 +51,11 @@ export function MiniTransactionBlock({ transaction }: { transaction: Transaction
             <div className="flex w-full gap-2">
                 <div>
                     <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/[0.08] bg-black/30">
-                        <WalletAvatar wallet={wallet} className="h-8 w-8 rounded-lg" iconSize={16} iconStrokeWidth={1.6} />
+                        <WalletAvatar wallet={paymentSource} className="h-8 w-8 rounded-lg" iconSize={20} iconStrokeWidth={1.6} />
                     </div>
                 </div>
                 <div className="flex justify-between items-center w-full">
-                    <div className="flex flex-col text-left">
+                    <div className="flex flex-col text-left truncate max-w-[70%]">
                         <p className="truncate text-sm font-semibold text-white">{transaction.description || "Sem descricao"}</p>
                         <p className="truncate text-xs text-neutral-400"> {getCategoryDisplayLabel(transaction)}</p>
                     </div>

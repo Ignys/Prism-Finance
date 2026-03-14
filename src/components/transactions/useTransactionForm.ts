@@ -18,6 +18,7 @@ import { extractCurrencyDigits, formatCurrencyFromDigits, parseCurrencyDigitsToN
 interface UseTransactionFormOptions {
     type?: TransactionType;
     transaction?: Transaction | null;
+    mode?: "default" | "invoice_payment_edit";
 }
 
 interface CategorySelection {
@@ -27,6 +28,7 @@ interface CategorySelection {
 
 export interface TransactionFormState {
     isEditing: boolean;
+    isInvoicePaymentEdit: boolean;
     isTransfer: boolean;
     sourceTransaction: Transaction | null;
     amountInput: string;
@@ -117,14 +119,15 @@ function findCategorySelectionFromTransaction(transaction: Transaction, availabl
     };
 }
 
-export function useTransactionForm({ type, transaction }: UseTransactionFormOptions = {}): TransactionFormState {
+export function useTransactionForm({ type, transaction, mode = "default" }: UseTransactionFormOptions = {}): TransactionFormState {
     const wallets = useFinanceWallets();
     const favoriteWalletId = useFinanceFavoriteWallet();
     const categories = useFinanceCategories();
     const beneficiaries = useFinanceBeneficiaries();
     const allTags = useFinanceTags();
-    const { addTransaction, deleteTransaction } = useFinanceActions();
+    const { addTransaction, deleteTransaction, updateInvoicePaymentTransaction } = useFinanceActions();
     const isEditing = Boolean(transaction);
+    const isInvoicePaymentEdit = mode === "invoice_payment_edit" && Boolean(transaction);
 
     const [amountInput, setAmountInputState] = useState(() => (transaction ? formatAmountInputFromValue(transaction.value) : "R$ 0,00"));
     const [status, setStatus] = useState<TransactionStatus>(transaction?.status ?? "paid");
@@ -302,6 +305,8 @@ export function useTransactionForm({ type, transaction }: UseTransactionFormOpti
             value: numericValue,
             date: date || getLocalTodayDate(),
             inWallet: walletId,
+            paymentMethod: "wallet" as const,
+            creditCardId: null,
             categoryId: selectedCategoryId,
             beneficiaryId: beneficiaryId || null,
             tagIds: selectedTagIds,
@@ -313,6 +318,16 @@ export function useTransactionForm({ type, transaction }: UseTransactionFormOpti
 
     const submit = async () => {
         if (transaction) {
+            if (isInvoicePaymentEdit) {
+                await updateInvoicePaymentTransaction({
+                    transactionId: transaction.id,
+                    description: description || transaction.description || "Pagamento de fatura",
+                    beneficiaryId: beneficiaryId || null,
+                    date: date || transaction.date || getLocalTodayDate(),
+                });
+                return true;
+            }
+
             const draft = buildDraft();
             if (!draft) {
                 return false;
@@ -342,6 +357,10 @@ export function useTransactionForm({ type, transaction }: UseTransactionFormOpti
     };
 
     const duplicate = async () => {
+        if (isInvoicePaymentEdit) {
+            return false;
+        }
+
         const draft = buildDraft();
         if (!draft) {
             return false;
@@ -353,6 +372,7 @@ export function useTransactionForm({ type, transaction }: UseTransactionFormOpti
 
     return {
         isEditing,
+        isInvoicePaymentEdit,
         isTransfer,
         sourceTransaction: transaction ?? null,
         amountInput,

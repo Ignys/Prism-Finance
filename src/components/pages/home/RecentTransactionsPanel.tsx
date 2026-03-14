@@ -1,7 +1,7 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { useMemo } from "react";
-import type { Transaction } from "../../context/FinanceContext";
-import { parseAppDate } from "../../lib/localDate";
+import type { Transaction } from "../../../context/FinanceContext";
+import { parseAppDate } from "../../../lib/localDate";
 import { MiniTransactionBlock } from "./SmTransactionBlock";
 
 interface RecentTransactionsPanelProps {
@@ -20,6 +20,7 @@ export function RecentTransactionsPanel({ transactions }: RecentTransactionsPane
             .slice(0, 5);
     }, [transactions]);
 
+    console.log(recentPaidTransactions)
     return (
         <section className="w-full">
             <div className="relative overflow-hidden rounded-2xl border border-white/[0.08] bg-[#111111] p-4 shadow-[0_24px_60px_-32px_rgba(0,0,0,0.9)]">
