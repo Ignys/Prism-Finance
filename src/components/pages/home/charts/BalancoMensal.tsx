@@ -59,7 +59,7 @@ export function BalancoMensal() {
             </div>
 
             <div className="relative flex justify-between gap-3">
-                <div className="w-[20] rounded-xl border border-white/[0.06] bg-black/20 p-6">
+                <div className="w-[20%] rounded-xl border border-white/[0.06] bg-black/20 p-6">
                     <div className="flex h-full items-end justify-center gap-3">
                         <div className="h-full w-5 overflow-hidden rounded-full">
                             <div className="flex h-full items-end">
