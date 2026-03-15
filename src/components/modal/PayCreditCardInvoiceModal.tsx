@@ -6,6 +6,7 @@ import { extractCurrencyDigits, formatCurrencyFromDigits, parseCurrencyDigitsToN
 import { getLocalTodayDate, parseAppDate } from "../../lib/localDate";
 import { useModal } from "../../context/ModalContext";
 import { WalletAvatar } from "../common/WalletAvatar";
+import { DateField } from "../transactions/DateField";
 import { SingleSelectCombobox, type ComboboxOptionBase } from "../transactions/SingleSelectCombobox";
 import { ModalStructure } from "./ModalStructure";
 
@@ -50,10 +51,11 @@ function WalletOptionContent({ option }: { option: WalletOption }) {
 
 export function PayCreditCardInvoiceModal({ invoice, creditCard }: PayCreditCardInvoiceModalProps) {
     const wallets = useFinanceWallets();
+    const activeWallets = useMemo(() => wallets.filter((wallet) => wallet.isActive), [wallets]);
     const { payCreditCardInvoice } = useFinanceActions();
     const { closeModal } = useModal();
     const openAmount = Math.max(0, invoice.totalAmount - invoice.paidAmount);
-    const [walletId, setWalletId] = useState(creditCard.bankWalletId ?? wallets[0]?.id ?? "");
+    const [walletId, setWalletId] = useState(creditCard.bankWalletId ?? activeWallets[0]?.id ?? "");
     const [amountInput, setAmountInput] = useState(formatAmountInputFromValue(openAmount));
     const [paymentDate, setPaymentDate] = useState(getLocalTodayDate());
     const [submitting, setSubmitting] = useState(false);
@@ -63,21 +65,21 @@ export function PayCreditCardInvoiceModal({ invoice, creditCard }: PayCreditCard
     const selectedWallet = useMemo(() => wallets.find((wallet) => wallet.id === walletId) ?? null, [walletId, wallets]);
     const walletOptions = useMemo<WalletOption[]>(
         () =>
-            wallets.map((wallet) => ({
+            activeWallets.map((wallet) => ({
                 id: wallet.id,
                 label: wallet.name,
                 searchText: `${wallet.name} ${wallet.balance}`,
                 wallet,
             })),
-        [wallets],
+        [activeWallets],
     );
 
     useEffect(() => {
-        const fallbackWalletId = creditCard.bankWalletId ?? wallets[0]?.id ?? "";
-        if (!wallets.some((wallet) => wallet.id === walletId)) {
+        const fallbackWalletId = activeWallets.find((wallet) => wallet.id === creditCard.bankWalletId)?.id ?? activeWallets[0]?.id ?? "";
+        if (!activeWallets.some((wallet) => wallet.id === walletId)) {
             setWalletId(fallbackWalletId);
         }
-    }, [creditCard.bankWalletId, walletId, wallets]);
+    }, [activeWallets, creditCard.bankWalletId, walletId]);
 
     const handleSubmit = async () => {
         if (submitting) {
@@ -161,15 +163,7 @@ export function PayCreditCardInvoiceModal({ invoice, creditCard }: PayCreditCard
                         renderOptionContent={(option) => <WalletOptionContent option={option} />}
                     />
 
-                    <label className="flex flex-col gap-1.5 text-left">
-                        <span className="text-[11px] uppercase tracking-[0.12em] text-white/50">Data do pagamento</span>
-                        <input
-                            type="date"
-                            value={paymentDate}
-                            onChange={(event) => setPaymentDate(event.target.value)}
-                            className="rounded-xl border border-white/[0.1] bg-black/35 p-2.5 text-white outline-none"
-                        />
-                    </label>
+                    <DateField label="Data do pagamento" value={paymentDate} onChange={setPaymentDate} />
 
                     <label className="flex flex-col gap-1.5 text-left">
                         <span className="text-[11px] uppercase tracking-[0.12em] text-white/50">Valor a pagar</span>

@@ -113,7 +113,6 @@ export function StatementPage() {
                     transaction.paymentMethod === "credit_card" &&
                     transaction.type === "spending" &&
                     transaction.status !== "cancelled" &&
-                    transaction.status !== "skipped" &&
                     Boolean(transaction.invoiceId),
             )
             .filter((transaction) => {

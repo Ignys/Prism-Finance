@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import {
     DEFAULT_WALLET_ID,
+    type TransactionMode,
+    type TransactionSeriesScope,
     type Transaction,
     type TransactionStatus,
     type TransactionType,
@@ -9,6 +11,7 @@ import {
     useFinanceCategories,
     useFinanceFavoriteWallet,
     useFinanceTags,
+    useFinanceTransactionGroups,
     useFinanceWallets,
 } from "../../context/FinanceContext";
 import { normalizeComparisonText } from "../../context/finance/helpers";
@@ -30,6 +33,7 @@ export interface TransactionFormState {
     isEditing: boolean;
     isInvoicePaymentEdit: boolean;
     isTransfer: boolean;
+    isSeriesTransaction: boolean;
     sourceTransaction: Transaction | null;
     amountInput: string;
     status: TransactionStatus;
@@ -41,6 +45,8 @@ export interface TransactionFormState {
     selectedTagIds: string[];
     date: string;
     resolvedType: TransactionType;
+    transactionMode: TransactionMode;
+    editScope: TransactionSeriesScope;
     availableCategories: ReturnType<typeof useFinanceCategories>;
     rootCategories: ReturnType<typeof useFinanceCategories>;
     subCategories: ReturnType<typeof useFinanceCategories>;
@@ -55,8 +61,11 @@ export interface TransactionFormState {
     setRootCategoryId: (value: string) => void;
     setSubCategoryId: (value: string) => void;
     setBeneficiaryId: (value: string) => void;
+    setSelectedTagIds: (value: string[]) => void;
     setDate: (value: string) => void;
     setDateOffset: (offsetInDays: number) => void;
+    setTransactionMode: (value: TransactionMode) => void;
+    setEditScope: (value: TransactionSeriesScope) => void;
     toggleTag: (tagId: string) => void;
     submit: () => Promise<boolean>;
     remove: () => Promise<boolean>;
@@ -66,6 +75,18 @@ export interface TransactionFormState {
 function formatAmountInputFromValue(value: number): string {
     const cents = Math.max(0, Math.round(Math.abs(value) * 100));
     return formatCurrencyFromDigits(String(cents));
+}
+
+function getDefaultDescriptionByType(type: TransactionType): string {
+    if (type === "income") {
+        return "Receita";
+    }
+
+    if (type === "spending") {
+        return "Despesa";
+    }
+
+    return "Transferencia";
 }
 
 function findCategorySelectionFromTransaction(transaction: Transaction, availableCategories: ReturnType<typeof useFinanceCategories>): CategorySelection | null {
@@ -124,10 +145,16 @@ export function useTransactionForm({ type, transaction, mode = "default" }: UseT
     const favoriteWalletId = useFinanceFavoriteWallet();
     const categories = useFinanceCategories();
     const beneficiaries = useFinanceBeneficiaries();
+    const transactionGroups = useFinanceTransactionGroups();
     const allTags = useFinanceTags();
-    const { addTransaction, deleteTransaction, updateInvoicePaymentTransaction } = useFinanceActions();
+    const { addTransaction, deleteTransactionWithScope, updateInvoicePaymentTransaction, updateTransaction } = useFinanceActions();
     const isEditing = Boolean(transaction);
     const isInvoicePaymentEdit = mode === "invoice_payment_edit" && Boolean(transaction);
+    const sourceGroup = useMemo(
+        () => (transaction ? transactionGroups.find((item) => item.id === transaction.groupId) ?? null : null),
+        [transaction, transactionGroups],
+    );
+    const isSeriesTransaction = Boolean(sourceGroup && sourceGroup.transactionMode !== "single");
 
     const [amountInput, setAmountInputState] = useState(() => (transaction ? formatAmountInputFromValue(transaction.value) : "R$ 0,00"));
     const [status, setStatus] = useState<TransactionStatus>(transaction?.status ?? "paid");
@@ -138,7 +165,14 @@ export function useTransactionForm({ type, transaction, mode = "default" }: UseT
     const [beneficiaryId, setBeneficiaryId] = useState(transaction?.beneficiaryId ?? "");
     const [selectedTagIds, setSelectedTagIds] = useState<string[]>(transaction?.tagIds ?? []);
     const [date, setDate] = useState(transaction?.date ?? getLocalTodayDate());
+    const [transactionMode, setTransactionModeState] = useState<TransactionMode>(() => (sourceGroup?.transactionMode === "recurring" ? "recurring" : "single"));
+    const [editScope, setEditScopeState] = useState<TransactionSeriesScope>("single");
     const [hydratedTransactionId, setHydratedTransactionId] = useState<string | null>(null);
+    const activeWallets = useMemo(() => wallets.filter((wallet) => wallet.isActive), [wallets]);
+    const selectableWallets = useMemo(
+        () => wallets.filter((wallet) => wallet.isActive || (isEditing && wallet.id === walletId)),
+        [isEditing, walletId, wallets],
+    );
 
     const amountValue = useMemo(() => parseCurrencyDigitsToNumber(extractCurrencyDigits(amountInput)), [amountInput]);
 
@@ -204,8 +238,10 @@ export function useTransactionForm({ type, transaction, mode = "default" }: UseT
         setBeneficiaryId(transaction.beneficiaryId ?? "");
         setSelectedTagIds(transaction.tagIds ?? []);
         setDate(transaction.date ?? getLocalTodayDate());
+        setTransactionModeState(sourceGroup?.transactionMode === "recurring" ? "recurring" : "single");
+        setEditScopeState("single");
         setHydratedTransactionId(null);
-    }, [favoriteWalletId, transaction?.id]);
+    }, [favoriteWalletId, sourceGroup?.transactionMode, transaction?.id]);
 
     useEffect(() => {
         if (!transaction) {
@@ -231,14 +267,21 @@ export function useTransactionForm({ type, transaction, mode = "default" }: UseT
 
     useEffect(() => {
         const fallbackWalletId =
+            activeWallets.find((wallet) => wallet.id === favoriteWalletId)?.id ??
+            activeWallets[0]?.id ??
             wallets.find((wallet) => wallet.id === favoriteWalletId)?.id ??
             wallets[wallets.length - 1]?.id ??
             DEFAULT_WALLET_ID;
 
-        if (!wallets.some((wallet) => wallet.id === walletId)) {
+        if (!selectableWallets.some((wallet) => wallet.id === walletId)) {
+            setWalletId(fallbackWalletId);
+            return;
+        }
+
+        if (!isEditing && wallets.some((wallet) => wallet.id === walletId && !wallet.isActive)) {
             setWalletId(fallbackWalletId);
         }
-    }, [favoriteWalletId, walletId, wallets]);
+    }, [activeWallets, favoriteWalletId, isEditing, selectableWallets, walletId, wallets]);
 
     useEffect(() => {
         if (transaction && hydratedTransactionId !== transaction.id) {
@@ -292,13 +335,33 @@ export function useTransactionForm({ type, transaction, mode = "default" }: UseT
         setDate(getLocalDateFromOffset(offsetInDays));
     };
 
+    const setTransactionMode = (value: TransactionMode) => {
+        setTransactionModeState(value === "recurring" ? "recurring" : "single");
+    };
+
+    const setEditScope = (value: TransactionSeriesScope) => {
+        if (value === "all" || value === "this_and_next") {
+            setEditScopeState(value);
+            return;
+        }
+        setEditScopeState("single");
+    };
+
     const buildDraft = () => {
         const numericValue = amountValue;
         if (!Number.isFinite(numericValue) || numericValue === 0) {
             return null;
         }
+        const trimmedDescription = description.trim();
+        const fallbackDescription = getDefaultDescriptionByType(transaction?.type ?? resolvedType);
 
         const selectedCategoryId = subCategoryId || rootCategoryId || null;
+        const resolvedTransactionMode: TransactionMode =
+            isTransfer || (isEditing && isSeriesTransaction && editScope === "single")
+                ? "single"
+                : transactionMode === "recurring"
+                  ? "recurring"
+                  : "single";
 
         return {
             type: transaction?.type ?? resolvedType,
@@ -310,18 +373,35 @@ export function useTransactionForm({ type, transaction, mode = "default" }: UseT
             categoryId: selectedCategoryId,
             beneficiaryId: beneficiaryId || null,
             tagIds: selectedTagIds,
-            description: description || "Transacao",
+            description: trimmedDescription || fallbackDescription,
             status,
-            notes: description || undefined,
+            notes: trimmedDescription || undefined,
+            transactionMode: resolvedTransactionMode,
+            installmentCount: null,
+            recurrenceRule:
+                resolvedTransactionMode === "recurring"
+                    ? {
+                          frequency: "monthly",
+                          interval: 1,
+                          anchorDate: date || getLocalTodayDate(),
+                          amount: Math.abs(numericValue),
+                          tagIds: selectedTagIds,
+                          excludedDates: [],
+                          notes: trimmedDescription || null,
+                      }
+                    : null,
+            recurrenceEndDate: null,
         };
     };
 
     const submit = async () => {
         if (transaction) {
             if (isInvoicePaymentEdit) {
+                const trimmedDescription = description.trim();
+                const transactionDescription = transaction.description?.trim() ?? "";
                 await updateInvoicePaymentTransaction({
                     transactionId: transaction.id,
-                    description: description || transaction.description || "Pagamento de fatura",
+                    description: trimmedDescription || transactionDescription || "Pagamento de fatura",
                     beneficiaryId: beneficiaryId || null,
                     date: date || transaction.date || getLocalTodayDate(),
                 });
@@ -333,8 +413,11 @@ export function useTransactionForm({ type, transaction, mode = "default" }: UseT
                 return false;
             }
 
-            await addTransaction(draft);
-            await deleteTransaction(transaction);
+            await updateTransaction({
+                transaction,
+                draft,
+                scope: editScope,
+            });
             return true;
         }
 
@@ -352,7 +435,7 @@ export function useTransactionForm({ type, transaction, mode = "default" }: UseT
             return false;
         }
 
-        await deleteTransaction(transaction);
+        await deleteTransactionWithScope(transaction, editScope);
         return true;
     };
 
@@ -374,6 +457,7 @@ export function useTransactionForm({ type, transaction, mode = "default" }: UseT
         isEditing,
         isInvoicePaymentEdit,
         isTransfer,
+        isSeriesTransaction,
         sourceTransaction: transaction ?? null,
         amountInput,
         status,
@@ -385,10 +469,12 @@ export function useTransactionForm({ type, transaction, mode = "default" }: UseT
         selectedTagIds,
         date,
         resolvedType,
+        transactionMode,
+        editScope,
         availableCategories,
         rootCategories,
         subCategories,
-        wallets,
+        wallets: selectableWallets,
         beneficiaries,
         tags,
         hasSubCategories,
@@ -399,8 +485,11 @@ export function useTransactionForm({ type, transaction, mode = "default" }: UseT
         setRootCategoryId,
         setSubCategoryId,
         setBeneficiaryId,
+        setSelectedTagIds,
         setDate,
         setDateOffset,
+        setTransactionMode,
+        setEditScope,
         toggleTag,
         submit,
         remove,

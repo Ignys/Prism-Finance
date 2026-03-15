@@ -1,5 +1,6 @@
+import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { Pencil, Plus, Star } from "lucide-react";
+import { Eye, EyeOff, Pencil, Plus, Star } from "lucide-react";
 import {
     DEFAULT_WALLET_ID,
     useFinanceActions,
@@ -31,8 +32,18 @@ export function BalancePage() {
     const favoriteCreditCardId = useFinanceFavoriteCreditCard();
     const { setFavoriteWallet, setFavoriteCreditCard } = useFinanceActions();
     const { openModal } = useModal();
+    const [showArchivedWallets, setShowArchivedWallets] = useState(false);
+    const [showArchivedCreditCards, setShowArchivedCreditCards] = useState(false);
     const favoriteWallet = wallets.find((wallet) => wallet.id === favoriteWalletId) ?? wallets[0] ?? null;
     const favoriteCreditCard = creditCards.find((card) => card.id === favoriteCreditCardId) ?? creditCards[0] ?? null;
+    const visibleWallets = useMemo(
+        () => wallets.filter((wallet) => showArchivedWallets || wallet.isActive),
+        [showArchivedWallets, wallets],
+    );
+    const visibleCreditCards = useMemo(
+        () => creditCards.filter((card) => showArchivedCreditCards || card.isActive),
+        [creditCards, showArchivedCreditCards],
+    );
     const totalCreditLimit = creditCards.reduce((sum, card) => sum + card.limit, 0);
     const totalOpenInvoices = creditCardInvoices.reduce((sum, invoice) => sum + Math.max(0, invoice.totalAmount - invoice.paidAmount), 0);
 
@@ -65,10 +76,23 @@ export function BalancePage() {
                                 <Plus size={14} />
                                 Criar carteira
                             </button>
+                            <button
+                                type="button"
+                                onClick={() => setShowArchivedWallets((current) => !current)}
+                                className="inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-white/[0.12] bg-white/[0.03] px-2.5 py-1 text-xs uppercase tracking-[0.08em] text-white/70 transition-colors hover:border-white/[0.24] hover:text-white"
+                            >
+                                {showArchivedWallets ? <EyeOff size={13} /> : <Eye size={13} />}
+                                {showArchivedWallets ? "Ocultar arquivadas" : "Mostrar arquivadas"}
+                            </button>
                         </div>
 
                         <div className="relative mt-4 space-y-2">
-                            {wallets.map((wallet, index) => {
+                            {visibleWallets.length < 1 && (
+                                <p className="rounded-xl border border-white/[0.08] bg-white/[0.03] p-3 text-sm text-white/55">
+                                    Nenhuma carteira para os filtros atuais.
+                                </p>
+                            )}
+                            {visibleWallets.map((wallet, index) => {
                                 const isFavorite = wallet.id === favoriteWalletId;
                                 const isDefault = wallet.id === DEFAULT_WALLET_ID;
 
@@ -78,13 +102,22 @@ export function BalancePage() {
                                         initial={{ opacity: 0, y: 14 }}
                                         animate={{ opacity: 1, y: 0 }}
                                         transition={{ duration: 0.22, delay: index * 0.03, ease: "easeOut" }}
-                                        className="flex items-center justify-between gap-3 rounded-xl border border-white/[0.06] bg-white/[0.02] p-3"
+                                        className={`flex items-center justify-between gap-3 rounded-xl border p-3 ${
+                                            wallet.isActive ? "border-white/[0.06] bg-white/[0.02]" : "border-white/[0.08] bg-white/[0.01] opacity-70"
+                                        }`}
                                     >
                                         <div className="flex min-w-0 items-center gap-3">
                                             <WalletAvatar wallet={wallet} className="h-14 w-14 rounded-xl border border-white/10" iconSize={30} iconStrokeWidth={1.7} />
 
                                             <div className="min-w-0 text-left">
-                                                <p className="truncate text-[15px] font-medium text-white">{wallet.name}</p>
+                                                <div className="flex items-center gap-2">
+                                                    <p className="truncate text-[15px] font-medium text-white">{wallet.name}</p>
+                                                    {!wallet.isActive && (
+                                                        <span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] text-white/55">
+                                                            Arquivada
+                                                        </span>
+                                                    )}
+                                                </div>
                                                 <p className="text-sm font-normal text-white/60 tracking-widest">{currencyFormatter.format(wallet.balance)}</p>
                                             </div>
                                         </div>
@@ -105,12 +138,19 @@ export function BalancePage() {
                                             </button>
                                             <button
                                                 type="button"
-                                                onClick={() => void setFavoriteWallet(wallet.id)}
+                                                onClick={() => {
+                                                    if (wallet.isActive) {
+                                                        void setFavoriteWallet(wallet.id);
+                                                    }
+                                                }}
+                                                disabled={!wallet.isActive}
                                                 className={[
                                                     "inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.04em] transition-all",
                                                     isFavorite
                                                         ? "border-amber-200/35 bg-amber-300/10 text-amber-200"
-                                                        : "border-white/[0.12] bg-white/[0.03] text-white/70 hover:border-white/[0.2] hover:text-white",
+                                                        : wallet.isActive
+                                                          ? "border-white/[0.12] bg-white/[0.03] text-white/70 hover:border-white/[0.2] hover:text-white"
+                                                          : "border-white/[0.1] bg-white/[0.02] text-white/40",
                                                 ].join(" ")}
                                             >
                                                 <Star size={14} className={isFavorite ? "fill-amber-200 text-amber-200" : ""} />
@@ -140,11 +180,21 @@ export function BalancePage() {
                                 <Plus size={14} />
                                 Criar cartao
                             </button>
+                            <button
+                                type="button"
+                                onClick={() => setShowArchivedCreditCards((current) => !current)}
+                                className="inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-white/[0.12] bg-white/[0.03] px-2.5 py-1 text-xs uppercase tracking-[0.08em] text-white/70 transition-colors hover:border-white/[0.24] hover:text-white"
+                            >
+                                {showArchivedCreditCards ? <EyeOff size={13} /> : <Eye size={13} />}
+                                {showArchivedCreditCards ? "Ocultar arquivados" : "Mostrar arquivados"}
+                            </button>
                         </div>
 
                         <div className="relative mt-4 space-y-2">
-                            {creditCards.length < 1 && <p className="rounded-xl border border-white/[0.08] bg-white/[0.03] p-3 text-sm text-white/55">Nenhum cartao cadastrado.</p>}
-                            {creditCards.map((creditCard, index) => {
+                            {visibleCreditCards.length < 1 && (
+                                <p className="rounded-xl border border-white/[0.08] bg-white/[0.03] p-3 text-sm text-white/55">Nenhum cartao para os filtros atuais.</p>
+                            )}
+                            {visibleCreditCards.map((creditCard, index) => {
                                 const isFavorite = creditCard.id === favoriteCreditCardId;
                                 const openAmount = creditCardInvoices
                                     .filter((invoice) => invoice.creditCardId === creditCard.id)
@@ -156,13 +206,22 @@ export function BalancePage() {
                                         initial={{ opacity: 0, y: 14 }}
                                         animate={{ opacity: 1, y: 0 }}
                                         transition={{ duration: 0.22, delay: index * 0.03, ease: "easeOut" }}
-                                        className="flex items-center justify-between gap-3 rounded-xl border border-white/[0.06] bg-white/[0.02] p-3"
+                                        className={`flex items-center justify-between gap-3 rounded-xl border p-3 ${
+                                            creditCard.isActive ? "border-white/[0.06] bg-white/[0.02]" : "border-white/[0.08] bg-white/[0.01] opacity-70"
+                                        }`}
                                     >
                                         <div className="flex min-w-0 items-center gap-3">
                                             <WalletAvatar wallet={creditCard} className="h-14 w-14 rounded-xl border border-white/10" iconSize={30} iconStrokeWidth={1.7} />
 
                                             <div className="min-w-0 text-left">
-                                                <p className="truncate text-[15px] font-medium text-white">{creditCard.name}</p>
+                                                <div className="flex items-center gap-2">
+                                                    <p className="truncate text-[15px] font-medium text-white">{creditCard.name}</p>
+                                                    {!creditCard.isActive && (
+                                                        <span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] text-white/55">
+                                                            Arquivado
+                                                        </span>
+                                                    )}
+                                                </div>
                                                 <p className="text-sm font-normal text-white/60">
                                                     Limite: {currencyFormatter.format(creditCard.limit)} - Aberto: {currencyFormatter.format(openAmount)}
                                                 </p>
@@ -183,12 +242,19 @@ export function BalancePage() {
                                             </button>
                                             <button
                                                 type="button"
-                                                onClick={() => void setFavoriteCreditCard(creditCard.id)}
+                                                onClick={() => {
+                                                    if (creditCard.isActive) {
+                                                        void setFavoriteCreditCard(creditCard.id);
+                                                    }
+                                                }}
+                                                disabled={!creditCard.isActive}
                                                 className={[
                                                     "inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.04em] transition-all",
                                                     isFavorite
                                                         ? "border-amber-200/35 bg-amber-300/10 text-amber-200"
-                                                        : "border-white/[0.12] bg-white/[0.03] text-white/70 hover:border-white/[0.2] hover:text-white",
+                                                        : creditCard.isActive
+                                                          ? "border-white/[0.12] bg-white/[0.03] text-white/70 hover:border-white/[0.2] hover:text-white"
+                                                          : "border-white/[0.1] bg-white/[0.02] text-white/40",
                                                 ].join(" ")}
                                             >
                                                 <Star size={14} className={isFavorite ? "fill-amber-200 text-amber-200" : ""} />

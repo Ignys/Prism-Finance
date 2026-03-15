@@ -19,6 +19,7 @@ export type {
     TransactionGroupType,
     TransactionListItem,
     TransactionMode,
+    TransactionSeriesScope,
     TransactionSystemKind,
     TransactionStatus,
     TransactionTag,

@@ -8,6 +8,7 @@ export type TransactionMode = "single" | "installment" | "recurring";
 export type TransactionStatus = "pending" | "paid" | "cancelled" | "skipped";
 export type PaymentMethod = "wallet" | "credit_card";
 export type TransactionSystemKind = "invoice_payment";
+export type TransactionSeriesScope = "single" | "this_and_next" | "all";
 export type InvoiceStatus = "open" | "paid";
 export type WalletType = "checking" | "savings" | "cash" | "investment";
 export type BeneficiaryType = "person" | "cost_center" | "pet" | "other";
@@ -221,6 +222,11 @@ export interface TransactionDraft {
     status?: TransactionStatus | boolean;
     notes?: string;
     groupId?: string;
+    transactionMode?: TransactionMode;
+    installmentCount?: number | null;
+    ignoredInstallmentsCount?: number | null;
+    recurrenceRule?: Record<string, unknown> | null;
+    recurrenceEndDate?: string | null;
 }
 
 interface NormalizeFinanceResult {

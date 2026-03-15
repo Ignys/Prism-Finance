@@ -1,4 +1,5 @@
 import { ChangeEvent, useEffect, useMemo, useState } from "react";
+import { AlertTriangle, RotateCcw, Trash2 } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
 import { type CreditCard, useFinanceActions, useFinanceCreditCards, useFinanceWallets } from "../../context/FinanceContext";
 import { useModal } from "../../context/ModalContext";
@@ -116,7 +117,7 @@ const SECONDARY_BUTTON_CLASS =
 export function AddCreditCard({ mode = "create", creditCardId, initialCreditCard }: AddCreditCardProps) {
     const creditCards = useFinanceCreditCards();
     const wallets = useFinanceWallets();
-    const { addCreditCard } = useFinanceActions();
+    const { addCreditCard, deleteCreditCard, setCreditCardActive } = useFinanceActions();
     const { closeModal } = useModal();
 
     const editingCreditCard = useMemo(() => {
@@ -143,6 +144,13 @@ export function AddCreditCard({ mode = "create", creditCardId, initialCreditCard
     const [uploadError, setUploadError] = useState("");
     const [submitError, setSubmitError] = useState("");
     const [isProcessingUpload, setIsProcessingUpload] = useState(false);
+    const [submitting, setSubmitting] = useState(false);
+    const [confirmingDelete, setConfirmingDelete] = useState(false);
+    const activeWallets = useMemo(() => wallets.filter((wallet) => wallet.isActive), [wallets]);
+    const selectableWallets = useMemo(
+        () => wallets.filter((wallet) => wallet.isActive || wallet.id === bankWalletId),
+        [bankWalletId, wallets],
+    );
 
     useEffect(() => {
         if (mode === "edit") {
@@ -157,12 +165,13 @@ export function AddCreditCard({ mode = "create", creditCardId, initialCreditCard
             setLimitInput(formatAmountInputFromValue(editingCreditCard.limit));
             setClosingDayInput(String(editingCreditCard.closingDay));
             setDueDayInput(String(editingCreditCard.dueDay));
-            setBankWalletId(editingCreditCard.bankWalletId ?? "");
+            setBankWalletId(editingCreditCard.bankWalletId ?? activeWallets[0]?.id ?? "");
             setCardColor(normalizeWalletColor(editingCreditCard.color));
             setCustomIcon(usingDefaultIcon ? null : normalizedIcon);
             setIconUrlInput(!usingDefaultIcon && /^https?:\/\//i.test(normalizedIcon) ? normalizedIcon : "");
             setUploadError("");
             setSubmitError("");
+            setConfirmingDelete(false);
             return;
         }
 
@@ -170,13 +179,21 @@ export function AddCreditCard({ mode = "create", creditCardId, initialCreditCard
         setLimitInput("");
         setClosingDayInput("10");
         setDueDayInput("15");
-        setBankWalletId(wallets[0]?.id ?? "");
+        setBankWalletId(activeWallets[0]?.id ?? "");
         setCardColor(DEFAULT_WALLET_COLOR);
         setCustomIcon(null);
         setIconUrlInput("");
         setUploadError("");
         setSubmitError("");
-    }, [editingCreditCard, mode, wallets]);
+        setConfirmingDelete(false);
+    }, [activeWallets, editingCreditCard, mode]);
+
+    useEffect(() => {
+        const fallbackWalletId = activeWallets[0]?.id ?? wallets[0]?.id ?? "";
+        if (!selectableWallets.some((wallet) => wallet.id === bankWalletId)) {
+            setBankWalletId(fallbackWalletId);
+        }
+    }, [activeWallets, bankWalletId, selectableWallets, wallets]);
 
     const isEditMode = mode === "edit" && Boolean(editingCreditCard);
     const canSubmit = mode !== "edit" || Boolean(editingCreditCard);
@@ -234,47 +251,88 @@ export function AddCreditCard({ mode = "create", creditCardId, initialCreditCard
         setSubmitError("");
     };
 
-    const handleSubmit = async () => {
-        if (!canSubmit || isProcessingUpload) {
+    const runAction = async (action: () => Promise<boolean>) => {
+        if (submitting) {
             return;
         }
 
-        if (!normalizedName) {
-            setSubmitError("Informe o nome do cartao.");
-            return;
+        setSubmitting(true);
+
+        try {
+            const success = await action();
+            if (success) {
+                closeModal();
+                return;
+            }
+        } catch (error) {
+            console.error("Failed to submit credit card modal:", error);
         }
 
-        if (!limitInput.trim()) {
-            setSubmitError("Informe o limite do cartao.");
-            return;
-        }
+        setSubmitting(false);
+    };
 
-        const limit = parseAmountInput(limitInput);
-        if (!Number.isFinite(limit) || limit < 0) {
-            setSubmitError("Limite invalido.");
-            return;
-        }
+    const handleSubmit = () =>
+        runAction(async () => {
+            if (!canSubmit || isProcessingUpload) {
+                return false;
+            }
 
-        const closingDay = parseDay(closingDayInput);
-        const dueDay = parseDay(dueDayInput);
+            if (!normalizedName) {
+                setSubmitError("Informe o nome do cartao.");
+                return false;
+            }
 
-        setSubmitError("");
+            if (!limitInput.trim()) {
+                setSubmitError("Informe o limite do cartao.");
+                return false;
+            }
 
-        await addCreditCard({
-            id: editingCreditCard?.id ?? uuidv4(),
-            name: normalizedName,
-            icon: resolvedIcon,
-            color: resolvedColor,
-            limit,
-            closingDay,
-            dueDay,
-            bankWalletId: bankWalletId.trim() || null,
-            isActive: editingCreditCard?.isActive ?? true,
-            createdAt: editingCreditCard?.createdAt ?? new Date().toISOString(),
+            const limit = parseAmountInput(limitInput);
+            if (!Number.isFinite(limit) || limit < 0) {
+                setSubmitError("Limite invalido.");
+                return false;
+            }
+
+            const closingDay = parseDay(closingDayInput);
+            const dueDay = parseDay(dueDayInput);
+
+            setSubmitError("");
+
+            await addCreditCard({
+                id: editingCreditCard?.id ?? uuidv4(),
+                name: normalizedName,
+                icon: resolvedIcon,
+                color: resolvedColor,
+                limit,
+                closingDay,
+                dueDay,
+                bankWalletId: bankWalletId.trim() || null,
+                isActive: editingCreditCard?.isActive ?? true,
+                createdAt: editingCreditCard?.createdAt ?? new Date().toISOString(),
+            });
+
+            return true;
         });
 
-        closeModal();
-    };
+    const handleDelete = () =>
+        runAction(async () => {
+            if (!editingCreditCard) {
+                return false;
+            }
+
+            await deleteCreditCard(editingCreditCard.id);
+            return true;
+        });
+
+    const handleReactivate = () =>
+        runAction(async () => {
+            if (!editingCreditCard || editingCreditCard.isActive) {
+                return false;
+            }
+
+            await setCreditCardActive(editingCreditCard.id, true);
+            return true;
+        });
 
     return (
         <div className="rounded-2xl border border-white/[0.09] bg-[#131313] p-5 text-white shadow-[0_26px_70px_-38px_rgba(0,0,0,0.95)]">
@@ -351,7 +409,7 @@ export function AddCreditCard({ mode = "create", creditCardId, initialCreditCard
                         className={`${FIELD_INPUT_CLASS} appearance-none`}
                     >
                         <option value="">Sem vinculo</option>
-                        {wallets.map((wallet) => (
+                        {selectableWallets.map((wallet) => (
                             <option key={wallet.id} value={wallet.id}>
                                 {wallet.name}
                             </option>
@@ -426,23 +484,85 @@ export function AddCreditCard({ mode = "create", creditCardId, initialCreditCard
                 {uploadError && <p className="text-sm text-amber-200">{uploadError}</p>}
                 {submitError && <p className="text-sm text-red-200">{submitError}</p>}
 
-                <div className="flex items-center justify-end gap-2">
-                    <button
-                        type="button"
-                        onClick={closeModal}
-                        className="inline-flex min-w-24 items-center justify-center rounded-xl border border-white/[0.12] bg-white/[0.03] px-4 py-2 text-sm font-medium text-white/70 transition-colors hover:border-white/[0.2] hover:text-white"
-                    >
-                        Cancelar
-                    </button>
-                    <button
-                        type="submit"
-                        disabled={!canSubmit || isProcessingUpload}
-                        className="inline-flex min-w-32 items-center justify-center rounded-xl border border-emerald-400/35 bg-emerald-500/15 px-4 py-2 text-sm font-semibold text-emerald-100 transition-colors hover:border-emerald-400/55 hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                        {isEditMode ? "Salvar alteracoes" : "Criar cartao"}
-                    </button>
+                <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                        {isEditMode && editingCreditCard && (
+                            <button
+                                type="button"
+                                onClick={() => (editingCreditCard.isActive ? setConfirmingDelete((current) => !current) : void handleReactivate())}
+                                disabled={submitting}
+                                className={`inline-flex min-w-28 items-center justify-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+                                    editingCreditCard.isActive
+                                        ? "border-red-400/25 bg-red-500/10 text-red-200 hover:border-red-400/45 hover:text-red-100"
+                                        : "border-emerald-400/35 bg-emerald-500/15 text-emerald-100 hover:border-emerald-400/55 hover:bg-emerald-500/20"
+                                }`}
+                            >
+                                {editingCreditCard.isActive ? <Trash2 size={15} /> : <RotateCcw size={15} />}
+                                {editingCreditCard.isActive ? "Excluir" : "Reativar"}
+                            </button>
+                        )}
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                        <button
+                            type="button"
+                            onClick={closeModal}
+                            disabled={submitting}
+                            className="inline-flex min-w-24 items-center justify-center rounded-xl border border-white/[0.12] bg-white/[0.03] px-4 py-2 text-sm font-medium text-white/70 transition-colors hover:border-white/[0.2] hover:text-white"
+                        >
+                            Cancelar
+                        </button>
+                        <button
+                            type="submit"
+                            disabled={!canSubmit || isProcessingUpload || submitting}
+                            className="inline-flex min-w-32 items-center justify-center rounded-xl border border-emerald-400/35 bg-emerald-500/15 px-4 py-2 text-sm font-semibold text-emerald-100 transition-colors hover:border-emerald-400/55 hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                            {submitting ? "Processando..." : isEditMode ? "Salvar alteracoes" : "Criar cartao"}
+                        </button>
+                    </div>
                 </div>
             </form>
+
+            {confirmingDelete && editingCreditCard && (
+                <div
+                    className="fixed inset-0 z-[120] flex items-center justify-center bg-black/70 px-4"
+                    onClick={() => setConfirmingDelete(false)}
+                >
+                    <div
+                        className="w-full max-w-md rounded-2xl border border-red-400/25 bg-[#171717] p-5 text-white shadow-[0_24px_60px_-32px_rgba(0,0,0,0.9)]"
+                        onClick={(event) => event.stopPropagation()}
+                    >
+                        <div className="flex items-start gap-2">
+                            <AlertTriangle size={18} className="mt-0.5 shrink-0 text-red-200" />
+                            <div>
+                                <h3 className="text-lg font-semibold">Excluir cartao?</h3>
+                                <p className="mt-1 text-sm text-white/70">
+                                    Se existir historico de transacoes, o cartao sera arquivado e nao podera ser usado em novas transacoes.
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="mt-5 flex justify-end gap-2">
+                            <button
+                                type="button"
+                                onClick={() => setConfirmingDelete(false)}
+                                disabled={submitting}
+                                className="inline-flex min-w-24 items-center justify-center rounded-xl border border-white/[0.14] bg-white/[0.03] px-4 py-2 text-sm font-medium text-white/75 transition-colors hover:border-white/[0.24] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => void handleDelete()}
+                                disabled={submitting}
+                                className="inline-flex min-w-28 items-center justify-center rounded-xl border border-red-400/35 bg-red-500/15 px-4 py-2 text-sm font-semibold text-red-100 transition-colors hover:border-red-400/55 hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                                Confirmar exclusao
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

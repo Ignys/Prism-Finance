@@ -39,6 +39,8 @@ import {
     type Transaction,
     type TransactionDraft,
     type TransactionGroup,
+    type TransactionMode,
+    type TransactionSeriesScope,
     type TransactionTag,
     toTransactionList,
     type Wallet,
@@ -47,7 +49,7 @@ import {
     resolveCreditCardInvoiceCycleFromCycleKey,
     SYSTEM_EXPENSE_CARD_INVOICE_CATEGORY_ID,
 } from "../financeTypes";
-import type { FinanceStoreValue, PayCreditCardInvoiceDraft, PersistFields, UpdateInvoicePaymentTransactionDraft } from "./contextTypes";
+import type { FinanceStoreValue, PayCreditCardInvoiceDraft, PersistFields, UpdateInvoicePaymentTransactionDraft, UpdateTransactionDraft } from "./contextTypes";
 import {
     createId,
     ensureWalletId,
@@ -67,20 +69,26 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function resolveFavoriteWalletId(candidate: unknown, wallets: Wallet[]): string {
     const normalizedCandidate = typeof candidate === "string" ? normalizeWalletId(candidate.trim()) : DEFAULT_WALLET_ID;
-    if (wallets.some((wallet) => wallet.id === normalizedCandidate)) {
+    if (wallets.some((wallet) => wallet.id === normalizedCandidate && wallet.isActive)) {
         return normalizedCandidate;
     }
 
-    return wallets.find((wallet) => wallet.id === DEFAULT_WALLET_ID)?.id ?? wallets[0]?.id ?? DEFAULT_WALLET_ID;
+    return (
+        wallets.find((wallet) => wallet.id === DEFAULT_WALLET_ID && wallet.isActive)?.id ??
+        wallets.find((wallet) => wallet.isActive)?.id ??
+        wallets.find((wallet) => wallet.id === DEFAULT_WALLET_ID)?.id ??
+        wallets[0]?.id ??
+        DEFAULT_WALLET_ID
+    );
 }
 
 function resolveFavoriteCreditCardId(candidate: unknown, creditCards: CreditCard[]): string | null {
     const normalizedCandidate = typeof candidate === "string" ? candidate.trim() : "";
-    if (normalizedCandidate && creditCards.some((card) => card.id === normalizedCandidate)) {
+    if (normalizedCandidate && creditCards.some((card) => card.id === normalizedCandidate && card.isActive)) {
         return normalizedCandidate;
     }
 
-    return creditCards[0]?.id ?? null;
+    return creditCards.find((card) => card.isActive)?.id ?? creditCards[0]?.id ?? null;
 }
 
 function compareCreditCardsByCreatedAt(a: CreditCard, b: CreditCard): number {
@@ -97,6 +105,10 @@ function compareCreditCardInvoicesByDueDate(a: CreditCardInvoice, b: CreditCardI
     return a.dueDate.localeCompare(b.dueDate);
 }
 
+function buildTransactionBackedGroupIds(transactions: StoredTransaction[]): Set<string> {
+    return new Set(transactions.map((transaction) => transaction.groupId));
+}
+
 function toLedgerDateIso(dateValue: string, fallbackIso: string): string {
     const parsedDate = parseAppDate(dateValue);
     if (!parsedDate) {
@@ -105,6 +117,261 @@ function toLedgerDateIso(dateValue: string, fallbackIso: string): string {
 
     const localMidday = new Date(parsedDate.getFullYear(), parsedDate.getMonth(), parsedDate.getDate(), 12, 0, 0, 0);
     return localMidday.toISOString();
+}
+
+const RECURRING_MONTHS_HORIZON = 12;
+
+function normalizeSeriesScope(scope: TransactionSeriesScope | null | undefined): TransactionSeriesScope {
+    if (scope === "all" || scope === "this_and_next") {
+        return scope;
+    }
+    return "single";
+}
+
+function compareDateValue(a: string, b: string): number {
+    if (a === b) {
+        return 0;
+    }
+    return a < b ? -1 : 1;
+}
+
+function addDaysToDateValue(dateValue: string, days: number): string {
+    const parsed = parseAppDate(dateValue);
+    if (!parsed || !Number.isFinite(days)) {
+        return dateValue;
+    }
+
+    const shifted = new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate() + days);
+    return `${shifted.getFullYear()}-${String(shifted.getMonth() + 1).padStart(2, "0")}-${String(shifted.getDate()).padStart(2, "0")}`;
+}
+
+function addMonthsToDateValue(dateValue: string, months: number): string {
+    const parsed = parseAppDate(dateValue);
+    if (!parsed || !Number.isFinite(months)) {
+        return dateValue;
+    }
+
+    const day = parsed.getDate();
+    const shiftedBase = new Date(parsed.getFullYear(), parsed.getMonth() + months, 1);
+    const lastDay = new Date(shiftedBase.getFullYear(), shiftedBase.getMonth() + 1, 0).getDate();
+    const targetDay = Math.min(day, lastDay);
+    const shifted = new Date(shiftedBase.getFullYear(), shiftedBase.getMonth(), targetDay);
+    return `${shifted.getFullYear()}-${String(shifted.getMonth() + 1).padStart(2, "0")}-${String(shifted.getDate()).padStart(2, "0")}`;
+}
+
+function splitAmountAcrossInstallments(amount: number, installmentCount: number): number[] {
+    const safeCount = Math.max(2, Math.floor(installmentCount));
+    const cents = Math.round(Math.abs(amount) * 100);
+    const base = Math.floor(cents / safeCount);
+    const remainder = cents - base * safeCount;
+
+    const parts: number[] = [];
+    for (let index = 0; index < safeCount; index += 1) {
+        const partCents = base + (index < remainder ? 1 : 0);
+        parts.push(roundToCents(partCents / 100));
+    }
+    return parts;
+}
+
+function normalizeIgnoredInstallmentsCount(value: unknown, installmentCount: number | null): number {
+    if (!installmentCount || installmentCount < 2) {
+        return 0;
+    }
+
+    const parsedValue = Number(value);
+    const safeValue = Number.isFinite(parsedValue) ? Math.floor(parsedValue) : 0;
+    return Math.max(0, Math.min(installmentCount - 1, safeValue));
+}
+
+function recalculateGroupTotals(groups: TransactionGroup[], transactions: StoredTransaction[]): TransactionGroup[] {
+    const amountsByGroupId = new Map<string, number>();
+    const transactionCountByGroupId = new Map<string, number>();
+
+    transactions.forEach((transaction) => {
+        amountsByGroupId.set(transaction.groupId, roundToCents((amountsByGroupId.get(transaction.groupId) ?? 0) + Math.abs(transaction.amount)));
+        transactionCountByGroupId.set(transaction.groupId, (transactionCountByGroupId.get(transaction.groupId) ?? 0) + 1);
+    });
+
+    return groups.map((group) => {
+        const nextTotalAmount = roundToCents(amountsByGroupId.get(group.id) ?? 0);
+        if (group.transactionMode === "installment") {
+            const nextInstallmentCount = transactionCountByGroupId.get(group.id) ?? 0;
+            return {
+                ...group,
+                totalAmount: nextTotalAmount,
+                installmentCount: nextInstallmentCount > 0 ? nextInstallmentCount : null,
+            };
+        }
+
+        return {
+            ...group,
+            totalAmount: nextTotalAmount,
+        };
+    });
+}
+
+interface RecurrenceRuleView {
+    interval: number;
+    anchorDate: string;
+    amount: number;
+    tagIds: string[];
+    excludedDates: Set<string>;
+    notes: string | null;
+}
+
+function readRecurrenceRule(group: TransactionGroup, groupTransactions: StoredTransaction[], transactionTags: TransactionTag[], validTagIds: Set<string>): RecurrenceRuleView | null {
+    if (group.transactionMode !== "recurring") {
+        return null;
+    }
+
+    const [firstTransaction] = [...groupTransactions].sort((a, b) => {
+        if (a.scheduledDate === b.scheduledDate) {
+            return a.id.localeCompare(b.id);
+        }
+        return a.scheduledDate.localeCompare(b.scheduledDate);
+    });
+
+    if (!firstTransaction) {
+        return null;
+    }
+
+    const rule = group.recurrenceRule && typeof group.recurrenceRule === "object" ? group.recurrenceRule : null;
+    const rawInterval = rule && "interval" in rule ? Number(rule.interval) : Number.NaN;
+    const interval = Number.isInteger(rawInterval) && rawInterval > 0 ? rawInterval : 1;
+    const anchorDate = rule && typeof rule.anchorDate === "string" && parseAppDate(rule.anchorDate) ? rule.anchorDate : firstTransaction.scheduledDate;
+    const rawAmount = rule && "amount" in rule ? Number(rule.amount) : Number.NaN;
+    const amount = Number.isFinite(rawAmount) && rawAmount > 0 ? roundToCents(Math.abs(rawAmount)) : roundToCents(Math.abs(firstTransaction.amount));
+    const notes = rule && "notes" in rule && typeof rule.notes === "string" ? rule.notes : firstTransaction.notes ?? null;
+
+    const excludedDates = new Set<string>();
+    if (rule && "excludedDates" in rule && Array.isArray(rule.excludedDates)) {
+        for (const value of rule.excludedDates) {
+            if (typeof value === "string" && parseAppDate(value)) {
+                excludedDates.add(value);
+            }
+        }
+    }
+
+    const explicitTagIds: string[] = [];
+    if (rule && "tagIds" in rule && Array.isArray(rule.tagIds)) {
+        for (const value of rule.tagIds) {
+            if (typeof value === "string" && validTagIds.has(value)) {
+                explicitTagIds.push(value);
+            }
+        }
+    }
+
+    const fallbackTagIds = new Set<string>();
+    transactionTags.forEach((link) => {
+        if (link.transactionId === firstTransaction.id && validTagIds.has(link.tagId)) {
+            fallbackTagIds.add(link.tagId);
+        }
+    });
+
+    return {
+        interval,
+        anchorDate,
+        amount,
+        tagIds: explicitTagIds.length > 0 ? Array.from(new Set(explicitTagIds)) : Array.from(fallbackTagIds),
+        excludedDates,
+        notes,
+    };
+}
+
+function ensureRecurringTransactionsHorizon(params: {
+    groups: TransactionGroup[];
+    transactions: StoredTransaction[];
+    transactionTags: TransactionTag[];
+    tags: Tag[];
+}): { groups: TransactionGroup[]; transactions: StoredTransaction[]; transactionTags: TransactionTag[]; changed: boolean } {
+    const { groups, transactions, transactionTags, tags } = params;
+    const today = getTodayDate();
+    const horizonEndDate = addMonthsToDateValue(today, RECURRING_MONTHS_HORIZON - 1);
+    const validTagIds = new Set(tags.map((tag) => tag.id));
+    const nextTransactions = [...transactions];
+    const nextTransactionTags = [...transactionTags];
+    let changed = false;
+
+    const transactionsByGroupId = new Map<string, StoredTransaction[]>();
+    nextTransactions.forEach((transaction) => {
+        const groupTransactions = transactionsByGroupId.get(transaction.groupId) ?? [];
+        groupTransactions.push(transaction);
+        transactionsByGroupId.set(transaction.groupId, groupTransactions);
+    });
+
+    const nextGroups = groups.map((group) => {
+        if (group.transactionMode !== "recurring") {
+            return group;
+        }
+
+        const groupTransactions = transactionsByGroupId.get(group.id) ?? [];
+        const recurrence = readRecurrenceRule(group, groupTransactions, nextTransactionTags, validTagIds);
+        if (!recurrence) {
+            return group;
+        }
+
+        const effectiveEndDate =
+            group.recurrenceEndDate && parseAppDate(group.recurrenceEndDate)
+                ? compareDateValue(group.recurrenceEndDate, horizonEndDate) < 0
+                    ? group.recurrenceEndDate
+                    : horizonEndDate
+                : horizonEndDate;
+
+        if (compareDateValue(recurrence.anchorDate, effectiveEndDate) > 0) {
+            return group;
+        }
+
+        const existingDateSet = new Set(groupTransactions.map((transaction) => transaction.scheduledDate));
+        let cursor = recurrence.anchorDate;
+        while (compareDateValue(cursor, effectiveEndDate) <= 0) {
+            if (!existingDateSet.has(cursor) && !recurrence.excludedDates.has(cursor)) {
+                const recurringTransaction = normalizeStoredTransaction({
+                    id: createId("tx-recurring"),
+                    groupId: group.id,
+                    installmentNumber: null,
+                    amount: recurrence.amount,
+                    scheduledDate: cursor,
+                    status: "pending",
+                    paidAt: null,
+                    invoiceId: null,
+                    notes: recurrence.notes,
+                    createdAt: new Date().toISOString(),
+                });
+                nextTransactions.push(recurringTransaction);
+                existingDateSet.add(cursor);
+                changed = true;
+
+                recurrence.tagIds.forEach((tagId) => {
+                    if (!nextTransactionTags.some((item) => item.transactionId === recurringTransaction.id && item.tagId === tagId)) {
+                        nextTransactionTags.push({
+                            transactionId: recurringTransaction.id,
+                            tagId,
+                        });
+                    }
+                });
+            }
+
+            cursor = addMonthsToDateValue(cursor, recurrence.interval);
+        }
+
+        return group;
+    });
+
+    if (!changed) {
+        return {
+            groups: nextGroups,
+            transactions: nextTransactions,
+            transactionTags: nextTransactionTags,
+            changed: false,
+        };
+    }
+
+    return {
+        groups: recalculateGroupTotals(nextGroups, nextTransactions),
+        transactions: nextTransactions,
+        transactionTags: nextTransactionTags,
+        changed: true,
+    };
 }
 
 function syncCreditCardInvoices(params: {
@@ -176,14 +443,15 @@ function syncCreditCardInvoices(params: {
         const existingInvoice = existingInvoicesById.get(resolvedInvoiceId);
         const includeInInvoice = transaction.status !== "cancelled" && transaction.status !== "skipped";
 
+        invoiceMetaById.set(resolvedInvoiceId, {
+            creditCardId: card.id,
+            cycleKey: existingInvoice?.cycleKey ?? resolvedCycle.cycleKey,
+            closingDate: existingInvoice?.closingDate ?? resolvedCycle.closingDate,
+            dueDate: existingInvoice?.dueDate ?? resolvedCycle.dueDate,
+            createdAt: existingInvoice?.createdAt ?? transaction.createdAt,
+        });
+
         if (includeInInvoice) {
-            invoiceMetaById.set(resolvedInvoiceId, {
-                creditCardId: card.id,
-                cycleKey: existingInvoice?.cycleKey ?? resolvedCycle.cycleKey,
-                closingDate: existingInvoice?.closingDate ?? resolvedCycle.closingDate,
-                dueDate: existingInvoice?.dueDate ?? resolvedCycle.dueDate,
-                createdAt: existingInvoice?.createdAt ?? transaction.createdAt,
-            });
             invoiceTotalsById.set(resolvedInvoiceId, roundToCents((invoiceTotalsById.get(resolvedInvoiceId) ?? 0) + Math.abs(transaction.amount)));
         }
 
@@ -392,6 +660,18 @@ export function useFinanceStore(): FinanceStoreValue {
     }, [ledgerEntries]);
 
     const setSnapshotState = useCallback((snapshot: FinanceSnapshot) => {
+        walletsRef.current = snapshot.wallets;
+        creditCardsRef.current = snapshot.creditCards;
+        creditCardInvoicesRef.current = snapshot.creditCardInvoices;
+        favoriteCreditCardIdRef.current = snapshot.favoriteCreditCardId;
+        beneficiariesRef.current = snapshot.beneficiaries;
+        categoriesRef.current = snapshot.categories;
+        tagsRef.current = snapshot.tags;
+        transactionGroupsRef.current = snapshot.transactionGroups;
+        storedTransactionsRef.current = snapshot.transactions;
+        transactionTagsRef.current = snapshot.transactionTags;
+        ledgerEntriesRef.current = snapshot.ledgerEntries;
+
         setWallets(snapshot.wallets);
         setCreditCards(snapshot.creditCards);
         setCreditCardInvoices(snapshot.creditCardInvoices);
@@ -443,7 +723,34 @@ export function useFinanceStore(): FinanceStoreValue {
                 const rawUserData = snap.exists() ? (snap.data() as unknown) : null;
                 const { finance: rawFinance, hasLegacyDotFields } = readFinanceFromUserData(rawUserData);
                 const normalizedFinance = normalizeFinanceSnapshot(rawFinance, user.uid);
-                const snapshot = normalizedFinance.snapshot;
+                const recurringHydration = ensureRecurringTransactionsHorizon({
+                    groups: normalizedFinance.snapshot.transactionGroups,
+                    transactions: normalizedFinance.snapshot.transactions,
+                    transactionTags: normalizedFinance.snapshot.transactionTags,
+                    tags: normalizedFinance.snapshot.tags,
+                });
+                const hydratedGroups = recurringHydration.groups;
+                const hydratedTransactions = recurringHydration.transactions;
+                const hydratedTransactionTags = recurringHydration.transactionTags;
+                const syncedInvoices = syncCreditCardInvoices({
+                    creditCards: normalizedFinance.snapshot.creditCards,
+                    transactionGroups: hydratedGroups,
+                    transactions: hydratedTransactions,
+                    existingInvoices: normalizedFinance.snapshot.creditCardInvoices,
+                });
+                const snapshot = createFinanceSnapshot(
+                    normalizedFinance.snapshot.wallets,
+                    normalizedFinance.snapshot.creditCards,
+                    syncedInvoices.creditCardInvoices,
+                    normalizedFinance.snapshot.favoriteCreditCardId,
+                    hydratedGroups,
+                    syncedInvoices.transactions,
+                    normalizedFinance.snapshot.ledgerEntries,
+                    normalizedFinance.snapshot.beneficiaries,
+                    normalizedFinance.snapshot.categories,
+                    normalizedFinance.snapshot.tags,
+                    hydratedTransactionTags,
+                );
                 const rawFavoriteWalletId = isRecord(rawFinance) ? rawFinance.favoriteWalletId : undefined;
                 const normalizedFavoriteWalletId = resolveFavoriteWalletId(rawFavoriteWalletId, snapshot.wallets);
                 const favoriteChanged = normalizedFavoriteWalletId !== rawFavoriteWalletId;
@@ -455,7 +762,7 @@ export function useFinanceStore(): FinanceStoreValue {
                 setSnapshotState(snapshot);
                 setFavoriteWalletId(normalizedFavoriteWalletId);
 
-                if (normalizedFinance.changed || favoriteChanged || hasLegacyDotFields) {
+                if (normalizedFinance.changed || recurringHydration.changed || syncedInvoices.changed || favoriteChanged || hasLegacyDotFields) {
                     await mergeFinanceFields(user.uid, {
                         wallets: snapshot.wallets,
                         creditCards: snapshot.creditCards,
@@ -574,6 +881,119 @@ export function useFinanceStore(): FinanceStoreValue {
         [persistFinanceFields],
     );
 
+    const setWalletActive = useCallback(
+        async (walletId: string, isActive: boolean) => {
+            const normalizedWalletId = normalizeWalletId(walletId);
+            if (normalizedWalletId === DEFAULT_WALLET_ID && !isActive) {
+                return;
+            }
+
+            let changed = false;
+            const nextWallets = walletsRef.current.map((wallet) => {
+                if (wallet.id !== normalizedWalletId || wallet.isActive === isActive) {
+                    return wallet;
+                }
+
+                changed = true;
+                return {
+                    ...wallet,
+                    isActive,
+                };
+            });
+
+            if (!changed) {
+                return;
+            }
+
+            const nextFavoriteWalletId = resolveFavoriteWalletId(favoriteWalletIdRef.current, nextWallets);
+            const snapshot = buildSnapshot({ wallets: nextWallets });
+            setSnapshotState(snapshot);
+            setFavoriteWalletId(nextFavoriteWalletId);
+
+            await persistFinanceFields({
+                wallets: snapshot.wallets,
+                ledgerEntries: snapshot.ledgerEntries,
+                favoriteWalletId: nextFavoriteWalletId,
+            });
+        },
+        [buildSnapshot, persistFinanceFields, setSnapshotState],
+    );
+
+    const deleteWallet = useCallback(
+        async (walletId: string) => {
+            const normalizedWalletId = normalizeWalletId(walletId);
+            if (normalizedWalletId === DEFAULT_WALLET_ID) {
+                return;
+            }
+
+            const walletExists = walletsRef.current.some((wallet) => wallet.id === normalizedWalletId);
+            if (!walletExists) {
+                return;
+            }
+
+            const groupIdsWithTransactions = buildTransactionBackedGroupIds(storedTransactionsRef.current);
+            const hasLinkedTransactions = transactionGroupsRef.current.some(
+                (group) =>
+                    groupIdsWithTransactions.has(group.id) &&
+                    (group.sourceWalletId === normalizedWalletId || group.destinationWalletId === normalizedWalletId),
+            );
+
+            const nextWallets = hasLinkedTransactions
+                ? walletsRef.current.map((wallet) => (wallet.id === normalizedWalletId ? { ...wallet, isActive: false } : wallet))
+                : walletsRef.current.filter((wallet) => wallet.id !== normalizedWalletId);
+
+            const nextCreditCards = creditCardsRef.current.map((card) => (card.bankWalletId === normalizedWalletId ? { ...card, bankWalletId: null } : card));
+            const nextGroups = hasLinkedTransactions
+                ? transactionGroupsRef.current
+                : transactionGroupsRef.current.map((group) => {
+                      if (group.sourceWalletId !== normalizedWalletId && group.destinationWalletId !== normalizedWalletId) {
+                          return group;
+                      }
+
+                      return normalizeTransactionGroup(
+                          {
+                              ...group,
+                              sourceWalletId: group.sourceWalletId === normalizedWalletId ? DEFAULT_WALLET_ID : group.sourceWalletId,
+                              destinationWalletId: group.destinationWalletId === normalizedWalletId ? DEFAULT_WALLET_ID : group.destinationWalletId,
+                          },
+                          new Set(nextWallets.map((wallet) => wallet.id)),
+                      );
+                  });
+
+            const nextFavoriteWalletId = resolveFavoriteWalletId(favoriteWalletIdRef.current, nextWallets);
+            const nextFavoriteCreditCardId = resolveFavoriteCreditCardId(favoriteCreditCardIdRef.current, nextCreditCards);
+            const syncedInvoices = syncCreditCardInvoices({
+                creditCards: nextCreditCards,
+                transactionGroups: nextGroups,
+                transactions: storedTransactionsRef.current,
+                existingInvoices: creditCardInvoicesRef.current,
+            });
+
+            const snapshot = buildSnapshot({
+                wallets: nextWallets,
+                creditCards: nextCreditCards,
+                creditCardInvoices: syncedInvoices.creditCardInvoices,
+                transactions: syncedInvoices.transactions,
+                transactionGroups: nextGroups,
+                favoriteCreditCardId: nextFavoriteCreditCardId,
+            });
+            setSnapshotState(snapshot);
+            setFavoriteWalletId(nextFavoriteWalletId);
+
+            await persistFinanceFields({
+                wallets: snapshot.wallets,
+                ledgerEntries: snapshot.ledgerEntries,
+                creditCards: snapshot.creditCards,
+                creditCardInvoices: snapshot.creditCardInvoices,
+                transactions: snapshot.transactions,
+                transactionGroups: snapshot.transactionGroups,
+                favoriteWalletId: nextFavoriteWalletId,
+                favoriteCreditCardId: snapshot.favoriteCreditCardId,
+            });
+        },
+        [buildSnapshot, persistFinanceFields, setSnapshotState],
+    );
+
     const addWallet = useCallback(
         async (newWallet: Wallet) => {
             const wallet = normalizeWallet(newWallet);
@@ -637,6 +1057,98 @@ export function useFinanceStore(): FinanceStoreValue {
             await persistFinanceFields({ favoriteCreditCardId: nextFavoriteCreditCardId });
         },
         [persistFinanceFields],
+    );
+
+    const setCreditCardActive = useCallback(
+        async (creditCardId: string, isActive: boolean) => {
+            let changed = false;
+            const nextCreditCards = creditCardsRef.current
+                .map((card) => {
+                    if (card.id !== creditCardId || card.isActive === isActive) {
+                        return card;
+                    }
+
+                    changed = true;
+                    return {
+                        ...card,
+                        isActive,
+                    };
+                })
+                .sort(compareCreditCardsByCreatedAt);
+
+            if (!changed) {
+                return;
+            }
+
+            const nextFavoriteCreditCardId = resolveFavoriteCreditCardId(favoriteCreditCardIdRef.current, nextCreditCards);
+            const syncedInvoices = syncCreditCardInvoices({
+                creditCards: nextCreditCards,
+                transactionGroups: transactionGroupsRef.current,
+                transactions: storedTransactionsRef.current,
+                existingInvoices: creditCardInvoicesRef.current,
+            });
+            const snapshot = buildSnapshot({
+                creditCards: nextCreditCards,
+                creditCardInvoices: syncedInvoices.creditCardInvoices,
+                transactions: syncedInvoices.transactions,
+                favoriteCreditCardId: nextFavoriteCreditCardId,
+            });
+            setSnapshotState(snapshot);
+
+            await persistFinanceFields({
+                creditCards: snapshot.creditCards,
+                creditCardInvoices: snapshot.creditCardInvoices,
+                transactions: snapshot.transactions,
+                favoriteCreditCardId: snapshot.favoriteCreditCardId,
+            });
+        },
+        [buildSnapshot, persistFinanceFields, setSnapshotState],
+    );
+
+    const deleteCreditCard = useCallback(
+        async (creditCardId: string) => {
+            const targetCard = creditCardsRef.current.find((card) => card.id === creditCardId);
+            if (!targetCard) {
+                return;
+            }
+
+            const groupIdsWithTransactions = buildTransactionBackedGroupIds(storedTransactionsRef.current);
+            const hasLinkedTransactions = transactionGroupsRef.current.some(
+                (group) => groupIdsWithTransactions.has(group.id) && group.creditCardId === creditCardId,
+            );
+
+            const nextCreditCards = hasLinkedTransactions
+                ? creditCardsRef.current.map((card) => (card.id === creditCardId ? { ...card, isActive: false } : card))
+                : creditCardsRef.current.filter((card) => card.id !== creditCardId);
+            const nextGroups = hasLinkedTransactions
+                ? transactionGroupsRef.current
+                : transactionGroupsRef.current.map((group) => (group.creditCardId === creditCardId ? { ...group, creditCardId: null } : group));
+
+            const nextFavoriteCreditCardId = resolveFavoriteCreditCardId(favoriteCreditCardIdRef.current, nextCreditCards);
+            const syncedInvoices = syncCreditCardInvoices({
+                creditCards: nextCreditCards,
+                transactionGroups: nextGroups,
+                transactions: storedTransactionsRef.current,
+                existingInvoices: creditCardInvoicesRef.current,
+            });
+            const snapshot = buildSnapshot({
+                creditCards: nextCreditCards,
+                creditCardInvoices: syncedInvoices.creditCardInvoices,
+                transactions: syncedInvoices.transactions,
+                transactionGroups: nextGroups,
+                favoriteCreditCardId: nextFavoriteCreditCardId,
+            });
+            setSnapshotState(snapshot);
+
+            await persistFinanceFields({
+                creditCards: snapshot.creditCards,
+                creditCardInvoices: snapshot.creditCardInvoices,
+                transactions: snapshot.transactions,
+                transactionGroups: snapshot.transactionGroups,
+                favoriteCreditCardId: snapshot.favoriteCreditCardId,
+            });
+        },
+        [buildSnapshot, persistFinanceFields, setSnapshotState],
     );
 
     const payCreditCardInvoice = useCallback(
@@ -1265,17 +1777,74 @@ export function useFinanceStore(): FinanceStoreValue {
             );
             const destinationWalletIdRaw = newTransaction.destinationWalletId ? normalizeWalletId(newTransaction.destinationWalletId) : null;
             const destinationWalletId = destinationWalletIdRaw ? ensureWalletId(destinationWalletIdRaw, walletsRef.current) : null;
+            const validTagIds = Array.from(new Set(newTransaction.tagIds ?? [])).filter((tagId) => tagsRef.current.some((tag) => tag.id === tagId));
 
             const transactionId = newTransaction.id && newTransaction.id.trim() ? newTransaction.id.trim() : createId("tx");
             const groupId = newTransaction.groupId && newTransaction.groupId.trim() ? newTransaction.groupId.trim() : `group-${transactionId}`;
             const existingGroup = transactionGroupsRef.current.find((group) => group.id === groupId);
+            const requestedMode = newTransaction.transactionMode;
+            const normalizedRequestedMode: TransactionMode =
+                requestedMode === "recurring" || requestedMode === "installment" || requestedMode === "single" ? requestedMode : "single";
+
+            const transactionMode: TransactionMode =
+                existingGroup?.transactionMode ??
+                (groupType === "transfer"
+                    ? "single"
+                    : normalizedRequestedMode === "installment" && groupType === "expense"
+                      ? "installment"
+                      : normalizedRequestedMode === "recurring"
+                        ? "recurring"
+                        : "single");
 
             const resolvedGroupCreditCardId = existingGroup?.creditCardId ?? (groupType === "expense" ? resolvedCreditCard?.id ?? null : null);
+            const rawInstallmentCount = Number(newTransaction.installmentCount ?? existingGroup?.installmentCount ?? 0);
+            const installmentCount = transactionMode === "installment" && Number.isInteger(rawInstallmentCount) && rawInstallmentCount >= 2 ? rawInstallmentCount : null;
+            const ignoredInstallmentsCount =
+                transactionMode === "installment"
+                    ? normalizeIgnoredInstallmentsCount(newTransaction.ignoredInstallmentsCount, installmentCount)
+                    : 0;
+            const existingRecurrenceRule =
+                existingGroup?.recurrenceRule && typeof existingGroup.recurrenceRule === "object" ? existingGroup.recurrenceRule : {};
+            const providedRecurrenceRule =
+                newTransaction.recurrenceRule && typeof newTransaction.recurrenceRule === "object" ? newTransaction.recurrenceRule : {};
+            const recurrenceRule =
+                transactionMode === "recurring"
+                    ? {
+                          frequency: "monthly",
+                          interval: 1,
+                          anchorDate: scheduledDate,
+                          amount: absoluteAmount,
+                          tagIds: validTagIds,
+                          excludedDates: Array.isArray((existingRecurrenceRule as Record<string, unknown>).excludedDates)
+                              ? (existingRecurrenceRule as Record<string, unknown>).excludedDates
+                              : [],
+                          notes: newTransaction.notes ?? null,
+                          ...existingRecurrenceRule,
+                          ...providedRecurrenceRule,
+                      }
+                    : null;
             const group = existingGroup
-                ? {
-                      ...existingGroup,
-                      totalAmount: roundToCents(existingGroup.totalAmount + absoluteAmount),
-                  }
+                ? normalizeTransactionGroup(
+                      {
+                          ...existingGroup,
+                          beneficiaryId: finalBeneficiary.id,
+                          beneficiaryName: finalBeneficiary.name,
+                          categoryId: finalCategory.id,
+                          categoryName,
+                          subcategoryName,
+                          title: description || categoryName,
+                          notes: newTransaction.notes || null,
+                          sourceWalletId,
+                          destinationWalletId,
+                          creditCardId: resolvedGroupCreditCardId,
+                          transactionMode,
+                          installmentCount,
+                          recurrenceRule,
+                          recurrenceEndDate: transactionMode === "recurring" ? (newTransaction.recurrenceEndDate ?? existingGroup.recurrenceEndDate ?? null) : null,
+                          totalAmount: roundToCents(existingGroup.totalAmount + absoluteAmount),
+                      },
+                      new Set(walletsRef.current.map((wallet) => wallet.id)),
+                  )
                 : normalizeTransactionGroup(
                       {
                           id: groupId,
@@ -1288,11 +1857,11 @@ export function useFinanceStore(): FinanceStoreValue {
                           title: description || categoryName,
                           notes: newTransaction.notes || null,
                           type: groupType,
-                          transactionMode: "single",
+                          transactionMode,
                           totalAmount: absoluteAmount,
-                          installmentCount: null,
-                          recurrenceRule: null,
-                          recurrenceEndDate: null,
+                          installmentCount,
+                          recurrenceRule,
+                          recurrenceEndDate: transactionMode === "recurring" ? (newTransaction.recurrenceEndDate ?? null) : null,
                           sourceWalletId,
                           destinationWalletId,
                           creditCardId: resolvedGroupCreditCardId,
@@ -1305,64 +1874,100 @@ export function useFinanceStore(): FinanceStoreValue {
                 ? transactionGroupsRef.current.map((item) => (item.id === groupId ? group : item))
                 : [...transactionGroupsRef.current, group];
 
-            const transactionInvoiceId =
-                group.type === "expense" && group.creditCardId
-                    ? (() => {
-                          const linkedCard = creditCardsRef.current.find((item) => item.id === group.creditCardId);
-                          if (!linkedCard) {
-                              return null;
-                          }
-
-                          const requestedInvoiceId = newTransaction.invoiceId?.trim() ?? "";
-                          const parsedRequestedInvoice = requestedInvoiceId ? parseCreditCardInvoiceId(requestedInvoiceId) : null;
-                          if (parsedRequestedInvoice && parsedRequestedInvoice.creditCardId === linkedCard.id) {
-                              return requestedInvoiceId;
-                          }
-
-                          const cycle = resolveCreditCardInvoiceCycle(scheduledDate, linkedCard.closingDay, linkedCard.dueDay);
-                          return buildCreditCardInvoiceId(linkedCard.id, cycle.cycleKey);
-                      })()
-                    : null;
-
-            const transaction = normalizeStoredTransaction({
-                id: transactionId,
-                groupId,
-                installmentNumber: null,
-                amount: absoluteAmount,
-                scheduledDate,
-                status,
-                paidAt: status === "paid" ? nowIso : null,
-                invoiceId: transactionInvoiceId,
-                notes: newTransaction.notes || null,
-                createdAt: nowIso,
-            });
-
-            const validTagIds = Array.from(new Set(newTransaction.tagIds ?? [])).filter((tagId) => tagsRef.current.some((tag) => tag.id === tagId));
-            const nextTransactionTags = [...transactionTagsRef.current];
-            validTagIds.forEach((tagId) => {
-                if (!nextTransactionTags.some((item) => item.transactionId === transaction.id && item.tagId === tagId)) {
-                    nextTransactionTags.push({ transactionId: transaction.id, tagId });
+            const resolveTransactionInvoiceId = (dateValue: string, allowRequestedInvoice: boolean): string | null => {
+                if (group.type !== "expense" || !group.creditCardId) {
+                    return null;
                 }
+
+                const linkedCard = creditCardsRef.current.find((item) => item.id === group.creditCardId);
+                if (!linkedCard) {
+                    return null;
+                }
+
+                const requestedInvoiceId = allowRequestedInvoice ? newTransaction.invoiceId?.trim() ?? "" : "";
+                const parsedRequestedInvoice = requestedInvoiceId ? parseCreditCardInvoiceId(requestedInvoiceId) : null;
+                if (parsedRequestedInvoice && parsedRequestedInvoice.creditCardId === linkedCard.id) {
+                    return requestedInvoiceId;
+                }
+
+                const cycle = resolveCreditCardInvoiceCycle(dateValue, linkedCard.closingDay, linkedCard.dueDay);
+                return buildCreditCardInvoiceId(linkedCard.id, cycle.cycleKey);
+            };
+
+            const createdTransactions: StoredTransaction[] = [];
+            if (group.transactionMode === "installment" && installmentCount) {
+                const installmentAmounts = splitAmountAcrossInstallments(absoluteAmount, installmentCount);
+                installmentAmounts.forEach((installmentAmount, index) => {
+                    const occurrenceDate = addMonthsToDateValue(scheduledDate, index);
+                    const transactionStatus = index < ignoredInstallmentsCount ? "skipped" : index === ignoredInstallmentsCount ? status : "pending";
+                    const transaction = normalizeStoredTransaction({
+                        id: index === 0 ? transactionId : createId("tx"),
+                        groupId,
+                        installmentNumber: index + 1,
+                        amount: installmentAmount,
+                        scheduledDate: occurrenceDate,
+                        status: transactionStatus,
+                        paidAt: transactionStatus === "paid" ? nowIso : null,
+                        invoiceId: resolveTransactionInvoiceId(occurrenceDate, false),
+                        notes: newTransaction.notes || null,
+                        createdAt: nowIso,
+                    });
+                    createdTransactions.push(transaction);
+                });
+            } else {
+                const transaction = normalizeStoredTransaction({
+                    id: transactionId,
+                    groupId,
+                    installmentNumber: null,
+                    amount: absoluteAmount,
+                    scheduledDate,
+                    status,
+                    paidAt: status === "paid" ? nowIso : null,
+                    invoiceId: resolveTransactionInvoiceId(scheduledDate, group.transactionMode === "single"),
+                    notes: newTransaction.notes || null,
+                    createdAt: nowIso,
+                });
+                createdTransactions.push(transaction);
+            }
+
+            const nextTransactions = [...storedTransactionsRef.current, ...createdTransactions];
+            const nextTransactionTags = [...transactionTagsRef.current];
+            createdTransactions.forEach((transaction) => {
+                validTagIds.forEach((tagId) => {
+                    if (!nextTransactionTags.some((item) => item.transactionId === transaction.id && item.tagId === tagId)) {
+                        nextTransactionTags.push({ transactionId: transaction.id, tagId });
+                    }
+                });
             });
 
-            const nextTransactions = [...storedTransactionsRef.current, transaction];
+            const hydratedRecurring = ensureRecurringTransactionsHorizon({
+                groups: nextGroups,
+                transactions: nextTransactions,
+                transactionTags: nextTransactionTags,
+                tags: tagsRef.current,
+            });
+            const nextGroupsWithTotals = recalculateGroupTotals(hydratedRecurring.groups, hydratedRecurring.transactions);
             const syncedInvoices = syncCreditCardInvoices({
                 creditCards: creditCardsRef.current,
-                transactionGroups: nextGroups,
-                transactions: nextTransactions,
+                transactionGroups: nextGroupsWithTotals,
+                transactions: hydratedRecurring.transactions,
                 existingInvoices: creditCardInvoicesRef.current,
             });
-            const newLedgerEntries = status === "paid" ? createLedgerEntriesForPaidTransaction(transaction, group) : [];
+            const resolvedGroup = nextGroupsWithTotals.find((item) => item.id === group.id) ?? group;
+            const newLedgerEntries = createdTransactions
+                .filter((transaction) => transaction.status === "paid")
+                .flatMap((transaction) => createLedgerEntriesForPaidTransaction(transaction, resolvedGroup));
             const nextLedgerEntries = [...ledgerEntriesRef.current, ...newLedgerEntries];
+            const finalGroups = recalculateGroupTotals(nextGroupsWithTotals, syncedInvoices.transactions);
 
             const snapshot = buildSnapshot({
                 categories: [...nextCategories].sort(compareCategoriesByTypeParentSort),
                 beneficiaries: [...nextBeneficiaries].sort(compareBySortOrderNameAndId),
-                transactionGroups: nextGroups,
+                transactionGroups: finalGroups,
                 transactions: syncedInvoices.transactions,
                 creditCardInvoices: syncedInvoices.creditCardInvoices,
                 ledgerEntries: nextLedgerEntries,
-                transactionTags: nextTransactionTags,
+                transactionTags: hydratedRecurring.transactionTags,
             });
             setSnapshotState(snapshot);
             await persistFullSnapshot(snapshot);
@@ -1403,59 +2008,142 @@ export function useFinanceStore(): FinanceStoreValue {
         [buildSnapshot, persistFullSnapshot, setSnapshotState],
     );
 
-    const deleteTransaction = useCallback(
-        async (transaction: Transaction) => {
+    const deleteTransactionWithScope = useCallback(
+        async (transaction: Transaction, scope: TransactionSeriesScope = "single") => {
             const transactionToDelete = storedTransactionsRef.current.find((item) => item.id === transaction.id);
             if (!transactionToDelete) {
                 return;
             }
 
+            const normalizedScope = normalizeSeriesScope(scope);
+            const walletIds = new Set(walletsRef.current.map((wallet) => wallet.id));
             const nowIso = new Date().toISOString();
-            const invoicePaymentMeta = parseInvoicePaymentNote(transactionToDelete.notes);
-            const nextTransactions = storedTransactionsRef.current.filter((item) => item.id !== transactionToDelete.id);
-            const nextLedgerEntries = ledgerEntriesRef.current.filter((item) => item.transactionId !== transactionToDelete.id);
-            const nextTransactionTags = transactionTagsRef.current.filter((item) => item.transactionId !== transactionToDelete.id);
-
-            const remainingOfGroup = nextTransactions.filter((item) => item.groupId === transactionToDelete.groupId);
-            const nextGroups = transactionGroupsRef.current
-                .map((group) => {
-                    if (group.id !== transactionToDelete.groupId) {
-                        return group;
+            const group = transactionGroupsRef.current.find((item) => item.id === transactionToDelete.groupId) ?? null;
+            const groupTransactions = storedTransactionsRef.current
+                .filter((item) => item.groupId === transactionToDelete.groupId)
+                .sort((a, b) => {
+                    if (a.scheduledDate === b.scheduledDate) {
+                        return a.id.localeCompare(b.id);
                     }
+                    return a.scheduledDate.localeCompare(b.scheduledDate);
+                });
 
-                    if (remainingOfGroup.length === 0) {
-                        return null;
+            const targetTransactionIds = new Set<string>();
+            if (!group || normalizedScope === "single") {
+                targetTransactionIds.add(transactionToDelete.id);
+            } else if (normalizedScope === "all") {
+                groupTransactions.forEach((item) => targetTransactionIds.add(item.id));
+            } else {
+                groupTransactions
+                    .filter((item) => compareDateValue(item.scheduledDate, transactionToDelete.scheduledDate) >= 0)
+                    .forEach((item) => targetTransactionIds.add(item.id));
+                targetTransactionIds.add(transactionToDelete.id);
+            }
+
+            let nextGroups = [...transactionGroupsRef.current];
+            let nextTransactions = [...storedTransactionsRef.current];
+
+            if (group?.transactionMode === "recurring" && normalizedScope === "single") {
+                const existingRule = group.recurrenceRule && typeof group.recurrenceRule === "object" ? group.recurrenceRule : {};
+                const excludedDates = new Set<string>();
+
+                if (Array.isArray((existingRule as Record<string, unknown>).excludedDates)) {
+                    for (const value of (existingRule as Record<string, unknown>).excludedDates as unknown[]) {
+                        if (typeof value === "string" && parseAppDate(value)) {
+                            excludedDates.add(value);
+                        }
                     }
+                }
 
-                    const groupTotal = remainingOfGroup.reduce((sum, item) => sum + item.amount, 0);
-                    return {
-                        ...group,
-                        totalAmount: roundToCents(groupTotal),
-                    };
-                })
-                .filter((group): group is TransactionGroup => group !== null);
+                excludedDates.add(transactionToDelete.scheduledDate);
 
-            const nextInvoicesAfterPaymentReversal = invoicePaymentMeta
-                ? creditCardInvoicesRef.current.map((invoice) => {
-                      if (invoice.id !== invoicePaymentMeta.invoiceId) {
-                          return invoice;
-                      }
+                nextGroups = nextGroups.map((item) =>
+                    item.id === group.id
+                        ? normalizeTransactionGroup(
+                              {
+                                  ...item,
+                                  recurrenceRule: {
+                                      ...existingRule,
+                                      excludedDates: Array.from(excludedDates),
+                                  },
+                              },
+                              walletIds,
+                          )
+                        : item,
+                );
+            }
 
-                      const nextPaidAmount = roundToCents(Math.max(0, invoice.paidAmount - Math.abs(transactionToDelete.amount)));
-                      const nextStatus = nextPaidAmount >= invoice.totalAmount && invoice.totalAmount > 0 ? "paid" : "open";
+            if (group?.transactionMode === "recurring" && normalizedScope === "this_and_next") {
+                const recurrenceEndDate = addDaysToDateValue(transactionToDelete.scheduledDate, -1);
+                nextGroups = nextGroups.map((item) =>
+                    item.id === group.id
+                        ? normalizeTransactionGroup(
+                              {
+                                  ...item,
+                                  recurrenceEndDate,
+                              },
+                              walletIds,
+                          )
+                        : item,
+                );
+            }
 
-                      return normalizeCreditCardInvoice(
-                          {
-                              ...invoice,
-                              paidAmount: nextPaidAmount,
-                              status: nextStatus,
-                              paidAt: nextStatus === "paid" ? invoice.paidAt ?? nowIso : null,
-                              updatedAt: nowIso,
-                          },
-                          new Set(creditCardsRef.current.map((card) => card.id)),
-                      );
-                  })
-                : creditCardInvoicesRef.current;
+            const removedTransactions = nextTransactions.filter((item) => targetTransactionIds.has(item.id));
+            nextTransactions = nextTransactions.filter((item) => !targetTransactionIds.has(item.id));
+            const nextLedgerEntries = ledgerEntriesRef.current.filter((item) => !item.transactionId || !targetTransactionIds.has(item.transactionId));
+            let nextTransactionTags = transactionTagsRef.current.filter((item) => !targetTransactionIds.has(item.transactionId));
+
+            const groupsWithTransactions = new Set(nextTransactions.map((item) => item.groupId));
+            nextGroups = nextGroups.filter((item) => groupsWithTransactions.has(item.id));
+            nextGroups = recalculateGroupTotals(nextGroups, nextTransactions);
+
+            const paymentReversalByInvoiceId = new Map<string, number>();
+            removedTransactions.forEach((item) => {
+                const invoicePaymentMeta = parseInvoicePaymentNote(item.notes);
+                if (!invoicePaymentMeta) {
+                    return;
+                }
+
+                paymentReversalByInvoiceId.set(
+                    invoicePaymentMeta.invoiceId,
+                    roundToCents((paymentReversalByInvoiceId.get(invoicePaymentMeta.invoiceId) ?? 0) + Math.abs(item.amount)),
+                );
+            });
+
+            const nextInvoicesAfterPaymentReversal =
+                paymentReversalByInvoiceId.size > 0
+                    ? creditCardInvoicesRef.current.map((invoice) => {
+                          const reversedAmount = paymentReversalByInvoiceId.get(invoice.id);
+                          if (!reversedAmount) {
+                              return invoice;
+                          }
+
+                          const nextPaidAmount = roundToCents(Math.max(0, invoice.paidAmount - reversedAmount));
+                          const nextStatus = nextPaidAmount >= invoice.totalAmount && invoice.totalAmount > 0 ? "paid" : "open";
+
+                          return normalizeCreditCardInvoice(
+                              {
+                                  ...invoice,
+                                  paidAmount: nextPaidAmount,
+                                  status: nextStatus,
+                                  paidAt: nextStatus === "paid" ? invoice.paidAt ?? nowIso : null,
+                                  updatedAt: nowIso,
+                              },
+                              new Set(creditCardsRef.current.map((card) => card.id)),
+                          );
+                      })
+                    : creditCardInvoicesRef.current;
+
+            const recurringHydration = ensureRecurringTransactionsHorizon({
+                groups: nextGroups,
+                transactions: nextTransactions,
+                transactionTags: nextTransactionTags,
+                tags: tagsRef.current,
+            });
+
+            nextGroups = recalculateGroupTotals(recurringHydration.groups, recurringHydration.transactions);
+            nextTransactions = recurringHydration.transactions;
+            nextTransactionTags = recurringHydration.transactionTags;
 
             const syncedInvoices = syncCreditCardInvoices({
                 creditCards: creditCardsRef.current,
@@ -1463,6 +2151,8 @@ export function useFinanceStore(): FinanceStoreValue {
                 transactions: nextTransactions,
                 existingInvoices: nextInvoicesAfterPaymentReversal,
             });
+
+            nextGroups = recalculateGroupTotals(nextGroups, syncedInvoices.transactions);
 
             const snapshot = buildSnapshot({
                 transactionGroups: nextGroups,
@@ -1475,6 +2165,29 @@ export function useFinanceStore(): FinanceStoreValue {
             await persistFullSnapshot(snapshot);
         },
         [buildSnapshot, persistFullSnapshot, setSnapshotState],
+    );
+
+    const deleteTransaction = useCallback(
+        async (transaction: Transaction) => {
+            await deleteTransactionWithScope(transaction, "single");
+        },
+        [deleteTransactionWithScope],
+    );
+
+    const updateTransaction = useCallback(
+        async ({ transaction, draft, scope = "single" }: UpdateTransactionDraft) => {
+            const transactionToUpdate = storedTransactionsRef.current.find((item) => item.id === transaction.id);
+            if (!transactionToUpdate) {
+                return;
+            }
+
+            await deleteTransactionWithScope(transaction, scope);
+            await addTransaction({
+                ...draft,
+                date: draft.date || transactionToUpdate.scheduledDate,
+            });
+        },
+        [addTransaction, deleteTransactionWithScope],
     );
 
     useEffect(() => {
@@ -1527,10 +2240,14 @@ export function useFinanceStore(): FinanceStoreValue {
             balance,
             setStartBalance,
             setFavoriteWallet,
+            setWalletActive,
+            deleteWallet,
             updateFinance,
             addTransaction,
+            updateTransaction,
             markTransactionAsPaid,
             deleteTransaction,
+            deleteTransactionWithScope,
             updateInvoicePaymentTransaction,
             clearTransactions,
             addWallet,
@@ -1545,6 +2262,8 @@ export function useFinanceStore(): FinanceStoreValue {
             setTagActive,
             addCreditCard,
             setFavoriteCreditCard,
+            setCreditCardActive,
+            deleteCreditCard,
             payCreditCardInvoice,
         }),
         [
@@ -1553,7 +2272,9 @@ export function useFinanceStore(): FinanceStoreValue {
             addCreditCard,
             addTag,
             addTransaction,
+            updateTransaction,
             addWallet,
+            deleteWallet,
             balance,
             beneficiaries,
             categories,
@@ -1561,6 +2282,7 @@ export function useFinanceStore(): FinanceStoreValue {
             creditCardInvoices,
             creditCards,
             deleteTransaction,
+            deleteTransactionWithScope,
             updateInvoicePaymentTransaction,
             favoriteCreditCardId,
             favoriteWalletId,
@@ -1574,8 +2296,11 @@ export function useFinanceStore(): FinanceStoreValue {
             setBeneficiaryActive,
             setCategoryActive,
             setFavoriteCreditCard,
+            setCreditCardActive,
+            deleteCreditCard,
             setTagActive,
             setFavoriteWallet,
+            setWalletActive,
             setStartBalance,
             storedTransactions,
             summary.despesas,

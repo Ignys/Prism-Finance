@@ -11,6 +11,7 @@ import type {
     Transaction,
     TransactionDraft,
     TransactionGroup,
+    TransactionSeriesScope,
     TransactionTag,
     Wallet,
 } from "../financeTypes";
@@ -29,6 +30,12 @@ export interface UpdateInvoicePaymentTransactionDraft {
     date: string;
 }
 
+export interface UpdateTransactionDraft {
+    transaction: Transaction;
+    draft: TransactionDraft;
+    scope?: TransactionSeriesScope;
+}
+
 export interface FinanceSessionValue {
     user: User | null;
     loading: boolean;
@@ -43,10 +50,14 @@ export interface FinanceSummaryValue {
 export interface FinanceActionsValue {
     setStartBalance: (walletId: string, balance: number) => Promise<void>;
     setFavoriteWallet: (walletId: string) => Promise<void>;
+    setWalletActive: (walletId: string, isActive: boolean) => Promise<void>;
+    deleteWallet: (walletId: string) => Promise<void>;
     updateFinance: (newFinance: FinanceSnapshot) => Promise<void>;
     addTransaction: (newTransaction: TransactionDraft) => Promise<void>;
+    updateTransaction: (draft: UpdateTransactionDraft) => Promise<void>;
     markTransactionAsPaid: (transaction: Transaction) => Promise<void>;
     deleteTransaction: (transaction: Transaction) => Promise<void>;
+    deleteTransactionWithScope: (transaction: Transaction, scope?: TransactionSeriesScope) => Promise<void>;
     updateInvoicePaymentTransaction: (draft: UpdateInvoicePaymentTransactionDraft) => Promise<void>;
     clearTransactions: () => Promise<void>;
     addWallet: (newWallet: Wallet) => Promise<void>;
@@ -61,6 +72,8 @@ export interface FinanceActionsValue {
     setTagActive: (tagId: string, isActive: boolean) => Promise<void>;
     addCreditCard: (newCreditCard: CreditCard) => Promise<void>;
     setFavoriteCreditCard: (creditCardId: string) => Promise<void>;
+    setCreditCardActive: (creditCardId: string, isActive: boolean) => Promise<void>;
+    deleteCreditCard: (creditCardId: string) => Promise<void>;
     payCreditCardInvoice: (draft: PayCreditCardInvoiceDraft) => Promise<void>;
 }
 

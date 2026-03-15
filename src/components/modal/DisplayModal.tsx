@@ -31,7 +31,7 @@ export function DisplayModal() {
                     />
 
                     <motion.div
-                        className="fixed inset-0 flex justify-center items-center z-[100] text-white"
+                        className="fixed inset-0 flex justify-center items-center-safe z-[100] text-white"
                         initial={{ opacity: 0, y: -200 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: 50 }}

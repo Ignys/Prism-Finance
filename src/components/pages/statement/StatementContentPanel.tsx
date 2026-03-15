@@ -34,6 +34,7 @@ type StatementSortField = "status" | "date" | "description" | "category" | "bene
 type StatementSortDirection = "asc" | "desc";
 type StatementSortMode = `${StatementSortField}-${StatementSortDirection}`;
 type ConsolidatedHeaderStatus = StatementInvoiceVisualStatus | "mixed" | "none";
+type StatementTransactionVisualStatus = StatementInvoiceVisualStatus | "skipped";
 
 interface SortableHeaderProps {
     label: string;
@@ -45,7 +46,7 @@ interface SortableHeaderProps {
 
 interface StatementTransactionSnapshot {
     transaction: Transaction;
-    invoiceStatus: StatementInvoiceVisualStatus | null;
+    transactionStatus: StatementTransactionVisualStatus | null;
     categoryLabel: string;
 }
 
@@ -61,6 +62,21 @@ const STATEMENT_STATUS_SORT_ORDER: Record<StatementInvoiceVisualStatus, number> 
     closed: 1,
     open: 2,
     paid: 3,
+};
+
+const TRANSACTION_STATUS_SORT_ORDER: Record<StatementTransactionVisualStatus, number> = {
+    ...STATEMENT_STATUS_SORT_ORDER,
+    skipped: 4,
+};
+
+const TRANSACTION_STATUS_BADGE_CLASS: Record<StatementTransactionVisualStatus, string> = {
+    ...STATEMENT_STATUS_BADGE_CLASS,
+    skipped: "border-slate-400/25 bg-slate-500/10 text-slate-200",
+};
+
+const TRANSACTION_STATUS_LABELS: Record<StatementTransactionVisualStatus, string> = {
+    ...STATEMENT_STATUS_LABELS,
+    skipped: "Pulada",
 };
 
 const HEADER_STATUS_BADGE_CLASS: Record<ConsolidatedHeaderStatus, string> = {
@@ -205,7 +221,7 @@ export function StatementContentPanel({
                 const invoice = transaction.invoiceId ? invoiceById.get(transaction.invoiceId) : null;
                 return {
                     transaction,
-                    invoiceStatus: invoice ? resolveInvoiceVisualStatus(invoice) : null,
+                    transactionStatus: transaction.status === "skipped" ? "skipped" : invoice ? resolveInvoiceVisualStatus(invoice) : null,
                     categoryLabel: getCategoryDisplayLabel(transaction),
                 };
             }),
@@ -234,8 +250,8 @@ export function StatementContentPanel({
 
         const sorted = [...filteredTransactionSnapshots].sort((a, b) => {
             if (field === "status") {
-                const aStatusValue = a.invoiceStatus ? STATEMENT_STATUS_SORT_ORDER[a.invoiceStatus] : Number.MAX_SAFE_INTEGER;
-                const bStatusValue = b.invoiceStatus ? STATEMENT_STATUS_SORT_ORDER[b.invoiceStatus] : Number.MAX_SAFE_INTEGER;
+                const aStatusValue = a.transactionStatus ? TRANSACTION_STATUS_SORT_ORDER[a.transactionStatus] : Number.MAX_SAFE_INTEGER;
+                const bStatusValue = b.transactionStatus ? TRANSACTION_STATUS_SORT_ORDER[b.transactionStatus] : Number.MAX_SAFE_INTEGER;
                 const statusComparison = aStatusValue - bStatusValue;
                 if (statusComparison !== 0) {
                     return direction === "asc" ? statusComparison : -statusComparison;
@@ -423,7 +439,7 @@ export function StatementContentPanel({
                             </tr>
                         </thead>
                         <tbody>
-                            {sortedTransactionSnapshots.map(({ transaction, invoiceStatus, categoryLabel }) => {
+                            {sortedTransactionSnapshots.map(({ transaction, transactionStatus, categoryLabel }) => {
                                 const creditCard = transaction.creditCardId ? cardById.get(transaction.creditCardId) : null;
                                 const CategoryIcon = getCategoryIconComponent(transaction.category.icon, transaction.category.type);
                                 const categoryColor = transaction.category.color ?? "#9CA3AF";
@@ -446,9 +462,9 @@ export function StatementContentPanel({
                                                     </span>
                                                 )}
                                             </span>
-                                            {invoiceStatus ? (
-                                                <span className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] uppercase tracking-[0.08em] ${STATEMENT_STATUS_BADGE_CLASS[invoiceStatus]}`}>
-                                                    {STATEMENT_STATUS_LABELS[invoiceStatus]}
+                                            {transactionStatus ? (
+                                                <span className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] uppercase tracking-[0.08em] ${TRANSACTION_STATUS_BADGE_CLASS[transactionStatus]}`}>
+                                                    {TRANSACTION_STATUS_LABELS[transactionStatus]}
                                                 </span>
                                             ) : (
                                                 "--"

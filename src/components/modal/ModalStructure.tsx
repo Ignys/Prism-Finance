@@ -4,6 +4,8 @@ import { useModal } from "../../context/ModalContext";
 export function ModalStructure({ height, width, children }: { height: string | number; width: string | number; children: React.ReactNode }) {
     const { closeModal } = useModal();
     const background = useRef<HTMLDivElement>(null);
+    const resolvedWidth = typeof width === "number" ? `${width}px` : width;
+    const resolvedHeight = typeof height === "number" ? `${height}px` : height;
 
     useEffect(() => {
         const handleClickOutside = (e: MouseEvent | KeyboardEvent) => {
@@ -23,7 +25,7 @@ export function ModalStructure({ height, width, children }: { height: string | n
     }, [closeModal]);
 
     return (
-        <div style={{ height, width }} ref={background}>
+        <div style={{ height: resolvedHeight, width: `min(95vw, ${resolvedWidth})`, maxHeight: "90vh" }} ref={background}>
             <div className="h-full">{children}</div>
         </div>
     );

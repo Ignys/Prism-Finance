@@ -12,6 +12,8 @@ export type {
     TransactionEntity,
     TransactionDraft,
     TransactionListItem,
+    TransactionMode,
+    TransactionSeriesScope,
     TransactionStatus,
     TransactionSystemKind,
     TransactionTag,

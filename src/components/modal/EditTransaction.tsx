@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { Transaction } from "../../context/FinanceContext";
 import { CardSpendingForm } from "../transactions/CardSpendingForm";
 import { TransactionForm } from "../transactions/TransactionForm";
@@ -8,15 +9,16 @@ interface EditTransactionProps {
 }
 
 export function EditTransaction({ transaction }: EditTransactionProps) {
+    const [advancedOpen, setAdvancedOpen] = useState(false);
     const isCreditCardSpending = transaction.type === "spending" && transaction.paymentMethod === "credit_card";
     const isInvoicePayment = transaction.systemKind === "invoice_payment";
 
     return (
-        <ModalStructure height="auto" width="700px">
+        <ModalStructure height="auto" width={advancedOpen ? "1100px" : "700px"}>
             {isCreditCardSpending ? (
-                <CardSpendingForm transaction={transaction} />
+                <CardSpendingForm transaction={transaction} onAdvancedOpenChange={setAdvancedOpen} />
             ) : (
-                <TransactionForm transaction={transaction} mode={isInvoicePayment ? "invoice_payment_edit" : "default"} />
+                <TransactionForm transaction={transaction} mode={isInvoicePayment ? "invoice_payment_edit" : "default"} onAdvancedOpenChange={setAdvancedOpen} />
             )}
         </ModalStructure>
     );
