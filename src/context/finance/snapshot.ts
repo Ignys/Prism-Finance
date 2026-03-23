@@ -10,6 +10,7 @@ export {
     parseCreditCardInvoiceId,
     resolveCreditCardInvoiceCycle,
     resolveCreditCardInvoiceCycleFromCycleKey,
+    resolveCreditCardInvoiceStatus,
     resolveOpenCreditCardInvoiceCycle,
     toTransactionList,
 } from "./financeCore";

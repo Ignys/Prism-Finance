@@ -3,7 +3,9 @@ import { type Transaction, useFinanceActions, useFinanceTransactions, useFinance
 import { normalizeComparisonText } from "../../context/finance/helpers";
 import { useModal } from "../../context/ModalContext";
 import { usePage } from "../../context/PageContext";
+import { getLocalTodayDate } from "../../lib/localDate";
 import { AuthShell } from "../layout/AuthShell";
+import { AddTransactionModal } from "../modal/AddTransaction";
 import { ConfirmActionModal } from "../modal/ConfirmActionModal";
 import { EditTransaction } from "../modal/EditTransaction";
 import { TransactionsFiltersPanel } from "./transactions/TransactionsFiltersPanel";
@@ -24,6 +26,20 @@ import {
     type TransactionsTabKey,
     type TransactionsSummary,
 } from "./transactions/transactionsPageShared";
+
+function resolveMonthStartDate(monthKey: string): string {
+    const match = /^(\d{4})-(\d{2})$/.exec(monthKey.trim());
+    if (!match) {
+        return getLocalTodayDate();
+    }
+
+    const month = Number(match[2]);
+    if (!Number.isInteger(month) || month < 1 || month > 12) {
+        return getLocalTodayDate();
+    }
+
+    return `${match[1]}-${match[2]}-01`;
+}
 
 export function TransactionsPage() {
     const transactions = useFinanceTransactions();
@@ -292,12 +308,28 @@ export function TransactionsPage() {
         );
     };
 
+    const handleCreateFromActiveTab = () => {
+        if (activeTab === "transfer") {
+            return;
+        }
+
+        openModal(
+            <AddTransactionModal
+                type={activeTab === "income" ? "income" : "spending"}
+                prefill={{
+                    initialDate: resolveMonthStartDate(selectedMonth),
+                }}
+            />,
+        );
+    };
+
     return (
         <AuthShell mainClassName="text-white">
             <div className="w-full flex justify-center space-y-3">
                 <div className="flex flex-col gap-3 2xl:flex-row w-[90%]">
                     <div className="min-w-0 flex-1 space-y-3">
                         <TransactionsFiltersPanel
+                            activeTab={activeTab}
                             selectedMonth={selectedMonth}
                             showAdvancedFilters={showAdvancedFilters}
                             searchQuery={searchQuery}
@@ -328,6 +360,7 @@ export function TransactionsPage() {
                             onMinAmountChange={(value) => setFilter("minAmount", value)}
                             onMaxAmountChange={(value) => setFilter("maxAmount", value)}
                             onTagToggle={toggleTagFilter}
+                            onCreateFromActiveTab={handleCreateFromActiveTab}
                         />
                         <TransactionsListPanel
                             activeTab={activeTab}

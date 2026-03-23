@@ -22,7 +22,7 @@ function StatementMonthSelector({ selectedMonth, onMonthChange }: StatementMonth
                 <ChevronLeft size={16} />
             </button>
             <label htmlFor="statement-month-selector" className="sr-only">
-                Mes e ano da fatura
+                Mes e ano de vencimento da fatura
             </label>
             <input
                 id="statement-month-selector"

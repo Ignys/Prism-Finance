@@ -1,18 +1,19 @@
 import { useState } from "react";
 import type { TransactionType } from "../../context/FinanceContext";
-import { TransactionForm } from "../transactions/TransactionForm";
+import { TransactionForm, type TransactionFormPrefill } from "../transactions/TransactionForm";
 import { ModalStructure } from "./ModalStructure";
 
 interface AddTransactionModalProps {
     type: Extract<TransactionType, "income" | "spending">;
+    prefill?: TransactionFormPrefill;
 }
 
-export function AddTransactionModal({ type }: AddTransactionModalProps) {
+export function AddTransactionModal({ type, prefill }: AddTransactionModalProps) {
     const [advancedOpen, setAdvancedOpen] = useState(false);
 
     return (
         <ModalStructure height="auto" width={advancedOpen ? "900px" : "600px"}>
-            <TransactionForm type={type} onAdvancedOpenChange={setAdvancedOpen} />
+            <TransactionForm type={type} prefill={prefill} onAdvancedOpenChange={setAdvancedOpen} />
         </ModalStructure>
     );
 }

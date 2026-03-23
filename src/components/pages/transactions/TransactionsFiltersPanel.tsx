@@ -1,7 +1,7 @@
 import { AnimatePresence, motion } from "framer-motion";
-import { ChevronLeft, ChevronRight, FunnelPlus, Search, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, FunnelPlus, Plus, Search, X } from "lucide-react";
 import type { TransactionStatus, Wallet } from "../../../context/FinanceContext";
-import { INPUT_CLASS, SELECT_CLASS, STATUS_LABELS, STATUS_ORDER, type SelectOption, type TagOption } from "./transactionsPageShared";
+import { INPUT_CLASS, SELECT_CLASS, STATUS_LABELS, STATUS_ORDER, type SelectOption, type TagOption, type TransactionsTabKey } from "./transactionsPageShared";
 
 function getCurrentMonthKey(): string {
     const now = new Date();
@@ -68,6 +68,7 @@ function MonthYearSelector({ selectedMonth, onMonthChange }: MonthYearSelectorPr
 }
 
 interface TransactionsFiltersPanelProps {
+    activeTab: TransactionsTabKey;
     selectedMonth: string;
     showAdvancedFilters: boolean;
     searchQuery: string;
@@ -98,9 +99,11 @@ interface TransactionsFiltersPanelProps {
     onMinAmountChange: (value: string) => void;
     onMaxAmountChange: (value: string) => void;
     onTagToggle: (tagId: string) => void;
+    onCreateFromActiveTab: () => void;
 }
 
 export function TransactionsFiltersPanel({
+    activeTab,
     selectedMonth,
     showAdvancedFilters,
     searchQuery,
@@ -131,7 +134,11 @@ export function TransactionsFiltersPanel({
     onMinAmountChange,
     onMaxAmountChange,
     onTagToggle,
+    onCreateFromActiveTab,
 }: TransactionsFiltersPanelProps) {
+    const canCreateTransaction = activeTab !== "transfer";
+    const createLabel = activeTab === "income" ? "Adicionar receita" : "Adicionar despesa";
+
     return (
         <section className="pt-1 ">
             <div className="relative flex flex-col gap-4">
@@ -141,7 +148,7 @@ export function TransactionsFiltersPanel({
                     </div>
                     <MonthYearSelector selectedMonth={selectedMonth} onMonthChange={onMonthChange} />
                 </div>
-                <div className="flex justify-between gap-3">
+                <div className="flex h-10 justify-between gap-3">
                     <div className="w-full">
                         <div className="relative w-full">
                             <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-white/40" />
@@ -154,7 +161,7 @@ export function TransactionsFiltersPanel({
                             />
                         </div>
                     </div>
-                    <div className="flex flex-wrap gap-2">
+                    <div className="flex py-1.5 gap-2">
                         <button
                             type="button"
                             onClick={onToggleAdvancedFilters}
@@ -167,10 +174,20 @@ export function TransactionsFiltersPanel({
                             <button
                                 type="button"
                                 onClick={onClearAdvancedFilters}
-                                className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-white/[0.12] bg-white/[0.02] px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.05em] text-white/70 transition-all hover:border-white/[0.2] hover:bg-white/[0.08]"
+                                className="inline-flex truncate cursor-pointer items-center gap-2 rounded-full border border-white/[0.12] bg-white/[0.02] px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.05em] text-white/70 transition-all hover:border-white/[0.2] hover:bg-white/[0.08]"
                             >
                                 <X size={14} />
                                 Limpar filtros
+                            </button>
+                        )}
+                        {canCreateTransaction && (
+                            <button
+                                type="button"
+                                onClick={onCreateFromActiveTab}
+                                className="inline-flex truncate cursor-pointer items-center gap-2 rounded-full border border-emerald-300/30 bg-emerald-500/15 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.05em] text-emerald-100 transition-all hover:border-emerald-300/45 hover:bg-emerald-500/20"
+                            >
+                                <Plus size={14} />
+                                {createLabel}
                             </button>
                         )}
                     </div>

@@ -20,7 +20,7 @@ export function BalancoMensal() {
         return transactionDate.getMonth() === currentMonth && transactionDate.getFullYear() === currentYear;
     });
 
-    const isIncludedStatus = (status: string | null | undefined) => status === "paid" || status === "pending";
+    const isIncludedStatus = (status: string | null | undefined) => status === "paid";
     const includedMonthTransactions = currentMonthTransactions.filter((tx) => isIncludedStatus(tx.status));
 
     const incomes = includedMonthTransactions.filter((tx) => tx.type === "income").reduce((sum, tx) => sum + tx.value, 0);
@@ -38,6 +38,8 @@ export function BalancoMensal() {
     const spendingRelativeHeight = maxMonthlyValue > 0 ? (spending / maxMonthlyValue) * 100 : 0;
     const invoiceShareWithinSpending = spending > 0 ? (invoicePaymentSpendingInRange / spending) * 100 : 0;
     const regularShareWithinSpending = spending > 0 ? (monthlyRegularSpending / spending) * 100 : 0;
+    const regularShareForDisplay = maxMonthlyValue > 0 ? (monthlyRegularSpending / maxMonthlyValue) * 100 : 0;
+    const invoiceShareForDisplay = maxMonthlyValue > 0 ? (invoicePaymentSpendingInRange / maxMonthlyValue) * 100 : 0;
     const largestValue = Math.max(incomes, spending);
     const balanceDifferenceVsLargest = largestValue > 0 ? (balance / largestValue) * 100 : null;
     const balanceDifferenceVsIncome = incomes > 0 ? (balance / incomes) * 100 : null;
@@ -73,8 +75,8 @@ export function BalancoMensal() {
                         <div className="h-full w-5 overflow-hidden">
                             <div className="flex h-full items-end">
                                 <div className="flex w-full flex-col-reverse gap-1 transition-all duration-700 ease-out" style={{ height: `${spendingRelativeHeight}%` }}>
-                                    {monthlyRegularSpending > 0 && <div className="w-full bg-gradient-to-t rounded-b-full from-red-500/50 to-red-400" style={{ height: `${regularShareWithinSpending}%` }} />}
-                                    {invoicePaymentSpendingInRange > 0 && <div className="w-full bg-amber-400 rounded-t-full" style={{ height: `${invoiceShareWithinSpending}%` }} />}
+                                    {monthlyRegularSpending > 0 && <div className={`${!invoiceShareWithinSpending ? "rounded-full" : "rounded-b-full"} w-full bg-gradient-to-t from-red-500/50 to-red-400`} style={{ height: `${regularShareWithinSpending}%` }} />}
+                                    {invoicePaymentSpendingInRange > 0 && <div className={`${!monthlyRegularSpending ? "rounded-full" : "rounded-t-full"} w-full bg-amber-400 `} style={{ height: `${invoiceShareWithinSpending}%` }} />}
                                 </div>
                             </div>
                         </div>
@@ -102,7 +104,7 @@ export function BalancoMensal() {
                                     <span className="font-medium text-neutral-200">Despesas</span>
                                 </div>
                                 <div className="flex items-center gap-3 text-sm">
-                                    <span className="text-neutral-400">{regularShareWithinSpending.toFixed(1)}%</span>
+                                    <span className="text-neutral-400">{regularShareForDisplay.toFixed(1)}%</span>
                                     <p className=" font-semibold text-red-300">R$ {formatCurrency(monthlyRegularSpending)}</p>
                                 </div>
                             </div>
@@ -112,7 +114,7 @@ export function BalancoMensal() {
                                     <span className="font-medium text-neutral-200">Fatura do cartão</span>
                                 </div>
                                 <div className=" flex items-center gap-3 text-sm">
-                                    <span className="text-neutral-400">{invoiceShareWithinSpending.toFixed(1)}%</span>
+                                    <span className="text-neutral-400">{invoiceShareForDisplay.toFixed(1)}%</span>
                                     <p className=" font-semibold text-yellow-200">R$ {formatCurrency(invoicePaymentSpendingInRange)}</p>
                                 </div>
                             </div>

@@ -15,7 +15,7 @@ import {
     useFinanceTransactions,
     useFinanceWallets,
 } from "../../context/FinanceContext";
-import { buildCreditCardInvoiceId, resolveCreditCardInvoiceCycle } from "../../context/financeTypes";
+import { buildCreditCardInvoiceId, getMonthKeyFromDateValue, resolveCreditCardInvoiceCycle } from "../../context/financeTypes";
 import { useModal } from "../../context/ModalContext";
 import { AppPage, usePage } from "../../context/PageContext";
 import { formatLocalDateInput, getLocalTodayDate } from "../../lib/localDate";
@@ -157,18 +157,58 @@ export function Header() {
         });
     }, [categories, openFavoriteInvoiceId, resolvedFavoriteCard, resolvedWalletId]);
     const testTransactions = useMemo(() => [...walletTestTransactions, ...cardInvoiceTestTransactions], [cardInvoiceTestTransactions, walletTestTransactions]);
-    const openInvoiceAmount = useMemo(() => {
-        if (!openFavoriteInvoiceId) {
-            return 0;
-        }
+    const pendingInvoicesAmount = useMemo(
+        () =>
+            Number(
+                creditCardInvoices
+                    .reduce((sum, invoice) => {
+                        const openAmount = Math.max(0, invoice.totalAmount - invoice.paidAmount);
+                        return sum + openAmount;
+                    }, 0)
+                    .toFixed(2),
+            ),
+        [creditCardInvoices],
+    );
+    const monthlySummary = useMemo(() => {
+        const currentMonthKey = getMonthKeyFromDateValue(getLocalTodayDate());
 
-        const openInvoice = creditCardInvoices.find((invoice) => invoice.id === openFavoriteInvoiceId) ?? null;
-        if (!openInvoice) {
-            return 0;
-        }
+        const totals = transactions.reduce(
+            (acc, transaction) => {
+                if (transaction.status !== "paid") {
+                    return acc;
+                }
 
-        return openInvoice.totalAmount;
-    }, [creditCardInvoices, openFavoriteInvoiceId]);
+                if (getMonthKeyFromDateValue(transaction.date) !== currentMonthKey) {
+                    return acc;
+                }
+
+                if (transaction.type === "income") {
+                    acc.receitas += transaction.value;
+                    return acc;
+                }
+
+                if (transaction.type === "spending" && transaction.paymentMethod !== "credit_card") {
+                    acc.despesas += transaction.value;
+                }
+
+                return acc;
+            },
+            { receitas: 0, despesas: 0 },
+        );
+
+        return {
+            receitas: Number(totals.receitas.toFixed(2)),
+            despesas: Number(totals.despesas.toFixed(2)),
+        };
+    }, [transactions]);
+    const metricAmounts = useMemo(
+        () => ({
+            balance: summary.balance,
+            receitas: monthlySummary.receitas,
+            despesas: monthlySummary.despesas,
+        }),
+        [monthlySummary.despesas, monthlySummary.receitas, summary.balance],
+    );
 
     async function removeSeededTransactions() {
         for (const transaction of seededTransactions) {
@@ -260,7 +300,7 @@ export function Header() {
 
                 <div className="flex items-center gap-2">
                     {METRIC_ITEMS.map(({ label, amountKey, modalType, isBalance }, index) => {
-                        const amount: number = summary[amountKey];
+                        const amount: number = metricAmounts[amountKey];
                         const amountColor = isBalance ? (amount >= 0 ? "text-emerald-300" : "text-red-400") : "text-white/85";
 
                         return (
@@ -304,9 +344,9 @@ export function Header() {
                     <div className="mx-0.5 h-5 w-px bg-white/[0.06]" />
                     <div className="group relative flex cursor-pointer items-center gap-2 rounded-[9px] border border-transparent px-5 py-1.5 transition-all duration-200 hover:border-white/[0.08] hover:bg-white/[0.05]">
                         <div className="flex flex-col gap-px transition-opacity duration-150 group-hover:opacity-0">
-                            <span className="whitespace-nowrap text-[12px] font-light uppercase tracking-[0.2em] text-white/30">Fatura</span>
+                            <span className="whitespace-nowrap text-[12px] font-light uppercase tracking-[0.2em] text-white/30">Faturas</span>
                             <span className="whitespace-nowrap text-[15px] font-normal text-white/85" style={{ fontFamily: "'Azeret Mono', monospace" }}>
-                                R$ {openInvoiceAmount.toFixed(2)}
+                                R$ {pendingInvoicesAmount.toFixed(2)}
                             </span>
                         </div>
 
@@ -351,4 +391,3 @@ export function Header() {
         </header>
     );
 }
-

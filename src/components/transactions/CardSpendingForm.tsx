@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Copy, ReceiptText, SlidersHorizontal, Trash2, X } from "lucide-react";
+import { CircleX, Copy, ReceiptText, SlidersHorizontal, SquareSlash, Trash2, X } from "lucide-react";
 import type { Beneficiary, Category, CreditCard, CreditCardInvoice, Transaction, TransactionMode, TransactionSeriesScope, TransactionStatus } from "../../context/FinanceContext";
 import {
     useFinanceActions,
@@ -26,10 +26,11 @@ import { SingleSelectCombobox, type ComboboxOptionBase } from "./SingleSelectCom
 const FIELD_LABEL_CLASS = "text-[11px] uppercase tracking-[0.12em] text-white/50";
 const FIELD_INPUT_CLASS = "rounded-xl border border-white/[0.1] bg-black/35 p-2.5 text-white outline-none transition-colors placeholder:text-white/35 focus:border-white/[0.24]";
 
-type InvoiceVisualStatus = "paid" | "overdue" | "closed" | "open";
+type InvoiceVisualStatus = "paid" | "overdue" | "closed" | "open" | "future";
 
 const INVOICE_STATUS_LABELS: Record<InvoiceVisualStatus, string> = {
     open: "Aberta",
+    future: "Futura",
     closed: "Fechada",
     overdue: "Vencida",
     paid: "Paga",
@@ -96,6 +97,7 @@ function CreditCardOptionContent({ option }: { option: CreditCardOption }) {
 function InvoiceOptionContent({ option }: { option: InvoiceOption }) {
     const statusClassNameByStatus: Record<InvoiceVisualStatus, string> = {
         open: "border-emerald-400/35 bg-emerald-500/15 text-emerald-100",
+        future: "border-violet-300/35 bg-violet-500/15 text-violet-100",
         closed: "border-amber-400/30 bg-amber-500/15 text-amber-100",
         overdue: "border-red-400/35 bg-red-500/15 text-red-100",
         paid: "border-sky-400/30 bg-sky-500/15 text-sky-100",
@@ -105,7 +107,6 @@ function InvoiceOptionContent({ option }: { option: InvoiceOption }) {
         <div className="flex min-w-0 items-center justify-between gap-2 ">
             <div className="min-w-0">
                 <p className="truncate text-sm text-white">{option.monthLabel}</p>
-                
             </div>
             <span className={`shrink-0 rounded-full border px-2 py-1 text-[10px] uppercase tracking-[0.08em] ${statusClassNameByStatus[option.visualStatus]}`}>
                 {INVOICE_STATUS_LABELS[option.visualStatus]}
@@ -208,14 +209,40 @@ function normalizeIgnoredInstallmentsCountInput(value: string, installmentCount:
     return Math.max(0, Math.min(installmentCount - 1, safeValue));
 }
 
-function resolveInvoiceVisualStatus(params: { status: "open" | "paid"; closingDate: string; dueDate: string }, referenceDate = new Date()): InvoiceVisualStatus {
-    if (params.status === "paid") {
-        return "paid";
+function resolveInvoiceVisualStatus(
+    params: { status: "open" | "paid"; cycleKey: string; closingDate: string; dueDate: string; currentOpenCycleKey: string },
+    referenceDate = new Date(),
+): InvoiceVisualStatus {
+    const today = getLocalTodayDate(referenceDate);
+
+    if (params.currentOpenCycleKey) {
+        const cycleComparison = params.cycleKey.localeCompare(params.currentOpenCycleKey);
+
+        if (cycleComparison === 0) {
+            return "open";
+        }
+
+        if (cycleComparison > 0) {
+            return "future";
+        }
+
+        if (today > params.dueDate && params.status !== "paid") {
+            return "overdue";
+        }
+
+        if (params.status === "paid") {
+            return "paid";
+        }
+
+        return "closed";
     }
 
-    const today = getLocalTodayDate(referenceDate);
-    if (today > params.dueDate) {
+    if (today > params.dueDate && params.status !== "paid") {
         return "overdue";
+    }
+
+    if (params.status === "paid") {
+        return "paid";
     }
 
     if (today > params.closingDate && today <= params.dueDate) {
@@ -237,15 +264,12 @@ export function CardSpendingForm({ transaction = null, prefill, onAdvancedOpenCh
     const beneficiaries = useFinanceBeneficiaries();
     const allTags = useFinanceTags();
     const isEditing = Boolean(transaction);
-    const sourceGroup = useMemo(
-        () => (transaction ? transactionGroups.find((item) => item.id === transaction.groupId) ?? null : null),
-        [transaction, transactionGroups],
-    );
+    const sourceGroup = useMemo(() => (transaction ? (transactionGroups.find((item) => item.id === transaction.groupId) ?? null) : null), [transaction, transactionGroups]);
     const isSeriesTransaction = Boolean(sourceGroup && sourceGroup.transactionMode !== "single");
-    const initialPrefillInvoiceId = !isEditing ? prefill?.initialInvoiceId?.trim() ?? "" : "";
+    const initialPrefillInvoiceId = !isEditing ? (prefill?.initialInvoiceId?.trim() ?? "") : "";
     const parsedInitialPrefillInvoice = !isEditing && initialPrefillInvoiceId ? parseCreditCardInvoiceId(initialPrefillInvoiceId) : null;
-    const initialPrefillCreditCardId = !isEditing ? (prefill?.initialCreditCardId?.trim() || parsedInitialPrefillInvoice?.creditCardId || "") : "";
-    const initialPrefillDate = !isEditing ? prefill?.initialDate?.trim() ?? "" : "";
+    const initialPrefillCreditCardId = !isEditing ? prefill?.initialCreditCardId?.trim() || parsedInitialPrefillInvoice?.creditCardId || "" : "";
+    const initialPrefillDate = !isEditing ? (prefill?.initialDate?.trim() ?? "") : "";
     const leadingSkippedInstallmentsCount = useMemo(() => {
         if (!sourceGroup || sourceGroup.transactionMode !== "installment") {
             return 0;
@@ -290,15 +314,10 @@ export function CardSpendingForm({ transaction = null, prefill, onAdvancedOpenCh
     const [installmentCountInput, setInstallmentCountInput] = useState(() =>
         sourceGroup?.transactionMode === "installment" && sourceGroup.installmentCount ? String(sourceGroup.installmentCount) : "2",
     );
-    const [ignoredInstallmentsCountInput, setIgnoredInstallmentsCountInput] = useState(() =>
-        sourceGroup?.transactionMode === "installment" ? String(leadingSkippedInstallmentsCount) : "0",
-    );
+    const [ignoredInstallmentsCountInput, setIgnoredInstallmentsCountInput] = useState(() => (sourceGroup?.transactionMode === "installment" ? String(leadingSkippedInstallmentsCount) : "0"));
     const [editScope, setEditScope] = useState<TransactionSeriesScope>("single");
     const activeCreditCards = useMemo(() => creditCards.filter((card) => card.isActive), [creditCards]);
-    const selectableCreditCards = useMemo(
-        () => creditCards.filter((card) => card.isActive || (isEditing && card.id === creditCardId)),
-        [creditCardId, creditCards, isEditing],
-    );
+    const selectableCreditCards = useMemo(() => creditCards.filter((card) => card.isActive || (isEditing && card.id === creditCardId)), [creditCardId, creditCards, isEditing]);
 
     const amountValue = useMemo(() => parseCurrencyDigitsToNumber(extractCurrencyDigits(amountInput)), [amountInput]);
 
@@ -329,11 +348,7 @@ export function CardSpendingForm({ transaction = null, prefill, onAdvancedOpenCh
         const fallbackCardId =
             activeCreditCards.find((card) => card.id === favoriteCreditCardId)?.id ??
             activeCreditCards[0]?.id ??
-            (isEditing
-                ? creditCards.find((card) => card.id === favoriteCreditCardId)?.id ??
-                  creditCards[0]?.id ??
-                  ""
-                : "");
+            (isEditing ? (creditCards.find((card) => card.id === favoriteCreditCardId)?.id ?? creditCards[0]?.id ?? "") : "");
         if (!selectableCreditCards.some((card) => card.id === creditCardId)) {
             setCreditCardId(fallbackCardId);
             return;
@@ -425,10 +440,7 @@ export function CardSpendingForm({ transaction = null, prefill, onAdvancedOpenCh
     );
 
     useEffect(() => {
-        const defaultBeneficiary =
-            beneficiaries.find((item) => normalizeComparisonText(item.name) === "eu") ??
-            beneficiaries.find((item) => item.isActive) ??
-            beneficiaries[0];
+        const defaultBeneficiary = beneficiaries.find((item) => normalizeComparisonText(item.name) === "eu") ?? beneficiaries.find((item) => item.isActive) ?? beneficiaries[0];
         if (!defaultBeneficiary) {
             setBeneficiaryId("");
             return;
@@ -440,7 +452,8 @@ export function CardSpendingForm({ transaction = null, prefill, onAdvancedOpenCh
 
     const selectedCard = useMemo(() => selectableCreditCards.find((card) => card.id === creditCardId) ?? null, [creditCardId, selectableCreditCards]);
     const openCycle = useMemo(() => (selectedCard ? resolveCreditCardInvoiceCycle(getLocalTodayDate(), selectedCard.closingDay, selectedCard.dueDay) : null), [selectedCard]);
-    const prefillInvoiceId = !isEditing ? prefill?.initialInvoiceId?.trim() ?? "" : "";
+    const currentOpenCycleKey = openCycle?.cycleKey ?? "";
+    const prefillInvoiceId = !isEditing ? (prefill?.initialInvoiceId?.trim() ?? "") : "";
     const prefillParsedInvoice = useMemo(() => (prefillInvoiceId ? parseCreditCardInvoiceId(prefillInvoiceId) : null), [prefillInvoiceId]);
     const prefillCycleKey = useMemo(() => {
         if (isEditing) {
@@ -534,7 +547,13 @@ export function CardSpendingForm({ transaction = null, prefill, onAdvancedOpenCh
                 return a.dueDate.localeCompare(b.dueDate);
             })
             .map((invoice) => {
-                const visualStatus = resolveInvoiceVisualStatus(invoice);
+                const visualStatus = resolveInvoiceVisualStatus({
+                    status: invoice.status,
+                    cycleKey: invoice.cycleKey,
+                    closingDate: invoice.closingDate,
+                    dueDate: invoice.dueDate,
+                    currentOpenCycleKey,
+                });
                 const monthKey = getCreditCardInvoiceMonthKey(invoice);
                 const monthLabel = formatMonthLabel(monthKey);
                 return {
@@ -547,7 +566,7 @@ export function CardSpendingForm({ transaction = null, prefill, onAdvancedOpenCh
                     invoice,
                 };
             });
-    }, [anchorCycleKey, creditCardInvoices, openCycle, selectedCard]);
+    }, [anchorCycleKey, creditCardInvoices, currentOpenCycleKey, openCycle, selectedCard]);
 
     useEffect(() => {
         if (invoiceOptions.length < 1) {
@@ -609,7 +628,7 @@ export function CardSpendingForm({ transaction = null, prefill, onAdvancedOpenCh
         setAmountInputState(formatCurrencyFromDigits(digits));
     };
 
-    const buildDraft = () => {
+    const buildDraft = (statusOverride?: TransactionStatus) => {
         const numericValue = amountValue;
         if (!Number.isFinite(numericValue) || numericValue === 0) {
             return null;
@@ -621,24 +640,18 @@ export function CardSpendingForm({ transaction = null, prefill, onAdvancedOpenCh
         }
 
         const resolvedMode: TransactionMode =
-            isEditing && isSeriesTransaction && editScope === "single"
-                ? "single"
-                : spendingMode === "installment"
-                  ? "installment"
-                  : spendingMode === "recurring"
-                    ? "recurring"
-                    : "single";
+            isEditing && isSeriesTransaction && editScope === "single" ? "single" : spendingMode === "installment" ? "installment" : spendingMode === "recurring" ? "recurring" : "single";
         const selectedInvoiceOption = invoiceOptions.find((option) => option.id === invoiceId) ?? null;
         if (resolvedMode === "single" && (!invoiceId || !selectedInvoiceOption)) {
             return null;
         }
 
         const resolvedStatus: TransactionStatus =
-            resolvedMode === "single" && selectedInvoiceOption ? (selectedInvoiceOption.visualStatus === "open" ? "pending" : "paid") : "pending";
+            resolvedMode === "single" && selectedInvoiceOption ? (selectedInvoiceOption.visualStatus === "open" || selectedInvoiceOption.visualStatus === "future" ? "pending" : "paid") : "pending";
+        const finalStatus = statusOverride ?? resolvedStatus;
         const parsedInstallmentCount = Number(installmentCountInput);
         const resolvedInstallmentCount = resolvedMode === "installment" && Number.isInteger(parsedInstallmentCount) && parsedInstallmentCount >= 2 ? parsedInstallmentCount : null;
-        const resolvedIgnoredInstallmentsCount =
-            resolvedMode === "installment" ? normalizeIgnoredInstallmentsCountInput(ignoredInstallmentsCountInput, resolvedInstallmentCount) : null;
+        const resolvedIgnoredInstallmentsCount = resolvedMode === "installment" ? normalizeIgnoredInstallmentsCountInput(ignoredInstallmentsCountInput, resolvedInstallmentCount) : null;
 
         return {
             type: "spending" as const,
@@ -652,7 +665,7 @@ export function CardSpendingForm({ transaction = null, prefill, onAdvancedOpenCh
             beneficiaryId: beneficiaryId || null,
             tagIds: selectedTagIds,
             description: trimmedDescription || "Compra no Cartao",
-            status: resolvedStatus,
+            status: finalStatus,
             notes: trimmedDescription || undefined,
             transactionMode: resolvedMode,
             installmentCount: resolvedInstallmentCount,
@@ -711,6 +724,42 @@ export function CardSpendingForm({ transaction = null, prefill, onAdvancedOpenCh
         return true;
     };
 
+    const ignore = async () => {
+        if (!transaction) {
+            return false;
+        }
+
+        const draft = buildDraft("skipped");
+        if (!draft) {
+            return false;
+        }
+
+        await updateTransaction({
+            transaction,
+            draft,
+            scope: editScope,
+        });
+        return true;
+    };
+
+    const cancelTransaction = async () => {
+        if (!transaction) {
+            return false;
+        }
+
+        const draft = buildDraft("cancelled");
+        if (!draft) {
+            return false;
+        }
+
+        await updateTransaction({
+            transaction,
+            draft,
+            scope: editScope,
+        });
+        return true;
+    };
+
     const runAction = async (action: () => Promise<boolean>) => {
         if (submitting) {
             return;
@@ -732,244 +781,253 @@ export function CardSpendingForm({ transaction = null, prefill, onAdvancedOpenCh
     };
 
     return (
-        <div className="rounded-2xl border border-white/[0.09] bg-[#131313] p-4 text-white shadow-[0_26px_70px_-38px_rgba(0,0,0,0.95)]">
-            <div className="flex items-start justify-between gap-3">
-                <h1 className="flex items-center gap-2 text-2xl font-medium uppercase">
-                    <ReceiptText size={30} className="rounded-2xl p-1" strokeWidth={2.5} />
-                    {isEditing ? "Editar gasto no cartao" : "Novo gasto no cartao"}
-                </h1>
-                <div className="flex items-center gap-2">
-                    <button
-                        type="button"
-                        onClick={() => setAdvancedOpen((current) => !current)}
-                        disabled={submitting}
-                        className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-medium uppercase tracking-[0.08em] transition-colors ${
-                            advancedOpen
-                                ? "border-emerald-400/45 bg-emerald-500/15 text-emerald-100"
-                                : "border-white/[0.14] bg-white/[0.03] text-white/70 hover:border-white/[0.22] hover:text-white"
-                        } disabled:cursor-not-allowed disabled:opacity-60`}
-                    >
-                        <SlidersHorizontal size={14} />
-                        {advancedOpen ? "Ocultar avancadas" : "Opcoes avancadas"}
-                    </button>
-                    <button
-                        type="button"
-                        onClick={closeModal}
-                        disabled={submitting}
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-white/[0.12] bg-white/[0.03] text-white/70 transition-colors hover:border-white/[0.22] hover:text-white disabled:cursor-not-allowed disabled:opacity-55"
-                        aria-label="Fechar modal"
-                        title="Fechar"
-                    >
-                        <X size={15} />
-                    </button>
+        <>
+            <div className="rounded-2xl border border-white/[0.09] bg-[#131313] p-4 text-white shadow-[0_26px_70px_-38px_rgba(0,0,0,0.95)]">
+                <div className="flex items-start justify-between gap-3">
+                    <h1 className="flex items-center gap-2 text-2xl font-medium uppercase">
+                        <ReceiptText size={30} className="rounded-2xl p-1" strokeWidth={2.5} />
+                        {isEditing ? "Editar gasto no cartao" : "Novo gasto no cartao"}
+                    </h1>
+                    <div className="flex items-center gap-2">
+                        <button
+                            type="button"
+                            onClick={() => setAdvancedOpen((current) => !current)}
+                            disabled={submitting}
+                            className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-medium uppercase tracking-[0.08em] transition-colors ${
+                                advancedOpen
+                                    ? "border-emerald-400/45 bg-emerald-500/15 text-emerald-100"
+                                    : "border-white/[0.14] bg-white/[0.03] text-white/70 hover:border-white/[0.22] hover:text-white"
+                            } disabled:cursor-not-allowed disabled:opacity-60`}
+                        >
+                            <SlidersHorizontal size={14} />
+                            {advancedOpen ? "Ocultar avancadas" : "Opcoes avancadas"}
+                        </button>
+                        <button
+                            type="button"
+                            onClick={closeModal}
+                            disabled={submitting}
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-white/[0.12] bg-white/[0.03] text-white/70 transition-colors hover:border-white/[0.22] hover:text-white disabled:cursor-not-allowed disabled:opacity-55"
+                            aria-label="Fechar modal"
+                            title="Fechar"
+                        >
+                            <X size={15} />
+                        </button>
+                    </div>
                 </div>
-            </div>
 
-            <div className={`mt-4 grid gap-4 ${advancedOpen ? "grid-cols-1 lg:grid-cols-[minmax(0,1fr)_320px]" : "grid-cols-1"}`}>
-                <section className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                    <label className="flex flex-col gap-1.5">
-                        <span className={FIELD_LABEL_CLASS}>Valor</span>
-                        <input className={FIELD_INPUT_CLASS} inputMode="numeric" placeholder="R$ 0,00" value={amountInput} onChange={(event) => setAmountInput(event.target.value)} />
-                    </label>
+                <div className={`mt-4 grid gap-4 ${advancedOpen ? "grid-cols-1 lg:grid-cols-[minmax(0,1fr)_320px]" : "grid-cols-1"}`}>
+                    <section className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                        <label className="flex flex-col gap-1.5">
+                            <span className={FIELD_LABEL_CLASS}>Valor</span>
+                            <input className={FIELD_INPUT_CLASS} inputMode="numeric" placeholder="R$ 0,00" value={amountInput} onChange={(event) => setAmountInput(event.target.value)} />
+                        </label>
 
-                    
-                    <SingleSelectCombobox
-                        label="Fatura"
-                        value={invoiceId}
-                        placeholder="Selecione uma fatura"
-                        emptyMessage="Nenhuma fatura disponivel."
-                        options={invoiceOptions}
-                        onChange={setInvoiceId}
-                        renderOptionContent={(option) => <InvoiceOptionContent option={option} />}
-                        labelClassName={FIELD_LABEL_CLASS}
-                    />
+                        <SingleSelectCombobox
+                            label="Fatura"
+                            value={invoiceId}
+                            placeholder="Selecione uma fatura"
+                            emptyMessage="Nenhuma fatura disponivel."
+                            options={invoiceOptions}
+                            onChange={setInvoiceId}
+                            renderOptionContent={(option) => <InvoiceOptionContent option={option} />}
+                            labelClassName={FIELD_LABEL_CLASS}
+                        />
 
-                    <DateField value={date} onChange={setDate} shortcuts={DATE_SHORTCUTS} />
+                        <DateField value={date} onChange={setDate} shortcuts={DATE_SHORTCUTS} />
 
-                    <SingleSelectCombobox
-                        label="Cartao"
-                        value={creditCardId}
-                        placeholder="Selecione um cartao"
-                        emptyMessage="Nenhum cartao encontrado."
-                        options={creditCardOptions}
-                        onChange={setCreditCardId}
-                        renderOptionContent={(option) => <CreditCardOptionContent option={option} />}
-                        labelClassName={FIELD_LABEL_CLASS}
-                    />
+                        <SingleSelectCombobox
+                            label="Cartao"
+                            value={creditCardId}
+                            placeholder="Selecione um cartao"
+                            emptyMessage="Nenhum cartao encontrado."
+                            options={creditCardOptions}
+                            onChange={setCreditCardId}
+                            renderOptionContent={(option) => <CreditCardOptionContent option={option} />}
+                            labelClassName={FIELD_LABEL_CLASS}
+                        />
 
-                    <SingleSelectCombobox
-                        label="Categoria"
-                        value={selectedCategoryOptionId}
-                        placeholder="Selecione uma categoria"
-                        emptyMessage="Nenhuma categoria disponivel."
-                        options={categoryOptions}
-                        onChange={handleCategorySelect}
-                        renderOptionContent={(option) => <CategoryOptionContent option={option} />}
-                        labelClassName={FIELD_LABEL_CLASS}
-                    />
+                        <SingleSelectCombobox
+                            label="Categoria"
+                            value={selectedCategoryOptionId}
+                            placeholder="Selecione uma categoria"
+                            emptyMessage="Nenhuma categoria disponivel."
+                            options={categoryOptions}
+                            onChange={handleCategorySelect}
+                            renderOptionContent={(option) => <CategoryOptionContent option={option} />}
+                            labelClassName={FIELD_LABEL_CLASS}
+                        />
 
-                    <SingleSelectCombobox
-                        label="Beneficiario"
-                        value={beneficiaryId}
-                        placeholder="Selecione um beneficiario"
-                        emptyMessage="Nenhum beneficiario encontrado."
-                        options={beneficiaryOptions}
-                        onChange={setBeneficiaryId}
-                        renderOptionContent={(option) => <BeneficiaryOptionContent option={option} />}
-                        labelClassName={FIELD_LABEL_CLASS}
-                    />
+                        <SingleSelectCombobox
+                            label="Beneficiario"
+                            value={beneficiaryId}
+                            placeholder="Selecione um beneficiario"
+                            emptyMessage="Nenhum beneficiario encontrado."
+                            options={beneficiaryOptions}
+                            onChange={setBeneficiaryId}
+                            renderOptionContent={(option) => <BeneficiaryOptionContent option={option} />}
+                            labelClassName={FIELD_LABEL_CLASS}
+                        />
 
-                    <label className="flex flex-col gap-1.5 md:col-span-2">
-                        <span className={FIELD_LABEL_CLASS}>Descricao</span>
-                        <input className={FIELD_INPUT_CLASS} placeholder="Descricao da compra" value={description} onChange={(event) => setDescription(event.target.value)} />
-                    </label>
-                </section>
+                        <label className="flex flex-col gap-1.5 md:col-span-2">
+                            <span className={FIELD_LABEL_CLASS}>Descricao</span>
+                            <input className={FIELD_INPUT_CLASS} placeholder="Descricao da compra" value={description} onChange={(event) => setDescription(event.target.value)} />
+                        </label>
+                    </section>
 
-                {advancedOpen && (
-                    <aside className="h-fit rounded-2xl border border-white/[0.09] bg-black/25 p-3">
-                        <div className="space-y-3">
-                            <label className="flex flex-col gap-1.5">
-                                <span className={FIELD_LABEL_CLASS}>Modo</span>
-                                <select
-                                    className={FIELD_INPUT_CLASS}
-                                    value={spendingMode}
-                                    onChange={(event) => {
-                                        const value = event.target.value;
-                                        if (value === "installment" || value === "recurring" || value === "single") {
-                                            setSpendingMode(value);
-                                        } else {
-                                            setSpendingMode("single");
-                                        }
-                                    }}
-                                >
-                                    <option value="single">Unica</option>
-                                    <option value="recurring">Fixa mensal</option>
-                                    <option value="installment">Parcelada</option>
-                                </select>
-                            </label>
-
-                            {spendingMode === "installment" && (
-                                <>
-                                    <label className="flex flex-col gap-1.5">
-                                        <span className={FIELD_LABEL_CLASS}>Parcelas</span>
-                                        <input
-                                            className={FIELD_INPUT_CLASS}
-                                            type="number"
-                                            min={2}
-                                            step={1}
-                                            value={installmentCountInput}
-                                            onChange={(event) => setInstallmentCountInput(event.target.value)}
-                                        />
-                                    </label>
-
-                                    <label className="flex flex-col gap-1.5">
-                                        <span className={FIELD_LABEL_CLASS}>Parcelas ja pagas (ignorar faturas antigas)</span>
-                                        <input
-                                            className={FIELD_INPUT_CLASS}
-                                            type="number"
-                                            min={0}
-                                            step={1}
-                                            value={ignoredInstallmentsCountInput}
-                                            onChange={(event) => setIgnoredInstallmentsCountInput(event.target.value)}
-                                            onBlur={() => {
-                                                const parsedInstallmentCount = Number(installmentCountInput);
-                                                const resolvedInstallmentCount = Number.isInteger(parsedInstallmentCount) && parsedInstallmentCount >= 2 ? parsedInstallmentCount : null;
-                                                const normalizedIgnoredCount = normalizeIgnoredInstallmentsCountInput(
-                                                    ignoredInstallmentsCountInput,
-                                                    resolvedInstallmentCount,
-                                                );
-                                                setIgnoredInstallmentsCountInput(String(normalizedIgnoredCount));
-                                            }}
-                                        />
-                                        <span className="text-[11px] text-white/45">Parcelas ignoradas nao entram em faturas, alertas e cobrancas.</span>
-                                    </label>
-                                </>
-                            )}
-
-                            {isEditing && isSeriesTransaction && (
+                    {advancedOpen && (
+                        <aside className="h-fit rounded-2xl border border-white/[0.09] bg-black/25 p-3">
+                            <div className="space-y-3">
                                 <label className="flex flex-col gap-1.5">
-                                    <span className={FIELD_LABEL_CLASS}>Escopo</span>
+                                    <span className={FIELD_LABEL_CLASS}>Modo</span>
                                     <select
                                         className={FIELD_INPUT_CLASS}
-                                        value={editScope}
+                                        value={spendingMode}
                                         onChange={(event) => {
                                             const value = event.target.value;
-                                            if (value === "all" || value === "this_and_next") {
-                                                setEditScope(value);
+                                            if (value === "installment" || value === "recurring" || value === "single") {
+                                                setSpendingMode(value);
                                             } else {
-                                                setEditScope("single");
+                                                setSpendingMode("single");
                                             }
                                         }}
                                     >
-                                        <option value="single">So esta ocorrencia</option>
-                                        <option value="this_and_next">Esta e proximas</option>
-                                        <option value="all">Toda a serie</option>
+                                        <option value="single">Unica</option>
+                                        <option value="recurring">Fixa mensal</option>
+                                        <option value="installment">Parcelada</option>
                                     </select>
                                 </label>
-                            )}
 
-                            <MultiSelectCombobox
-                                label="Tags"
-                                values={selectedTagIds}
-                                placeholder="Selecione tags"
-                                emptyMessage="Nenhuma tag cadastrada."
-                                options={tagOptions}
-                                onChange={setSelectedTagIds}
-                                renderOptionContent={(option) => <TagOptionContent option={option} />}
-                                labelClassName={FIELD_LABEL_CLASS}
-                            />
-                        </div>
-                    </aside>
-                )}
-            </div>
+                                {spendingMode === "installment" && (
+                                    <>
+                                        <label className="flex flex-col gap-1.5">
+                                            <span className={FIELD_LABEL_CLASS}>Parcelas</span>
+                                            <input
+                                                className={FIELD_INPUT_CLASS}
+                                                type="number"
+                                                min={2}
+                                                step={1}
+                                                value={installmentCountInput}
+                                                onChange={(event) => setInstallmentCountInput(event.target.value)}
+                                            />
+                                        </label>
 
-            <div className="mt-5 flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2">
-                    {isEditing && (
-                        <>
-                            <button
-                                type="button"
-                                onClick={() => void runAction(remove)}
-                                disabled={submitting}
-                                className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-red-400/25 bg-red-500/10 text-red-200 transition-colors hover:border-red-400/45 hover:text-red-100 disabled:cursor-not-allowed disabled:opacity-60"
-                                aria-label="Excluir transacao"
-                                title="Excluir transacao"
-                            >
-                                <Trash2 size={15} />
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => void runAction(duplicate)}
-                                disabled={submitting}
-                                className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-white/[0.12] bg-white/[0.03] text-white/70 transition-colors hover:border-white/[0.24] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
-                                aria-label="Duplicar transacao"
-                                title="Duplicar transacao"
-                            >
-                                <Copy size={15} />
-                            </button>
-                        </>
+                                        <label className="flex flex-col gap-1.5">
+                                            <span className={FIELD_LABEL_CLASS}>Parcelas ja pagas (ignorar faturas antigas)</span>
+                                            <input
+                                                className={FIELD_INPUT_CLASS}
+                                                type="number"
+                                                min={0}
+                                                step={1}
+                                                value={ignoredInstallmentsCountInput}
+                                                onChange={(event) => setIgnoredInstallmentsCountInput(event.target.value)}
+                                                onBlur={() => {
+                                                    const parsedInstallmentCount = Number(installmentCountInput);
+                                                    const resolvedInstallmentCount = Number.isInteger(parsedInstallmentCount) && parsedInstallmentCount >= 2 ? parsedInstallmentCount : null;
+                                                    const normalizedIgnoredCount = normalizeIgnoredInstallmentsCountInput(ignoredInstallmentsCountInput, resolvedInstallmentCount);
+                                                    setIgnoredInstallmentsCountInput(String(normalizedIgnoredCount));
+                                                }}
+                                            />
+                                            <span className="text-[11px] text-white/45">Parcelas ignoradas nao entram em faturas, alertas e cobrancas.</span>
+                                        </label>
+                                    </>
+                                )}
+
+                                {isEditing && isSeriesTransaction && (
+                                    <label className="flex flex-col gap-1.5">
+                                        <span className={FIELD_LABEL_CLASS}>Escopo</span>
+                                        <select
+                                            className={FIELD_INPUT_CLASS}
+                                            value={editScope}
+                                            onChange={(event) => {
+                                                const value = event.target.value;
+                                                if (value === "all" || value === "this_and_next") {
+                                                    setEditScope(value);
+                                                } else {
+                                                    setEditScope("single");
+                                                }
+                                            }}
+                                        >
+                                            <option value="single">So esta ocorrencia</option>
+                                            <option value="this_and_next">Esta e proximas</option>
+                                            <option value="all">Toda a serie</option>
+                                        </select>
+                                    </label>
+                                )}
+
+                                <MultiSelectCombobox
+                                    label="Tags"
+                                    values={selectedTagIds}
+                                    placeholder="Selecione tags"
+                                    emptyMessage="Nenhuma tag cadastrada."
+                                    options={tagOptions}
+                                    onChange={setSelectedTagIds}
+                                    renderOptionContent={(option) => <TagOptionContent option={option} />}
+                                    labelClassName={FIELD_LABEL_CLASS}
+                                />
+                            </div>
+                        </aside>
                     )}
                 </div>
 
-                <div className="flex items-center gap-2">
-                    <button
-                        type="button"
-                        onClick={closeModal}
-                        disabled={submitting}
-                        className="inline-flex min-w-24 items-center justify-center rounded-xl border border-white/[0.12] bg-white/[0.03] px-4 py-2 text-sm font-medium text-white/70 transition-colors hover:border-white/[0.2] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                        Cancelar
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => void runAction(submit)}
-                        disabled={submitting}
-                        className="inline-flex min-w-28 items-center justify-center rounded-xl border border-emerald-400/35 bg-emerald-500/15 px-4 py-2 text-sm font-semibold text-emerald-100 transition-colors hover:border-emerald-400/55 hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                        {submitting ? "Processando..." : "Concluir"}
-                    </button>
+                <div className="mt-4 flex items-center justify-between gap-3">
+                    <div className="flex gap-1">
+                        {isEditing && (
+                            <>
+                                <button
+                                    type="button"
+                                    onClick={() => void runAction(remove)}
+                                    disabled={submitting}
+                                    className="inline-flex p-2 gap-1.5 text-xs uppercase items-center justify-center rounded-lg border border-red-400/25 bg-red-500/10 text-red-200 transition-colors hover:border-red-400/45 hover:text-red-100 disabled:cursor-not-allowed disabled:opacity-60"
+                                >
+                                    <Trash2 size={15} /> Excluir
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => void runAction(duplicate)}
+                                    disabled={submitting}
+                                    className="inline-flex p-2 gap-1.5 text-xs uppercase items-center justify-center rounded-lg border border-white/[0.12] bg-white/[0.03] text-white/70 transition-colors hover:border-white/[0.24] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                                >
+                                    <Copy size={15} /> Duplicar
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => void runAction(ignore)}
+                                    disabled={submitting}
+                                    className="inline-flex p-2 gap-1.5 text-xs uppercase items-center justify-center rounded-lg border border-white/[0.12] bg-white/[0.03] text-white/70 transition-colors hover:border-white/[0.24] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                                >
+                                    <SquareSlash size={15} /> Ignorar
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => void runAction(cancelTransaction)}
+                                    disabled={submitting}
+                                    className="inline-flex p-2 gap-1.5 text-xs uppercase items-center justify-center rounded-lg border border-white/[0.12] bg-white/[0.03] text-white/70 transition-colors hover:border-white/[0.24] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                                >
+                                    <CircleX size={15} /> Cancelar transacao
+                                </button>
+                            </>
+                        )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <button
+                            type="button"
+                            onClick={closeModal}
+                            disabled={submitting}
+                            className="inline-flex min-w-24 items-center justify-center rounded-xl border border-white/[0.12] bg-white/[0.03] px-4 py-2 text-sm font-medium text-white/70 transition-colors hover:border-white/[0.2] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                            Cancelar
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => void runAction(submit)}
+                            disabled={submitting}
+                            className="inline-flex min-w-28 items-center justify-center rounded-xl border border-emerald-400/35 bg-emerald-500/15 px-4 py-2 text-sm font-semibold text-emerald-100 transition-colors hover:border-emerald-400/55 hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                            {submitting ? "Processando..." : "Concluir"}
+                        </button>
+                    </div>
                 </div>
             </div>
-        </div>
+        </>
     );
 }

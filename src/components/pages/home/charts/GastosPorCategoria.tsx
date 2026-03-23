@@ -41,7 +41,7 @@ export function GastosPorCategoria() {
         return transactionDate.getMonth() === currentMonth && transactionDate.getFullYear() === currentYear;
     });
 
-    const isIncludedStatus = (status: string | null | undefined) => status === "paid" || status === "pending";
+    const isIncludedStatus = (status: string | null | undefined) => status === "paid";
     const spendingTransactions = currentMonthTransactions
         .filter((tx) => tx.type === "spending")
         .filter((tx) => tx.paymentMethod !== "credit_card")

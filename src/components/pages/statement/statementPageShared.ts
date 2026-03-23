@@ -1,9 +1,11 @@
 import { type CreditCard, type CreditCardInvoice, type Transaction } from "../../../context/FinanceContext";
+import { resolveCreditCardInvoiceCycle } from "../../../context/financeTypes";
 import { getLocalTodayDate } from "../../../lib/localDate";
 
-export type StatementInvoiceVisualStatus = "paid" | "overdue" | "closed" | "open";
+export type StatementInvoiceVisualStatus = "paid" | "overdue" | "closed" | "open" | "future";
 
 export interface StatementFilterState {
+    // Month key (YYYY-MM) used by statement page filters, always based on invoice due date.
     selectedMonth: string;
     selectedCardId: string;
 }
@@ -54,11 +56,13 @@ const STATUS_PRIORITY: Record<StatementInvoiceVisualStatus, number> = {
     overdue: 0,
     closed: 1,
     open: 2,
-    paid: 3,
+    future: 3,
+    paid: 4,
 };
 
 export const STATEMENT_STATUS_LABELS: Record<StatementInvoiceVisualStatus, string> = {
     open: "Aberta",
+    future: "Futura",
     closed: "Fechada",
     overdue: "Vencida",
     paid: "Paga",
@@ -66,6 +70,7 @@ export const STATEMENT_STATUS_LABELS: Record<StatementInvoiceVisualStatus, strin
 
 export const STATEMENT_STATUS_BADGE_CLASS: Record<StatementInvoiceVisualStatus, string> = {
     open: "border-amber-300/30 bg-amber-500/10 text-amber-200",
+    future: "border-violet-300/30 bg-violet-500/10 text-violet-200",
     closed: "border-sky-300/30 bg-sky-500/10 text-sky-200",
     overdue: "border-red-400/30 bg-red-500/10 text-red-200",
     paid: "border-emerald-300/30 bg-emerald-500/10 text-emerald-200",
@@ -129,15 +134,43 @@ export function getInvoiceOpenAmount(invoice: CreditCardInvoice): number {
     return Math.max(0, invoice.totalAmount - invoice.paidAmount);
 }
 
-export function resolveInvoiceVisualStatus(invoice: CreditCardInvoice, referenceDate = new Date()): StatementInvoiceVisualStatus {
+export function resolveInvoiceVisualStatus(
+    invoice: CreditCardInvoice,
+    creditCard: Pick<CreditCard, "closingDay" | "dueDay"> | null = null,
+    referenceDate = new Date(),
+): StatementInvoiceVisualStatus {
     const openAmount = getInvoiceOpenAmount(invoice);
-    if (invoice.status === "paid" || openAmount <= 0) {
-        return "paid";
+    const today = getLocalTodayDate(referenceDate);
+
+    if (creditCard) {
+        const currentOpenCycleKey = resolveCreditCardInvoiceCycle(today, creditCard.closingDay, creditCard.dueDay).cycleKey;
+        const cycleComparison = invoice.cycleKey.localeCompare(currentOpenCycleKey);
+
+        if (cycleComparison === 0) {
+            return "open";
+        }
+
+        if (cycleComparison > 0) {
+            return "future";
+        }
+
+        if (today > invoice.dueDate && openAmount > 0) {
+            return "overdue";
+        }
+
+        if (invoice.status === "paid" || openAmount <= 0) {
+            return "paid";
+        }
+
+        return "closed";
     }
 
-    const today = getLocalTodayDate(referenceDate);
-    if (today > invoice.dueDate) {
+    if (today > invoice.dueDate && openAmount > 0) {
         return "overdue";
+    }
+
+    if (invoice.status === "paid" || openAmount <= 0) {
+        return "paid";
     }
 
     if (today > invoice.closingDate && today <= invoice.dueDate) {
@@ -186,8 +219,9 @@ export function buildStatementSummary({
     cardNameById,
     referenceDate = new Date(),
 }: BuildStatementSummaryParams): StatementSummary {
+    const scopedCardById = new Map(scopedCards.map((card) => [card.id, card]));
     const monthSnapshots = monthInvoices.map((invoice) => {
-        const status = resolveInvoiceVisualStatus(invoice, referenceDate);
+        const status = resolveInvoiceVisualStatus(invoice, scopedCardById.get(invoice.creditCardId) ?? null, referenceDate);
         const openAmount = getInvoiceOpenAmount(invoice);
         const cardName = cardNameById.get(invoice.creditCardId) ?? "Cartao removido";
 
@@ -201,6 +235,7 @@ export function buildStatementSummary({
 
     const statusDistribution: Record<StatementInvoiceVisualStatus, number> = {
         open: 0,
+        future: 0,
         closed: 0,
         overdue: 0,
         paid: 0,

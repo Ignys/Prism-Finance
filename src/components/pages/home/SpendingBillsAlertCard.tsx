@@ -1,6 +1,7 @@
 import { ReceiptText, TriangleAlert } from "lucide-react";
 import { useMemo } from "react";
 import { type Transaction, useFinanceCreditCardInvoices, useFinanceCreditCards } from "../../../context/FinanceContext";
+import { getMonthKeyFromDateValue } from "../../../context/financeTypes";
 import { usePage } from "../../../context/PageContext";
 import { getLocalTodayDate, parseAppDate } from "../../../lib/localDate";
 import { formatCurrencyBRL } from "../../transactions/transactionView";
@@ -12,6 +13,7 @@ interface SpendingBillsAlertCardProps {
 interface OverdueInvoiceByCardAlert {
     cardId: string;
     cardName: string;
+    // Month key (YYYY-MM) used by statement navigation, based on due date.
     selectedMonth: string;
     selectedDueDate: string;
     openAmount: number;
@@ -62,6 +64,7 @@ export function SpendingBillsAlertCard({ transactions }: SpendingBillsAlertCardP
         creditCardInvoices.forEach((invoice) => {
             const openAmount = Math.max(0, invoice.totalAmount - invoice.paidAmount);
             const isOverdue = invoice.status !== "paid" && openAmount > 0 && today > invoice.dueDate;
+            const invoiceDueMonth = getMonthKeyFromDateValue(invoice.dueDate);
 
             if (!isOverdue) {
                 return;
@@ -72,7 +75,7 @@ export function SpendingBillsAlertCard({ transactions }: SpendingBillsAlertCardP
                 alertsByCard.set(invoice.creditCardId, {
                     cardId: invoice.creditCardId,
                     cardName: cardNameById.get(invoice.creditCardId) ?? "Cartao removido",
-                    selectedMonth: invoice.cycleKey,
+                    selectedMonth: invoiceDueMonth,
                     selectedDueDate: invoice.dueDate,
                     openAmount,
                     overdueInvoiceCount: 1,
@@ -80,7 +83,7 @@ export function SpendingBillsAlertCard({ transactions }: SpendingBillsAlertCardP
                 return;
             }
 
-            const nextSelectedMonth = invoice.dueDate < existing.selectedDueDate ? invoice.cycleKey : existing.selectedMonth;
+            const nextSelectedMonth = invoice.dueDate < existing.selectedDueDate ? invoiceDueMonth : existing.selectedMonth;
             const nextSelectedDueDate = invoice.dueDate < existing.selectedDueDate ? invoice.dueDate : existing.selectedDueDate;
 
             alertsByCard.set(invoice.creditCardId, {

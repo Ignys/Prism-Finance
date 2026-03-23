@@ -2,7 +2,6 @@ import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { Eye, EyeOff, Pencil, Plus, Star } from "lucide-react";
 import {
-    DEFAULT_WALLET_ID,
     useFinanceActions,
     useFinanceCreditCardInvoices,
     useFinanceCreditCards,
@@ -34,23 +33,13 @@ export function BalancePage() {
     const { openModal } = useModal();
     const [showArchivedWallets, setShowArchivedWallets] = useState(false);
     const [showArchivedCreditCards, setShowArchivedCreditCards] = useState(false);
-    const favoriteWallet = wallets.find((wallet) => wallet.id === favoriteWalletId) ?? wallets[0] ?? null;
-    const favoriteCreditCard = creditCards.find((card) => card.id === favoriteCreditCardId) ?? creditCards[0] ?? null;
-    const visibleWallets = useMemo(
-        () => wallets.filter((wallet) => showArchivedWallets || wallet.isActive),
-        [showArchivedWallets, wallets],
-    );
-    const visibleCreditCards = useMemo(
-        () => creditCards.filter((card) => showArchivedCreditCards || card.isActive),
-        [creditCards, showArchivedCreditCards],
-    );
+    const visibleWallets = useMemo(() => wallets.filter((wallet) => showArchivedWallets || wallet.isActive), [showArchivedWallets, wallets]);
+    const visibleCreditCards = useMemo(() => creditCards.filter((card) => showArchivedCreditCards || card.isActive), [creditCards, showArchivedCreditCards]);
     const totalCreditLimit = creditCards.reduce((sum, card) => sum + card.limit, 0);
     const totalOpenInvoices = creditCardInvoices.reduce((sum, invoice) => sum + Math.max(0, invoice.totalAmount - invoice.paidAmount), 0);
 
     const metrics = [
         { label: "Saldo total", value: currencyFormatter.format(summary.balance) },
-        { label: "Carteira favorita", value: favoriteWallet?.name ?? "Nenhuma" },
-        { label: "Cartao favorito", value: favoriteCreditCard?.name ?? "Nenhum" },
         { label: "Limite total", value: currencyFormatter.format(totalCreditLimit) },
         { label: "Faturas abertas", value: currencyFormatter.format(totalOpenInvoices) },
     ];
@@ -58,7 +47,7 @@ export function BalancePage() {
     return (
         <AuthShell mainClassName="text-white">
             <div className="mx-auto flex w-full max-w-6xl flex-col gap-2 px-6 pb-10 lg:flex-row lg:items-start">
-                <section className="w-full lg:w-[66%]">
+                <section className="w-full lg:w-[80%]">
                     <div className="relative overflow-hidden rounded-2xl border border-white/[0.08] bg-[#111111] p-4 shadow-[0_24px_60px_-32px_rgba(0,0,0,0.9)]">
                         <div className="pointer-events-none absolute -right-10 -top-10 h-32 w-32 rounded-full bg-sky-500/10 blur-3xl" />
                         <div className="pointer-events-none absolute -bottom-20 -left-20 h-40 w-40 rounded-full bg-emerald-500/10 blur-3xl" />
@@ -68,33 +57,31 @@ export function BalancePage() {
                                 <p className="text-lg font-medium text-white">Suas carteiras</p>
                             </div>
 
-                            <button
-                                type="button"
-                                onClick={() => openModal(<BalanceModal mode="create" />)}
-                                className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-white/[0.1] bg-white/[0.04] px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.05em] text-white/80 transition-all hover:border-white/[0.18] hover:bg-white/[0.08]"
-                            >
-                                <Plus size={14} />
-                                Criar carteira
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => setShowArchivedWallets((current) => !current)}
-                                className="inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-white/[0.12] bg-white/[0.03] px-2.5 py-1 text-xs uppercase tracking-[0.08em] text-white/70 transition-colors hover:border-white/[0.24] hover:text-white"
-                            >
-                                {showArchivedWallets ? <EyeOff size={13} /> : <Eye size={13} />}
-                                {showArchivedWallets ? "Ocultar arquivadas" : "Mostrar arquivadas"}
-                            </button>
+                            <div className="flex flex-row-reverse gap-1.5 items-center">
+                                <button
+                                    type="button"
+                                    onClick={() => openModal(<BalanceModal mode="create" />)}
+                                    className="inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-white/[0.1] bg-white/[0.04] px-3 py-1 text-xs font-semibold uppercase tracking-[0.05em] text-white/80 transition-all hover:border-white/[0.18] hover:bg-white/[0.08]"
+                                >
+                                    <Plus size={13} />
+                                    Criar carteira
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowArchivedWallets((current) => !current)}
+                                    className="inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-white/[0.1] bg-white/[0.04] px-3 py-1 text-xs uppercase tracking-[0.05em] text-white/80 transition-all hover:border-white/[0.18] hover:bg-white/[0.08]"
+                                >
+                                    {showArchivedWallets ? <EyeOff size={13} /> : <Eye size={13} />}
+                                    {showArchivedWallets ? "Arquivadas" : "Arquivadas"}
+                                </button>
+                            </div>
                         </div>
 
                         <div className="relative mt-4 space-y-2">
-                            {visibleWallets.length < 1 && (
-                                <p className="rounded-xl border border-white/[0.08] bg-white/[0.03] p-3 text-sm text-white/55">
-                                    Nenhuma carteira para os filtros atuais.
-                                </p>
-                            )}
+                            {visibleWallets.length < 1 && <p className="rounded-xl border border-white/[0.08] bg-white/[0.03] p-3 text-sm text-white/55">Nenhuma carteira para os filtros atuais.</p>}
                             {visibleWallets.map((wallet, index) => {
                                 const isFavorite = wallet.id === favoriteWalletId;
-                                const isDefault = wallet.id === DEFAULT_WALLET_ID;
+                                
 
                                 return (
                                     <motion.article
@@ -118,7 +105,15 @@ export function BalancePage() {
                                                         </span>
                                                     )}
                                                 </div>
-                                                <p className="text-sm font-normal text-white/60 tracking-widest">{currencyFormatter.format(wallet.balance)}</p>
+                                               
+                                                <div className="flex gap-1 mt-1">
+                                                    <p className="text-xs px-2.5 py-0.5 bg-neutral-200/5 text-white/45 border border-white/10 rounded-full">
+                                                        Saldo inicial: {currencyFormatter.format(wallet.initialBalance)}
+                                                    </p>
+                                                    <p className="text-xs px-2.5 py-0.5 bg-neutral-200/5 text-white/45 border border-white/10 rounded-full">
+                                                        Saldo atual: {currencyFormatter.format(wallet.balance)}
+                                                    </p>
+                                                </div>
                                             </div>
                                         </div>
 
@@ -127,10 +122,7 @@ export function BalancePage() {
                                                 type="button"
                                                 onClick={() => openModal(<BalanceModal mode="edit" walletId={wallet.id} />)}
                                                 className={[
-                                                    "inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.04em] transition-all",
-                                                    isDefault
-                                                        ? "border-sky-300/25 bg-sky-500/10 text-sky-200 hover:border-sky-300/40"
-                                                        : "border-white/[0.12] bg-white/[0.03] text-white/70 hover:border-white/[0.2] hover:text-white",
+                                                    "inline-flex items-center gap-2 rounded-full border border-white/[0.12] bg-white/[0.03] px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.04em] text-white/70 transition-all hover:border-white/[0.2] hover:text-white",
                                                 ].join(" ")}
                                             >
                                                 <Pencil size={14} />
@@ -172,33 +164,30 @@ export function BalancePage() {
                                 <p className="text-lg font-medium text-white">Seus cartoes de credito</p>
                             </div>
 
-                            <button
-                                type="button"
-                                onClick={() => openModal(<CreditCardModal mode="create" />)}
-                                className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-white/[0.1] bg-white/[0.04] px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.05em] text-white/80 transition-all hover:border-white/[0.18] hover:bg-white/[0.08]"
-                            >
-                                <Plus size={14} />
-                                Criar cartao
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => setShowArchivedCreditCards((current) => !current)}
-                                className="inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-white/[0.12] bg-white/[0.03] px-2.5 py-1 text-xs uppercase tracking-[0.08em] text-white/70 transition-colors hover:border-white/[0.24] hover:text-white"
-                            >
-                                {showArchivedCreditCards ? <EyeOff size={13} /> : <Eye size={13} />}
-                                {showArchivedCreditCards ? "Ocultar arquivados" : "Mostrar arquivados"}
-                            </button>
+                            <div className="flex flex-row-reverse gap-1.5">
+                                <button
+                                    type="button"
+                                    onClick={() => openModal(<CreditCardModal mode="create" />)}
+                                    className="inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-white/[0.1] bg-white/[0.04] px-3 py-1 text-xs font-semibold uppercase tracking-[0.05em] text-white/80 transition-all hover:border-white/[0.18] hover:bg-white/[0.08]"
+                                >
+                                    <Plus size={13} />
+                                    Criar cartao
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowArchivedCreditCards((current) => !current)}
+                                    className="inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-white/[0.1] bg-white/[0.04] px-3 py-1 text-xs  uppercase tracking-[0.05em] text-white/80 transition-all hover:border-white/[0.18] hover:bg-white/[0.08]"
+                                >
+                                    {showArchivedCreditCards ? <EyeOff size={13} /> : <Eye size={13} />}
+                                    {showArchivedCreditCards ? " arquivados" : " arquivados"}
+                                </button>
+                            </div>
                         </div>
 
                         <div className="relative mt-4 space-y-2">
-                            {visibleCreditCards.length < 1 && (
-                                <p className="rounded-xl border border-white/[0.08] bg-white/[0.03] p-3 text-sm text-white/55">Nenhum cartao para os filtros atuais.</p>
-                            )}
+                            {visibleCreditCards.length < 1 && <p className="rounded-xl border border-white/[0.08] bg-white/[0.03] p-3 text-sm text-white/55">Nenhum cartao para os filtros atuais.</p>}
                             {visibleCreditCards.map((creditCard, index) => {
                                 const isFavorite = creditCard.id === favoriteCreditCardId;
-                                const openAmount = creditCardInvoices
-                                    .filter((invoice) => invoice.creditCardId === creditCard.id)
-                                    .reduce((sum, invoice) => sum + Math.max(0, invoice.totalAmount - invoice.paidAmount), 0);
 
                                 return (
                                     <motion.article
@@ -222,12 +211,11 @@ export function BalancePage() {
                                                         </span>
                                                     )}
                                                 </div>
-                                                <p className="text-sm font-normal text-white/60">
-                                                    Limite: {currencyFormatter.format(creditCard.limit)} - Aberto: {currencyFormatter.format(openAmount)}
-                                                </p>
-                                                <p className="text-xs text-white/45">
-                                                    Fechamento: dia {creditCard.closingDay} - Vencimento: dia {creditCard.dueDay}
-                                                </p>
+                                                <div className="flex gap-1 mt-1">
+                                                    <p className="text-xs px-2.5 py-0.5 bg-neutral-200/5 text-white/45 border border-white/10 rounded-full">Limite: {currencyFormatter.format(creditCard.limit)}</p>
+                                                    <p className="text-xs px-2.5 py-0.5 bg-neutral-200/5 text-white/45 border border-white/10 rounded-full">Fechamento: {creditCard.closingDay}</p>
+                                                    <p className="text-xs px-2.5 py-0.5 bg-neutral-200/5 text-white/45 border border-white/10 rounded-full">Vencimento: {creditCard.dueDay}</p>
+                                                </div>
                                             </div>
                                         </div>
 
@@ -268,7 +256,7 @@ export function BalancePage() {
                     </div>
                 </section>
 
-                <aside className="w-full space-y-2 lg:w-[34%]">
+                <aside className="w-full space-y-2 lg:w-[30%]">
                     {metrics.map((metric, index) => (
                         <motion.div
                             key={metric.label}
@@ -286,4 +274,3 @@ export function BalancePage() {
         </AuthShell>
     );
 }
-

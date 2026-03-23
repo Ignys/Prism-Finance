@@ -8,7 +8,7 @@ import {
     useFinanceActions,
     useFinanceTransactions,
 } from "../../context/FinanceContext";
-import { buildCreditCardInvoiceId, resolveCreditCardInvoiceCycleFromCycleKey } from "../../context/financeTypes";
+import { buildCreditCardInvoiceId, getMonthKeyFromDateValue, resolveCreditCardInvoiceCycleFromCycleKey } from "../../context/financeTypes";
 import { useModal } from "../../context/ModalContext";
 import { usePage } from "../../context/PageContext";
 import { AuthShell } from "../layout/AuthShell";
@@ -22,6 +22,7 @@ import {
     buildStatementSummary,
     compareInvoicesByDueDate,
     INITIAL_STATEMENT_FILTER_STATE,
+    shiftMonth,
     type StatementFilterState,
 } from "./statement/statementPageShared";
 import { StatementSummaryCards } from "./statement/StatementSummaryCards";
@@ -49,7 +50,7 @@ export function StatementPage() {
         }));
     }, [consumePendingNavigation]);
 
-    const { selectedMonth, selectedCardId } = filters;
+    const { selectedMonth: selectedDueMonth, selectedCardId } = filters;
 
     const setFilter = <K extends keyof StatementFilterState>(key: K, value: StatementFilterState[K]) => {
         setFilters((current) => ({
@@ -103,8 +104,10 @@ export function StatementPage() {
     }, [creditCardInvoices, selectedCardId]);
 
     const monthInvoices = useMemo(() => {
-        return scopedInvoices.filter((invoice) => invoice.cycleKey === selectedMonth).sort(compareInvoicesByDueDate);
-    }, [scopedInvoices, selectedMonth]);
+        return scopedInvoices.filter((invoice) => getMonthKeyFromDateValue(invoice.dueDate) === selectedDueMonth).sort(compareInvoicesByDueDate);
+    }, [scopedInvoices, selectedDueMonth]);
+
+    const monthInvoiceIds = useMemo(() => new Set(monthInvoices.map((invoice) => invoice.id)), [monthInvoices]);
 
     const monthTransactions = useMemo(() => {
         return transactions
@@ -124,20 +127,15 @@ export function StatementPage() {
                     return false;
                 }
 
-                const invoice = invoiceById.get(transaction.invoiceId);
-                if (!invoice) {
-                    return false;
-                }
-
-                return invoice.cycleKey === selectedMonth;
+                return monthInvoiceIds.has(transaction.invoiceId);
             })
             .sort((a, b) => b.date.localeCompare(a.date));
-    }, [invoiceById, selectedCardId, selectedMonth, transactions]);
+    }, [monthInvoiceIds, selectedCardId, transactions]);
 
     const summary = useMemo(
         () =>
             buildStatementSummary({
-                selectedMonth,
+                selectedMonth: selectedDueMonth,
                 selectedCardName,
                 scopedCards,
                 scopedInvoices,
@@ -145,7 +143,7 @@ export function StatementPage() {
                 monthTransactions,
                 cardNameById,
             }),
-        [selectedMonth, selectedCardName, scopedCards, scopedInvoices, monthInvoices, monthTransactions, cardNameById],
+        [selectedDueMonth, selectedCardName, scopedCards, scopedInvoices, monthInvoices, monthTransactions, cardNameById],
     );
 
     const handlePayInvoice = (invoice: CreditCardInvoice, creditCard: CreditCard) => {
@@ -184,7 +182,7 @@ export function StatementPage() {
             return;
         }
 
-        const prefillCycleKey = selectedMonth;
+        const prefillCycleKey = shiftMonth(selectedDueMonth, -1);
         const prefillInvoiceId = buildCreditCardInvoiceId(selectedCard.id, prefillCycleKey);
         const prefillDate = resolveCreditCardInvoiceCycleFromCycleKey(prefillCycleKey, selectedCard.closingDay, selectedCard.dueDay).dueDate;
 
@@ -206,7 +204,7 @@ export function StatementPage() {
                 <div className="flex flex-col gap-3 2xl:flex-row w-[90%]">
                     <div className="min-w-0 flex-1 space-y-3">
                         <StatementFiltersPanel
-                            selectedMonth={selectedMonth}
+                            selectedMonth={selectedDueMonth}
                             selectedCardId={selectedCardId}
                             selectedCardName={selectedCardName}
                             creditCards={creditCards}
@@ -216,7 +214,7 @@ export function StatementPage() {
                         />
 
                         <StatementContentPanel
-                            selectedCycleMonth={selectedMonth}
+                            selectedMonth={selectedDueMonth}
                             allCardsSelected={selectedCardId === "all"}
                             invoices={monthInvoices}
                             transactions={monthTransactions}

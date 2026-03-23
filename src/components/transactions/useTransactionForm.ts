@@ -15,13 +15,16 @@ import {
     useFinanceWallets,
 } from "../../context/FinanceContext";
 import { normalizeComparisonText } from "../../context/finance/helpers";
-import { getLocalDateFromOffset, getLocalTodayDate } from "../../lib/localDate";
+import { getLocalDateFromOffset, getLocalTodayDate, parseDateOnlyToLocalDate } from "../../lib/localDate";
 import { extractCurrencyDigits, formatCurrencyFromDigits, parseCurrencyDigitsToNumber } from "../../lib/currencyMask";
 
 interface UseTransactionFormOptions {
     type?: TransactionType;
     transaction?: Transaction | null;
     mode?: "default" | "invoice_payment_edit";
+    prefill?: {
+        initialDate?: string;
+    };
 }
 
 interface CategorySelection {
@@ -70,6 +73,8 @@ export interface TransactionFormState {
     submit: () => Promise<boolean>;
     remove: () => Promise<boolean>;
     duplicate: () => Promise<boolean>;
+    ignore: () => Promise<boolean>;
+    cancelTransaction: () => Promise<boolean>;
 }
 
 function formatAmountInputFromValue(value: number): string {
@@ -140,7 +145,16 @@ function findCategorySelectionFromTransaction(transaction: Transaction, availabl
     };
 }
 
-export function useTransactionForm({ type, transaction, mode = "default" }: UseTransactionFormOptions = {}): TransactionFormState {
+function resolveInitialDate(prefillDate?: string): string {
+    const normalizedPrefillDate = prefillDate?.trim() ?? "";
+    if (!normalizedPrefillDate) {
+        return getLocalTodayDate();
+    }
+
+    return parseDateOnlyToLocalDate(normalizedPrefillDate) ? normalizedPrefillDate : getLocalTodayDate();
+}
+
+export function useTransactionForm({ type, transaction, mode = "default", prefill }: UseTransactionFormOptions = {}): TransactionFormState {
     const wallets = useFinanceWallets();
     const favoriteWalletId = useFinanceFavoriteWallet();
     const categories = useFinanceCategories();
@@ -164,7 +178,7 @@ export function useTransactionForm({ type, transaction, mode = "default" }: UseT
     const [subCategoryId, setSubCategoryId] = useState("");
     const [beneficiaryId, setBeneficiaryId] = useState(transaction?.beneficiaryId ?? "");
     const [selectedTagIds, setSelectedTagIds] = useState<string[]>(transaction?.tagIds ?? []);
-    const [date, setDate] = useState(transaction?.date ?? getLocalTodayDate());
+    const [date, setDate] = useState(transaction?.date ?? resolveInitialDate(prefill?.initialDate));
     const [transactionMode, setTransactionModeState] = useState<TransactionMode>(() => (sourceGroup?.transactionMode === "recurring" ? "recurring" : "single"));
     const [editScope, setEditScopeState] = useState<TransactionSeriesScope>("single");
     const [hydratedTransactionId, setHydratedTransactionId] = useState<string | null>(null);
@@ -347,7 +361,7 @@ export function useTransactionForm({ type, transaction, mode = "default" }: UseT
         setEditScopeState("single");
     };
 
-    const buildDraft = () => {
+    const buildDraft = (statusOverride?: TransactionStatus) => {
         const numericValue = amountValue;
         if (!Number.isFinite(numericValue) || numericValue === 0) {
             return null;
@@ -363,6 +377,8 @@ export function useTransactionForm({ type, transaction, mode = "default" }: UseT
                   ? "recurring"
                   : "single";
 
+        const finalStatus = statusOverride ?? status;
+
         return {
             type: transaction?.type ?? resolvedType,
             value: numericValue,
@@ -374,7 +390,7 @@ export function useTransactionForm({ type, transaction, mode = "default" }: UseT
             beneficiaryId: beneficiaryId || null,
             tagIds: selectedTagIds,
             description: trimmedDescription || fallbackDescription,
-            status,
+            status: finalStatus,
             notes: trimmedDescription || undefined,
             transactionMode: resolvedTransactionMode,
             installmentCount: null,
@@ -453,6 +469,42 @@ export function useTransactionForm({ type, transaction, mode = "default" }: UseT
         return true;
     };
 
+    const ignore = async () => {
+        if (!transaction || isInvoicePaymentEdit) {
+            return false;
+        }
+
+        const draft = buildDraft("skipped");
+        if (!draft) {
+            return false;
+        }
+
+        await updateTransaction({
+            transaction,
+            draft,
+            scope: editScope,
+        });
+        return true;
+    };
+
+    const cancelTransaction = async () => {
+        if (!transaction || isInvoicePaymentEdit) {
+            return false;
+        }
+
+        const draft = buildDraft("cancelled");
+        if (!draft) {
+            return false;
+        }
+
+        await updateTransaction({
+            transaction,
+            draft,
+            scope: editScope,
+        });
+        return true;
+    };
+
     return {
         isEditing,
         isInvoicePaymentEdit,
@@ -494,5 +546,7 @@ export function useTransactionForm({ type, transaction, mode = "default" }: UseT
         submit,
         remove,
         duplicate,
+        ignore,
+        cancelTransaction,
     };
 }

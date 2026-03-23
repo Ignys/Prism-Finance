@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Copy, SlidersHorizontal, Trash2, X } from "lucide-react";
+import { CircleX, Copy, SlidersHorizontal, SquareSlash, Trash2, X } from "lucide-react";
 import type { Beneficiary, Category, Tag, Transaction, TransactionType, Wallet } from "../../context/FinanceContext";
 import { useModal } from "../../context/ModalContext";
 import { DateField } from "./DateField";
@@ -28,19 +28,24 @@ interface TagOption extends ComboboxOptionBase {
     tag: Tag;
 }
 
+export interface TransactionFormPrefill {
+    initialDate?: string;
+}
+
 interface TransactionFormProps {
     type?: TransactionType;
     transaction?: Transaction | null;
     mode?: "default" | "invoice_payment_edit";
+    prefill?: TransactionFormPrefill;
     onAdvancedOpenChange?: (isOpen: boolean) => void;
 }
 
-export function TransactionForm({ type, transaction, mode = "default", onAdvancedOpenChange }: TransactionFormProps) {
+export function TransactionForm({ type, transaction, mode = "default", prefill, onAdvancedOpenChange }: TransactionFormProps) {
     const { closeModal } = useModal();
     const [submitting, setSubmitting] = useState(false);
     const [advancedOpen, setAdvancedOpen] = useState(false);
     const [shouldRenderAdvanced, setShouldRenderAdvanced] = useState(false);
-    const form = useTransactionForm({ type, transaction, mode });
+    const form = useTransactionForm({ type, transaction, mode, prefill });
 
     const walletOptions = useMemo<WalletOption[]>(
         () =>
@@ -328,31 +333,41 @@ export function TransactionForm({ type, transaction, mode = "default", onAdvance
             </div>
 
             <div className="mt-5 flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2">
-                    {form.isEditing && (
+                <div className="flex gap-1">
+                    {form.isEditing && !form.isInvoicePaymentEdit && (
                         <>
                             <button
                                 type="button"
                                 onClick={() => void runAction(form.remove)}
                                 disabled={submitting}
-                                className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-red-400/25 bg-red-500/10 text-red-200 transition-colors hover:border-red-400/45 hover:text-red-100 disabled:cursor-not-allowed disabled:opacity-60"
-                                aria-label="Excluir transacao"
-                                title="Excluir transacao"
+                                className="inline-flex p-2 gap-1.5 text-xs uppercase items-center justify-center rounded-lg border border-red-400/25 bg-red-500/10 text-red-200 transition-colors hover:border-red-400/45 hover:text-red-100 disabled:cursor-not-allowed disabled:opacity-60"
                             >
-                                <Trash2 size={15} />
+                                <Trash2 size={15} /> Excluir
                             </button>
-                            {!form.isInvoicePaymentEdit && (
-                                <button
-                                    type="button"
-                                    onClick={() => void runAction(form.duplicate)}
-                                    disabled={submitting}
-                                    className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-white/[0.12] bg-white/[0.03] text-white/70 transition-colors hover:border-white/[0.24] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
-                                    aria-label="Duplicar transacao"
-                                    title="Duplicar transacao"
-                                >
-                                    <Copy size={15} />
-                                </button>
-                            )}
+                            <button
+                                type="button"
+                                onClick={() => void runAction(form.duplicate)}
+                                disabled={submitting}
+                                className="inline-flex p-2 gap-1.5 text-xs uppercase items-center justify-center rounded-lg border border-white/[0.12] bg-white/[0.03] text-white/70 transition-colors hover:border-white/[0.24] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                                <Copy size={15} /> Duplicar
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => void runAction(form.ignore)}
+                                disabled={submitting}
+                                className="inline-flex p-2 gap-1.5 text-xs uppercase items-center justify-center rounded-lg border border-white/[0.12] bg-white/[0.03] text-white/70 transition-colors hover:border-white/[0.24] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                                <SquareSlash size={15} /> Ignorar
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => void runAction(form.cancelTransaction)}
+                                disabled={submitting}
+                                className="inline-flex p-2 gap-1.5 text-xs uppercase items-center justify-center rounded-lg border border-white/[0.12] bg-white/[0.03] text-white/70 transition-colors hover:border-white/[0.24] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                                <CircleX size={15} /> Cancelar transacao
+                            </button>
                         </>
                     )}
                 </div>

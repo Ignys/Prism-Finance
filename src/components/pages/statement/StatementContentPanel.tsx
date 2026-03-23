@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { ArrowDown, ArrowUp, Circle, CreditCard as CreditCardIcon, Pencil, Search, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, Circle, CreditCard as CreditCardIcon, Pencil, Plus, Search, Trash2 } from "lucide-react";
 import { type Beneficiary, type CreditCard, type CreditCardInvoice, type Transaction, useFinanceBeneficiaries } from "../../../context/FinanceContext";
 import { normalizeComparisonText } from "../../../context/finance/helpers";
 import { getCategoryIconComponent } from "../../../lib/categoryIcons";
@@ -11,14 +11,13 @@ import {
     formatMonthLabel,
     getInvoiceOpenAmount,
     resolveInvoiceVisualStatus,
-    shiftMonth,
     type StatementInvoiceVisualStatus,
     STATEMENT_STATUS_BADGE_CLASS,
     STATEMENT_STATUS_LABELS,
 } from "./statementPageShared";
 
 interface StatementContentPanelProps {
-    selectedCycleMonth: string;
+    selectedMonth: string;
     allCardsSelected: boolean;
     invoices: CreditCardInvoice[];
     transactions: Transaction[];
@@ -61,7 +60,8 @@ const STATEMENT_STATUS_SORT_ORDER: Record<StatementInvoiceVisualStatus, number> 
     overdue: 0,
     closed: 1,
     open: 2,
-    paid: 3,
+    future: 3,
+    paid: 4,
 };
 
 const TRANSACTION_STATUS_SORT_ORDER: Record<StatementTransactionVisualStatus, number> = {
@@ -181,17 +181,8 @@ function compareByText(aValue: string, bValue: string): number {
     return aValue.localeCompare(bValue, "pt-BR", { sensitivity: "base" });
 }
 
-function getMonthKeyFromDateValue(dateValue: string): string | null {
-    const isoMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateValue);
-    if (!isoMatch) {
-        return null;
-    }
-
-    return `${isoMatch[1]}-${isoMatch[2]}`;
-}
-
 export function StatementContentPanel({
-    selectedCycleMonth,
+    selectedMonth,
     allCardsSelected,
     invoices,
     transactions,
@@ -221,11 +212,11 @@ export function StatementContentPanel({
                 const invoice = transaction.invoiceId ? invoiceById.get(transaction.invoiceId) : null;
                 return {
                     transaction,
-                    transactionStatus: transaction.status === "skipped" ? "skipped" : invoice ? resolveInvoiceVisualStatus(invoice) : null,
+                    transactionStatus: transaction.status === "skipped" ? "skipped" : invoice ? resolveInvoiceVisualStatus(invoice, cardById.get(invoice.creditCardId) ?? null) : null,
                     categoryLabel: getCategoryDisplayLabel(transaction),
                 };
             }),
-        [invoiceById, transactions],
+        [cardById, invoiceById, transactions],
     );
 
     const filteredTransactionSnapshots = useMemo(() => {
@@ -304,15 +295,14 @@ export function StatementContentPanel({
                 invoice,
                 creditCard: cardById.get(invoice.creditCardId) ?? null,
                 openAmount: getInvoiceOpenAmount(invoice),
-                visualStatus: resolveInvoiceVisualStatus(invoice),
+                visualStatus: resolveInvoiceVisualStatus(invoice, cardById.get(invoice.creditCardId) ?? null),
             })),
         [cardById, sortedInvoices],
     );
 
     const invoiceMonthLabel = useMemo(() => {
-        const dueMonthFromInvoice = invoiceSnapshots[0] ? getMonthKeyFromDateValue(invoiceSnapshots[0].invoice.dueDate) : null;
-        return formatMonthLabel(dueMonthFromInvoice ?? shiftMonth(selectedCycleMonth, 1));
-    }, [invoiceSnapshots, selectedCycleMonth]);
+        return formatMonthLabel(selectedMonth);
+    }, [selectedMonth]);
 
     const headerTitle = `${allCardsSelected ? "Faturas" : "Fatura"} de ${invoiceMonthLabel}`;
 
@@ -357,7 +347,7 @@ export function StatementContentPanel({
         })[0];
     }, [allCardsSelected, invoiceSnapshots]);
 
-    const payButtonLabel = payableSnapshot?.visualStatus === "open" ? "Pagar adiantado" : allCardsSelected ? "Pagar faturas" : "Pagar fatura";
+    const payButtonLabel = payableSnapshot?.visualStatus === "open" || payableSnapshot?.visualStatus === "future" ? "Pagar adiantado" : allCardsSelected ? "Pagar faturas" : "Pagar fatura";
     const canCreateCardSpending = cardById.size > 0;
 
     return (
@@ -392,15 +382,28 @@ export function StatementContentPanel({
                 </div>
             </section>
 
-            <div className="relative w-full">
-                <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-white/40" />
-                <input
-                    type="text"
-                    value={searchQuery}
-                    onChange={(event) => setSearchQuery(event.target.value)}
-                    placeholder="Buscar por descricao, beneficiario, categoria, cartao ou tag"
-                    className="w-full rounded-xl border border-white/[0.08] bg-black/25 py-2 pl-9 pr-3 text-sm text-white outline-none transition-colors placeholder:text-white/30 focus:border-white/[0.24] focus:bg-black/40"
-                />
+            <div className="flex items-center gap-2 justify-between">
+                <div className="relative w-full">
+                    <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-white/40" />
+                    <input
+                        type="text"
+                        value={searchQuery}
+                        onChange={(event) => setSearchQuery(event.target.value)}
+                        placeholder="Buscar por descricao, beneficiario, categoria, cartao ou tag"
+                        className="w-full rounded-xl border border-white/[0.08] bg-black/25 py-2 pl-9 pr-3 text-sm text-white outline-none transition-colors placeholder:text-white/30 focus:border-white/[0.24] focus:bg-black/40"
+                    />
+                </div>
+                <div className="flex py-1.5 gap-2">
+                    <button
+                        type="button"
+                        onClick={onCreateCardSpending}
+                        disabled={!canCreateCardSpending}
+                        className="inline-flex truncate cursor-pointer items-center gap-2 rounded-full border border-emerald-300/30 bg-emerald-500/15 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.05em] text-emerald-100 transition-all hover:border-emerald-300/45 hover:bg-emerald-500/20"
+                    >
+                        <Plus size={14} />
+                        Adicionar gasto
+                    </button>
+                </div>
             </div>
 
             <section className="rounded-2xl border border-white/[0.08] bg-[#111111] p-3 shadow-[0_24px_60px_-32px_rgba(0,0,0,0.9)]">
@@ -412,17 +415,7 @@ export function StatementContentPanel({
                 {sortedTransactionSnapshots.length < 1 ? (
                     <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] px-3 py-6 text-center text-sm text-white/55">
                         <p>Nenhuma compra encontrada para {invoiceMonthLabel}.</p>
-                        {canCreateCardSpending ? (
-                            <button
-                                type="button"
-                                onClick={onCreateCardSpending}
-                                className="mt-4 inline-flex items-center justify-center rounded-full border border-emerald-300/30 bg-emerald-500/15 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.06em] text-emerald-100 transition-colors hover:border-emerald-300/45 hover:bg-emerald-500/20"
-                            >
-                                Adicionar gasto nesta fatura
-                            </button>
-                        ) : (
-                            <p className="mt-3 text-xs text-white/40">Cadastre um cartao para lancar gastos em fatura.</p>
-                        )}
+                        {!canCreateCardSpending && <p className="mt-3 text-xs text-white/40">Cadastre um cartao para lancar gastos em fatura.</p>}
                     </div>
                 ) : (
                     <table className="w-full border-separate border-spacing-0 text-sm text-white/85">
@@ -463,7 +456,9 @@ export function StatementContentPanel({
                                                 )}
                                             </span>
                                             {transactionStatus ? (
-                                                <span className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] uppercase tracking-[0.08em] ${TRANSACTION_STATUS_BADGE_CLASS[transactionStatus]}`}>
+                                                <span
+                                                    className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] uppercase tracking-[0.08em] ${TRANSACTION_STATUS_BADGE_CLASS[transactionStatus]}`}
+                                                >
                                                     {TRANSACTION_STATUS_LABELS[transactionStatus]}
                                                 </span>
                                             ) : (

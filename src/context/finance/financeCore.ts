@@ -668,6 +668,27 @@ export function calculateCreditCardInvoiceOpenAmount(invoice: CreditCardInvoice)
     return roundToCents(Math.max(0, invoice.totalAmount - invoice.paidAmount));
 }
 
+export function resolveCreditCardInvoiceStatus(params: {
+    invoiceCycleKey: string;
+    cardClosingDay: number;
+    cardDueDay: number;
+    totalAmount: number;
+    paidAmount: number;
+    referenceDate?: Date;
+}): InvoiceStatus {
+    const { invoiceCycleKey, cardClosingDay, cardDueDay, totalAmount, paidAmount, referenceDate = new Date() } = params;
+    const today = getLocalTodayDate(referenceDate);
+    const currentOpenCycleKey = resolveCreditCardInvoiceCycle(today, cardClosingDay, cardDueDay).cycleKey;
+
+    if (invoiceCycleKey === currentOpenCycleKey) {
+        return "open";
+    }
+
+    const safeTotalAmount = roundToCents(Math.max(0, totalAmount));
+    const safePaidAmount = roundToCents(Math.min(safeTotalAmount, Math.max(0, paidAmount)));
+    return safePaidAmount >= safeTotalAmount && safeTotalAmount > 0 ? "paid" : "open";
+}
+
 export function findDefaultCategoryId(groupType: TransactionGroupType, categories: Category[]): string {
     const desiredType = toCategoryTypeFromGroupType(groupType);
     const categoryById = new Map(categories.map((item) => [item.id, item]));
@@ -2147,7 +2168,18 @@ export function normalizeFinanceSnapshot(rawFinance: unknown, userId: string | n
             const existing = existingInvoicesById.get(invoiceId);
             const totalAmount = roundToCents(invoiceTotalsById.get(invoiceId) ?? 0);
             const paidAmount = roundToCents(Math.min(totalAmount, Math.max(0, existing?.paidAmount ?? 0)));
-            const status: InvoiceStatus = paidAmount >= totalAmount && totalAmount > 0 ? "paid" : "open";
+            const creditCard = creditCardsById.get(meta.creditCardId);
+            const status: InvoiceStatus = creditCard
+                ? resolveCreditCardInvoiceStatus({
+                      invoiceCycleKey: meta.cycleKey,
+                      cardClosingDay: creditCard.closingDay,
+                      cardDueDay: creditCard.dueDay,
+                      totalAmount,
+                      paidAmount,
+                  })
+                : paidAmount >= totalAmount && totalAmount > 0
+                  ? "paid"
+                  : "open";
             const paidAt = status === "paid" ? existing?.paidAt ?? now : null;
 
             const invoice = normalizeCreditCardInvoice(

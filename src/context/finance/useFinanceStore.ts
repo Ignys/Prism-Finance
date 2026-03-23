@@ -45,6 +45,7 @@ import {
     toTransactionList,
     type Wallet,
     parseCreditCardInvoiceId,
+    resolveCreditCardInvoiceStatus,
     resolveCreditCardInvoiceCycle,
     resolveCreditCardInvoiceCycleFromCycleKey,
     SYSTEM_EXPENSE_CARD_INVOICE_CATEGORY_ID,
@@ -383,6 +384,7 @@ function syncCreditCardInvoices(params: {
     const { creditCards, transactionGroups, transactions, existingInvoices } = params;
     const nowIso = new Date().toISOString();
     const creditCardIds = new Set(creditCards.map((card) => card.id));
+    const creditCardById = new Map(creditCards.map((card) => [card.id, card]));
     const groupsById = new Map(transactionGroups.map((group) => [group.id, group]));
     const existingInvoicesById = new Map(
         existingInvoices.filter((invoice) => creditCardIds.has(invoice.creditCardId)).map((invoice) => [invoice.id, invoice]),
@@ -471,7 +473,19 @@ function syncCreditCardInvoices(params: {
             const existing = existingInvoicesById.get(invoiceId);
             const totalAmount = roundToCents(invoiceTotalsById.get(invoiceId) ?? 0);
             const paidAmount = roundToCents(Math.min(totalAmount, Math.max(0, existing?.paidAmount ?? 0)));
-            const status = paidAmount >= totalAmount && totalAmount > 0 ? "paid" : "open";
+            const linkedCard = creditCardById.get(meta.creditCardId);
+            const status =
+                linkedCard
+                    ? resolveCreditCardInvoiceStatus({
+                          invoiceCycleKey: meta.cycleKey,
+                          cardClosingDay: linkedCard.closingDay,
+                          cardDueDay: linkedCard.dueDay,
+                          totalAmount,
+                          paidAmount,
+                      })
+                    : paidAmount >= totalAmount && totalAmount > 0
+                      ? "paid"
+                      : "open";
             const paidAt = status === "paid" ? existing?.paidAt ?? nowIso : null;
 
             const invoice = normalizeCreditCardInvoice(
@@ -1242,7 +1256,17 @@ export function useFinanceStore(): FinanceStoreValue {
                 }
 
                 const nextPaidAmount = roundToCents(Math.min(item.totalAmount, item.paidAmount + safeAmount));
-                const nextStatus = nextPaidAmount >= item.totalAmount && item.totalAmount > 0 ? "paid" : "open";
+                const nextStatus = linkedCard
+                    ? resolveCreditCardInvoiceStatus({
+                          invoiceCycleKey: item.cycleKey,
+                          cardClosingDay: linkedCard.closingDay,
+                          cardDueDay: linkedCard.dueDay,
+                          totalAmount: item.totalAmount,
+                          paidAmount: nextPaidAmount,
+                      })
+                    : nextPaidAmount >= item.totalAmount && item.totalAmount > 0
+                      ? "paid"
+                      : "open";
 
                 return normalizeCreditCardInvoice(
                     {
@@ -2119,7 +2143,18 @@ export function useFinanceStore(): FinanceStoreValue {
                           }
 
                           const nextPaidAmount = roundToCents(Math.max(0, invoice.paidAmount - reversedAmount));
-                          const nextStatus = nextPaidAmount >= invoice.totalAmount && invoice.totalAmount > 0 ? "paid" : "open";
+                          const linkedCard = creditCardsRef.current.find((card) => card.id === invoice.creditCardId) ?? null;
+                          const nextStatus = linkedCard
+                              ? resolveCreditCardInvoiceStatus({
+                                    invoiceCycleKey: invoice.cycleKey,
+                                    cardClosingDay: linkedCard.closingDay,
+                                    cardDueDay: linkedCard.dueDay,
+                                    totalAmount: invoice.totalAmount,
+                                    paidAmount: nextPaidAmount,
+                                })
+                              : nextPaidAmount >= invoice.totalAmount && invoice.totalAmount > 0
+                                ? "paid"
+                                : "open";
 
                           return normalizeCreditCardInvoice(
                               {
