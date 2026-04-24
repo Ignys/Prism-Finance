@@ -17,17 +17,20 @@ import {
     createLedgerEntriesForPaidTransaction,
     DEFAULT_BENEFICIARY_ID,
     DEFAULT_BENEFICIARY_NAME,
+    DEFAULT_PLANNING_STATE,
     DEFAULT_WALLET,
     DEFAULT_WALLET_ID,
     findDefaultCategoryId,
     parseInvoicePaymentNote,
     type FinanceSnapshot,
     type LedgerEntry,
+    type PlanningState,
     normalizeBeneficiary,
     normalizeCategory,
     normalizeCreditCard,
     normalizeCreditCardInvoice,
     normalizeFinanceSnapshot,
+    normalizePlanningState,
     normalizeStoredTransaction,
     normalizeTag,
     normalizeTransactionGroup,
@@ -610,6 +613,7 @@ export function useFinanceStore(): FinanceStoreValue {
     const [storedTransactions, setStoredTransactions] = useState<StoredTransaction[]>([]);
     const [transactionTags, setTransactionTags] = useState<TransactionTag[]>([]);
     const [ledgerEntries, setLedgerEntries] = useState<LedgerEntry[]>([]);
+    const [planning, setPlanning] = useState<PlanningState>(DEFAULT_PLANNING_STATE);
     const [financeLoading, setFinanceLoading] = useState(true);
 
     const walletsRef = useRef(wallets);
@@ -624,6 +628,7 @@ export function useFinanceStore(): FinanceStoreValue {
     const storedTransactionsRef = useRef(storedTransactions);
     const transactionTagsRef = useRef(transactionTags);
     const ledgerEntriesRef = useRef(ledgerEntries);
+    const planningRef = useRef(planning);
 
     useEffect(() => {
         walletsRef.current = wallets;
@@ -673,6 +678,10 @@ export function useFinanceStore(): FinanceStoreValue {
         ledgerEntriesRef.current = ledgerEntries;
     }, [ledgerEntries]);
 
+    useEffect(() => {
+        planningRef.current = planning;
+    }, [planning]);
+
     const setSnapshotState = useCallback((snapshot: FinanceSnapshot) => {
         walletsRef.current = snapshot.wallets;
         creditCardsRef.current = snapshot.creditCards;
@@ -685,6 +694,7 @@ export function useFinanceStore(): FinanceStoreValue {
         storedTransactionsRef.current = snapshot.transactions;
         transactionTagsRef.current = snapshot.transactionTags;
         ledgerEntriesRef.current = snapshot.ledgerEntries;
+        planningRef.current = snapshot.planning;
 
         setWallets(snapshot.wallets);
         setCreditCards(snapshot.creditCards);
@@ -697,6 +707,7 @@ export function useFinanceStore(): FinanceStoreValue {
         setStoredTransactions(snapshot.transactions);
         setTransactionTags(snapshot.transactionTags);
         setLedgerEntries(snapshot.ledgerEntries);
+        setPlanning(snapshot.planning);
     }, []);
 
     const buildSnapshot = useCallback((overrides: Partial<FinanceSnapshot> = {}): FinanceSnapshot => {
@@ -712,6 +723,7 @@ export function useFinanceStore(): FinanceStoreValue {
             overrides.categories ?? categoriesRef.current,
             overrides.tags ?? tagsRef.current,
             overrides.transactionTags ?? transactionTagsRef.current,
+            overrides.planning ?? planningRef.current,
         );
     }, []);
 
@@ -764,6 +776,7 @@ export function useFinanceStore(): FinanceStoreValue {
                     normalizedFinance.snapshot.categories,
                     normalizedFinance.snapshot.tags,
                     hydratedTransactionTags,
+                    normalizedFinance.snapshot.planning,
                 );
                 const rawFavoriteWalletId = isRecord(rawFinance) ? rawFinance.favoriteWalletId : undefined;
                 const normalizedFavoriteWalletId = resolveFavoriteWalletId(rawFavoriteWalletId, snapshot.wallets);
@@ -789,6 +802,7 @@ export function useFinanceStore(): FinanceStoreValue {
                         categories: snapshot.categories,
                         tags: snapshot.tags,
                         transactionTags: snapshot.transactionTags,
+                        planning: snapshot.planning,
                         favoriteWalletId: normalizedFavoriteWalletId,
                     });
                 }
@@ -837,6 +851,7 @@ export function useFinanceStore(): FinanceStoreValue {
                 categories: snapshot.categories,
                 tags: snapshot.tags,
                 transactionTags: snapshot.transactionTags,
+                planning: snapshot.planning,
                 favoriteWalletId: favoriteWalletIdRef.current,
             });
         },
@@ -850,6 +865,19 @@ export function useFinanceStore(): FinanceStoreValue {
             await persistFullSnapshot(normalized);
         },
         [persistFullSnapshot, setSnapshotState, user?.uid],
+    );
+
+    const updatePlanningState = useCallback(
+        async (nextPlanning: PlanningState) => {
+            const normalizedPlanning = normalizePlanningState(nextPlanning);
+            const snapshot = buildSnapshot({ planning: normalizedPlanning });
+            setSnapshotState(snapshot);
+
+            await persistFinanceFields({
+                planning: snapshot.planning,
+            });
+        },
+        [buildSnapshot, persistFinanceFields, setSnapshotState],
     );
 
     const setStartBalance = useCallback(
@@ -2270,6 +2298,7 @@ export function useFinanceStore(): FinanceStoreValue {
             transactionTags,
             ledgerEntries,
             transactions,
+            planning,
             despesas: summary.despesas,
             receitas: summary.receitas,
             balance,
@@ -2284,6 +2313,7 @@ export function useFinanceStore(): FinanceStoreValue {
             deleteTransaction,
             deleteTransactionWithScope,
             updateInvoicePaymentTransaction,
+            updatePlanningState,
             clearTransactions,
             addWallet,
             addBeneficiary,
@@ -2325,6 +2355,7 @@ export function useFinanceStore(): FinanceStoreValue {
             loading,
             markTransactionAsPaid,
             payCreditCardInvoice,
+            planning,
             reorderBeneficiaries,
             reorderCategories,
             reorderTags,
@@ -2345,6 +2376,7 @@ export function useFinanceStore(): FinanceStoreValue {
             transactionTags,
             transactions,
             updateFinance,
+            updatePlanningState,
             user,
             wallets,
         ],

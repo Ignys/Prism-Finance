@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
-import { ArrowDown, ArrowUp, Circle, CreditCard as CreditCardIcon, Pencil, Plus, Search, Trash2 } from "lucide-react";
-import { type Beneficiary, type CreditCard, type CreditCardInvoice, type Transaction, useFinanceBeneficiaries } from "../../../context/FinanceContext";
+import { ArrowDown, ArrowUp, Circle, CreditCard as CreditCardIcon, Pencil, Plus, Repeat2, Search, Trash2 } from "lucide-react";
+import { type Beneficiary, type CreditCard, type CreditCardInvoice, type Transaction, useFinanceBeneficiaries, useFinanceTransactionGroups } from "../../../context/FinanceContext";
 import { normalizeComparisonText } from "../../../context/finance/helpers";
 import { getCategoryIconComponent } from "../../../lib/categoryIcons";
 import { WalletAvatar } from "../../common/WalletAvatar";
@@ -54,6 +54,28 @@ interface InvoiceSnapshot {
     creditCard: CreditCard | null;
     openAmount: number;
     visualStatus: StatementInvoiceVisualStatus;
+}
+
+type FinanceTransactionGroup = ReturnType<typeof useFinanceTransactionGroups>[number];
+
+type TransactionSeriesIndicator = { kind: "installment"; label: string } | { kind: "recurring" } | null;
+
+function resolveTransactionSeriesIndicator(transaction: Transaction, group: FinanceTransactionGroup | undefined): TransactionSeriesIndicator {
+    const installmentNumber = transaction.installmentNumber;
+    const installmentCount = group?.installmentCount;
+
+    if (Number.isInteger(installmentNumber) && Number.isInteger(installmentCount) && Number(installmentNumber) > 0 && Number(installmentCount) >= 2) {
+        return {
+            kind: "installment",
+            label: `(${Number(installmentNumber)}/${Number(installmentCount)})`,
+        };
+    }
+
+    if (group?.transactionMode === "recurring") {
+        return { kind: "recurring" };
+    }
+
+    return null;
 }
 
 const STATEMENT_STATUS_SORT_ORDER: Record<StatementInvoiceVisualStatus, number> = {
@@ -194,6 +216,7 @@ export function StatementContentPanel({
     onDelete,
 }: StatementContentPanelProps) {
     const beneficiaries = useFinanceBeneficiaries();
+    const transactionGroups = useFinanceTransactionGroups();
     const sortedInvoices = [...invoices].sort(compareInvoicesByDueDate);
     const [sortMode, setSortMode] = useState<StatementSortMode>("date-desc");
     const [searchQuery, setSearchQuery] = useState("");
@@ -205,6 +228,14 @@ export function StatementContentPanel({
         });
         return map;
     }, [beneficiaries]);
+
+    const transactionGroupsById = useMemo(() => {
+        const map = new Map<string, FinanceTransactionGroup>();
+        transactionGroups.forEach((group) => {
+            map.set(group.id, group);
+        });
+        return map;
+    }, [transactionGroups]);
 
     const transactionSnapshots = useMemo<StatementTransactionSnapshot[]>(
         () =>
@@ -433,6 +464,8 @@ export function StatementContentPanel({
                         </thead>
                         <tbody>
                             {sortedTransactionSnapshots.map(({ transaction, transactionStatus, categoryLabel }) => {
+                                const group = transactionGroupsById.get(transaction.groupId);
+                                const seriesIndicator = resolveTransactionSeriesIndicator(transaction, group);
                                 const creditCard = transaction.creditCardId ? cardById.get(transaction.creditCardId) : null;
                                 const CategoryIcon = getCategoryIconComponent(transaction.category.icon, transaction.category.type);
                                 const categoryColor = transaction.category.color ?? "#9CA3AF";
@@ -466,7 +499,17 @@ export function StatementContentPanel({
                                             )}
                                         </td>
                                         <td className="border-b border-white/[0.04] px-3 py-2.5 text-white/70">{formatTransactionDate(transaction.date, "dd/MM/yyyy")}</td>
-                                        <td className="border-b border-white/[0.04] px-3 py-2.5 text-[14px] font-medium text-white">{transaction.description || "Sem descricao"}</td>
+                                        <td className="border-b border-white/[0.04] px-3 py-2.5 text-[14px] font-medium text-white">
+                                            <div className="inline-flex items-center gap-1.5">
+                                                <span>{transaction.description || "Sem descricao"}</span>
+                                                {seriesIndicator?.kind === "installment" && <span className="text-xs text-white/55">{seriesIndicator.label}</span>}
+                                                {seriesIndicator?.kind === "recurring" && (
+                                                    <span className="inline-flex text-white/55" role="img" title="Transacao recorrente" aria-label="Transacao recorrente">
+                                                        <Repeat2 size={13} />
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </td>
                                         <td className="border-b border-white/[0.04] px-3 py-2.5 text-white/70">
                                             <div className="flex items-center gap-2">
                                                 <span

@@ -26,7 +26,7 @@ export function RegistryTagsSection() {
     };
 
     return (
-        <section className="rounded-xl border border-white/[0.08] bg-[#111111] p-4">
+        <section className="flex h-full min-h-0 flex-col rounded-xl border border-white/[0.08] bg-[#111111] p-4">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
                     <Tag size={18} className="text-white/80" />
@@ -51,17 +51,19 @@ export function RegistryTagsSection() {
                 </div>
             </div>
 
-            {orderedTags.length < 1 ? (
-                <div className="rounded-lg border border-white/6 bg-white/[0.02] p-3 text-sm text-white/45">Nenhuma tag para os filtros atuais.</div>
-            ) : (
-                <Reorder.Group axis="y" values={orderedTags} onReorder={setOrderedTags} className="space-y-2">
-                    {orderedTags.map((tag) => (
-                        <Reorder.Item key={tag.id} value={tag} onDragEnd={commitOrder} className="list-none">
-                            <TagCard tag={tag} onEdit={() => openModal(<AddTag mode="edit" tagId={tag.id} />)} />
-                        </Reorder.Item>
-                    ))}
-                </Reorder.Group>
-            )}
+            <div className="elegant-scrollbar min-h-0 flex-1 overflow-y-auto overflow-x-hidden pr-2">
+                {orderedTags.length < 1 ? (
+                    <div className="rounded-lg border border-white/6 bg-white/[0.02] p-3 text-sm text-white/45">Nenhuma tag para os filtros atuais.</div>
+                ) : (
+                    <Reorder.Group axis="y" values={orderedTags} onReorder={setOrderedTags} className="space-y-2">
+                        {orderedTags.map((tag) => (
+                            <Reorder.Item key={tag.id} value={tag} onDragEnd={commitOrder} className="list-none">
+                                <TagCard tag={tag} onEdit={() => openModal(<AddTag mode="edit" tagId={tag.id} />)} />
+                            </Reorder.Item>
+                        ))}
+                    </Reorder.Group>
+                )}
+            </div>
         </section>
     );
 }

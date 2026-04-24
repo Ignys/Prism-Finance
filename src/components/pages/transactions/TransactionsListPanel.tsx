@@ -1,6 +1,6 @@
 import { useMemo } from "react";
-import { ArrowDown, ArrowUp, Circle, Check, Pencil, Trash2 } from "lucide-react";
-import { type Beneficiary, type Transaction, type Wallet, useFinanceBeneficiaries } from "../../../context/FinanceContext";
+import { ArrowDown, ArrowUp, Circle, Check, Pencil, Repeat2, Trash2 } from "lucide-react";
+import { type Beneficiary, type Transaction, type Wallet, useFinanceBeneficiaries, useFinanceTransactionGroups } from "../../../context/FinanceContext";
 import { getCategoryIconComponent } from "../../../lib/categoryIcons";
 import { WalletAvatar } from "../../common/WalletAvatar";
 import { formatCurrencyBRL, formatTransactionDate, getTransactionTypeMeta, resolveTransactionWallet } from "../../transactions/transactionView";
@@ -42,6 +42,7 @@ interface TransactionsTableProps {
     activeTab: TransactionsTabKey;
     wallets: Wallet[];
     beneficiariesById: Map<string, Beneficiary>;
+    transactionGroupsById: Map<string, FinanceTransactionGroup>;
     sortMode: SortMode;
     onTabChange: (tab: TransactionsTabKey) => void;
     onSortModeChange: (sortMode: SortMode) => void;
@@ -56,6 +57,28 @@ interface SortableHeaderProps {
     sortMode: SortMode;
     align?: "left" | "right";
     onSortModeChange: (sortMode: SortMode) => void;
+}
+
+type FinanceTransactionGroup = ReturnType<typeof useFinanceTransactionGroups>[number];
+
+type TransactionSeriesIndicator = { kind: "installment"; label: string } | { kind: "recurring" } | null;
+
+function resolveTransactionSeriesIndicator(transaction: Transaction, group: FinanceTransactionGroup | undefined): TransactionSeriesIndicator {
+    const installmentNumber = transaction.installmentNumber;
+    const installmentCount = group?.installmentCount;
+
+    if (Number.isInteger(installmentNumber) && Number.isInteger(installmentCount) && Number(installmentNumber) > 0 && Number(installmentCount) >= 2) {
+        return {
+            kind: "installment",
+            label: `(${Number(installmentNumber)}/${Number(installmentCount)})`,
+        };
+    }
+
+    if (group?.transactionMode === "recurring") {
+        return { kind: "recurring" };
+    }
+
+    return null;
 }
 
 function getAriaSort(field: SortField, sortMode: SortMode): "ascending" | "descending" | "none" {
@@ -107,20 +130,32 @@ function getCategoryDisplayLabel(transaction: Transaction): string {
     return subcategoryLabel || categoryLabel;
 }
 
-function TransactionsTable({ tabs, activeTab, wallets, beneficiariesById, sortMode, onTabChange, onSortModeChange, onEdit, onConfirmPayment, onDelete }: TransactionsTableProps) {
+function TransactionsTable({
+    tabs,
+    activeTab,
+    wallets,
+    beneficiariesById,
+    transactionGroupsById,
+    sortMode,
+    onTabChange,
+    onSortModeChange,
+    onEdit,
+    onConfirmPayment,
+    onDelete,
+}: TransactionsTableProps) {
     const activeTabConfig = tabs.find((tab) => tab.key === activeTab) ?? tabs[0];
     const transactions = activeTabConfig?.transactions ?? [];
 
     return (
         <section className="rounded-2xl border border-white/[0.08] bg-[#111111] p-3 shadow-[0_24px_60px_-32px_rgba(0,0,0,0.9)]">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-                <div className="flex items-end gap-1 overflow-x-auto pb-1">
+                <div className="flex items-end gap-2 overflow-x-auto pb-1">
                     {tabs.map((tab) => (
                         <button
                             key={tab.key}
                             type="button"
                             onClick={() => onTabChange(tab.key)}
-                            className={`rounded-t-xl border px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.08em] transition-colors ${
+                            className={`rounded-full border px-5 py-2 text-xs font-base uppercase tracking-[0.08em] transition-colors ${
                                 activeTab === tab.key
                                     ? "border-white/[0.24] bg-white/[0.08] text-white"
                                     : "border-white/[0.1] bg-white/[0.03] text-white/60 hover:border-white/[0.2] hover:text-white/85"
@@ -152,6 +187,8 @@ function TransactionsTable({ tabs, activeTab, wallets, beneficiariesById, sortMo
                         </thead>
                         <tbody>
                             {transactions.map((transaction) => {
+                                const group = transactionGroupsById.get(transaction.groupId);
+                                const seriesIndicator = resolveTransactionSeriesIndicator(transaction, group);
                                 const wallet = resolveTransactionWallet(wallets, transaction.inWallet);
                                 const typeMeta = getTransactionTypeMeta(transaction.type);
                                 const CategoryIcon = getCategoryIconComponent(transaction.category.icon, transaction.category.type);
@@ -174,9 +211,19 @@ function TransactionsTable({ tabs, activeTab, wallets, beneficiariesById, sortMo
                                             >
                                                 {STATUS_LABELS[transaction.status]}
                                             </span>
+                                            {seriesIndicator?.kind === "installment" && <span className="text-xs text-white/55">{seriesIndicator.label}</span>}
+                                            {seriesIndicator?.kind === "recurring" && (
+                                                <span className={`inline-flex`} role="img" title="Transacao recorrente" aria-label="Transacao recorrente">
+                                                    <Repeat2 strokeWidth={2} size={15} />
+                                                </span>
+                                            )}
                                         </td>
                                         <td className="border-b border-white/[0.04] px-3 py-2.5 text-white/70">{formatTransactionDate(transaction.date, "dd/MM/yyyy")}</td>
-                                        <td className="border-b border-white/[0.04] px-3 py-2.5 text-[14px] font-medium text-white">{transaction.description || "Sem descricao"}</td>
+                                        <td className="border-b border-white/[0.04] px-3 py-2.5 text-[14px] font-medium text-white">
+                                            <div className="inline-flex items-center gap-1.5">
+                                                <span>{transaction.description || "Sem descricao"}</span>
+                                            </div>
+                                        </td>
                                         <td className="border-b border-white/[0.04] px-3 py-2.5 text-white/70">
                                             <div className="flex items-center gap-2">
                                                 <span
@@ -281,6 +328,7 @@ export function TransactionsListPanel({
     onDelete,
 }: TransactionsListPanelProps) {
     const beneficiaries = useFinanceBeneficiaries();
+    const transactionGroups = useFinanceTransactionGroups();
 
     const beneficiariesById = useMemo(() => {
         const map = new Map<string, Beneficiary>();
@@ -289,6 +337,14 @@ export function TransactionsListPanel({
         });
         return map;
     }, [beneficiaries]);
+
+    const transactionGroupsById = useMemo(() => {
+        const map = new Map<string, FinanceTransactionGroup>();
+        transactionGroups.forEach((group) => {
+            map.set(group.id, group);
+        });
+        return map;
+    }, [transactionGroups]);
 
     const tabs = useMemo<TabConfig[]>(
         () => [
@@ -306,7 +362,7 @@ export function TransactionsListPanel({
             },
             {
                 key: "transfer",
-                label: "Transferencias",
+                label: "Transferências",
                 transactions: transferTransactions,
                 emptyMessage: "Nenhuma transferencia neste mes para os filtros selecionados.",
             },
@@ -321,6 +377,7 @@ export function TransactionsListPanel({
                 activeTab={activeTab}
                 wallets={wallets}
                 beneficiariesById={beneficiariesById}
+                transactionGroupsById={transactionGroupsById}
                 sortMode={sortMode}
                 onTabChange={onTabChange}
                 onSortModeChange={onSortModeChange}

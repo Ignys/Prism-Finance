@@ -2,6 +2,7 @@ export {
     normalizeCreditCard,
     normalizeCreditCardInvoice,
     findDefaultCategoryId,
+    normalizePlanningState,
     normalizeBeneficiary,
     normalizeCategory,
     normalizeLedgerEntry,

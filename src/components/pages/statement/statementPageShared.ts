@@ -1,5 +1,5 @@
 import { type CreditCard, type CreditCardInvoice, type Transaction } from "../../../context/FinanceContext";
-import { resolveCreditCardInvoiceCycle } from "../../../context/financeTypes";
+import { getMonthKeyFromDateValue, resolveCreditCardInvoiceCycle } from "../../../context/financeTypes";
 import { getLocalTodayDate } from "../../../lib/localDate";
 
 export type StatementInvoiceVisualStatus = "paid" | "overdue" | "closed" | "open" | "future";
@@ -186,6 +186,18 @@ export function compareInvoicesByDueDate(a: CreditCardInvoice, b: CreditCardInvo
     }
 
     return a.dueDate.localeCompare(b.dueDate);
+}
+
+export function resolveDefaultStatementMonth(invoices: CreditCardInvoice[], fallbackMonth = getCurrentMonthKey()): string {
+    const firstOpenInvoice = [...invoices]
+        .filter((invoice) => invoice.status !== "paid" && getInvoiceOpenAmount(invoice) > 0)
+        .sort(compareInvoicesByDueDate)[0];
+
+    if (!firstOpenInvoice) {
+        return fallbackMonth;
+    }
+
+    return getMonthKeyFromDateValue(firstOpenInvoice.dueDate);
 }
 
 function getFocusedInvoice(entries: StatementInvoiceSnapshot[]): StatementInvoiceSnapshot | null {

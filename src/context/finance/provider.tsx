@@ -9,6 +9,7 @@ import {
     FinanceFavoriteWalletContext,
     FinanceFavoriteCreditCardContext,
     FinanceLedgerEntriesContext,
+    FinancePlanningContext,
     FinanceSessionContext,
     FinanceStoredTransactionsContext,
     FinanceSummaryContext,
@@ -54,6 +55,7 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
             deleteTransaction: store.deleteTransaction,
             deleteTransactionWithScope: store.deleteTransactionWithScope,
             updateInvoicePaymentTransaction: store.updateInvoicePaymentTransaction,
+            updatePlanningState: store.updatePlanningState,
             clearTransactions: store.clearTransactions,
             addWallet: store.addWallet,
             addBeneficiary: store.addBeneficiary,
@@ -82,6 +84,7 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
             store.deleteTransaction,
             store.deleteTransactionWithScope,
             store.updateInvoicePaymentTransaction,
+            store.updatePlanningState,
             store.markTransactionAsPaid,
             store.reorderBeneficiaries,
             store.reorderCategories,
@@ -117,9 +120,11 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
                                                     <FinanceTransactionTagsContext.Provider value={store.transactionTags}>
                                                         <FinanceLedgerEntriesContext.Provider value={store.ledgerEntries}>
                                                             <FinanceTransactionsContext.Provider value={store.transactions}>
-                                                                <FinanceSummaryContext.Provider value={summaryValue}>
-                                                                    <FinanceActionsContext.Provider value={actionsValue}>{children}</FinanceActionsContext.Provider>
-                                                                </FinanceSummaryContext.Provider>
+                                                                <FinancePlanningContext.Provider value={store.planning}>
+                                                                    <FinanceSummaryContext.Provider value={summaryValue}>
+                                                                        <FinanceActionsContext.Provider value={actionsValue}>{children}</FinanceActionsContext.Provider>
+                                                                    </FinanceSummaryContext.Provider>
+                                                                </FinancePlanningContext.Provider>
                                                             </FinanceTransactionsContext.Provider>
                                                         </FinanceLedgerEntriesContext.Provider>
                                                     </FinanceTransactionTagsContext.Provider>

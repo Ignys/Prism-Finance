@@ -6,16 +6,15 @@ import { RegistryTagsSection } from "./registry/RegistryTagsSection";
 export function RegistryPage() {
     return (
         <AuthShell>
-            <div className="pt-1 flex justify-center px-4 pb-8 md:px-6">
-                <section className="w-full max-w-5/6 space-y-3">
+            <div className="flex h-[calc(95vh-5rem)] justify-center overflow-hidden px-4 pb-6 pt-1 md:px-6">
+                <section className="flex h-full w-full max-w-5/6 flex-col space-y-3 overflow-hidden">
                     <div className="rounded-xl text-left">
                         <div className="flex flex-wrap items-center justify-between gap-3">
                             <h1 className="text-2xl font-semibold text-white">Cadastros</h1>
                             <p className="text-xs uppercase tracking-[0.14em] text-white/40">Categorias & Beneficiários & Tags</p>
                         </div>
                     </div>
-
-                    <div className="grid grid-cols-[2fr_1fr] gap-4">
+                    <div className="grid flex-1 min-h-0 grid-cols-[2fr_1fr] grid-rows-2 gap-4 overflow-hidden">
                         <RegistryCategoriesSection />
                         <RegistryBeneficiariesSection />
                         <RegistryTagsSection />

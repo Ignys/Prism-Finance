@@ -36,7 +36,7 @@ export function RegistryBeneficiariesSection() {
     };
 
     return (
-        <section className="rounded-xl border border-white/[0.08] bg-[#111111] p-4">
+        <section className="flex h-full min-h-0 flex-col rounded-xl border border-white/[0.08] bg-[#111111] p-4">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
                     <UserRound size={18} className="text-white/80" />
@@ -61,17 +61,19 @@ export function RegistryBeneficiariesSection() {
                 </div>
             </div>
 
-            {orderedBeneficiaries.length < 1 ? (
-                <div className="rounded-lg border border-white/6 bg-white/[0.02] p-3 text-sm text-white/45">Nenhum beneficiario para os filtros atuais.</div>
-            ) : (
-                <Reorder.Group axis="y" values={orderedBeneficiaries} onReorder={setOrderedBeneficiaries} className="space-y-2">
-                    {orderedBeneficiaries.map((beneficiary) => (
-                        <Reorder.Item key={beneficiary.id} value={beneficiary} onDragEnd={commitOrder} className="list-none">
-                            <BeneficiaryCard beneficiary={beneficiary} onEdit={() => openModal(<AddBeneficiary mode="edit" beneficiaryId={beneficiary.id} />)} />
-                        </Reorder.Item>
-                    ))}
-                </Reorder.Group>
-            )}
+            <div className="elegant-scrollbar min-h-0 flex-1 overflow-y-auto overflow-x-hidden pr-2">
+                {orderedBeneficiaries.length < 1 ? (
+                    <div className="rounded-lg border border-white/6 bg-white/[0.02] p-3 text-sm text-white/45">Nenhum beneficiario para os filtros atuais.</div>
+                ) : (
+                    <Reorder.Group axis="y" values={orderedBeneficiaries} onReorder={setOrderedBeneficiaries} className="space-y-2">
+                        {orderedBeneficiaries.map((beneficiary) => (
+                            <Reorder.Item key={beneficiary.id} value={beneficiary} onDragEnd={commitOrder} className="list-none">
+                                <BeneficiaryCard beneficiary={beneficiary} onEdit={() => openModal(<AddBeneficiary mode="edit" beneficiaryId={beneficiary.id} />)} />
+                            </Reorder.Item>
+                        ))}
+                    </Reorder.Group>
+                )}
+            </div>
         </section>
     );
 }

@@ -1,6 +1,6 @@
 import { lazy, Suspense, useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { ArrowLeftRight, FolderKanban, Home, ReceiptText, Wallet } from "lucide-react";
+import { ArrowLeftRight, CalendarRange, FolderKanban, Home, ReceiptText, Wallet } from "lucide-react";
 import {
     type Category,
     type TransactionDraft,
@@ -30,6 +30,7 @@ const NAV_ITEMS: { label: string; page: AppPage; icon: React.ReactNode }[] = [
     { label: "Início", page: "home", icon: <Home size={iconSize} /> },
     { label: "Carteiras", page: "balance", icon: <Wallet size={iconSize} /> },
     { label: "Transações", page: "transactions", icon: <ArrowLeftRight size={iconSize} /> },
+    { label: "Planejamentos", page: "planning", icon: <CalendarRange size={iconSize} /> },
     { label: "Fatura", page: "statement", icon: <ReceiptText size={iconSize} /> },
     { label: "Cadastros", page: "registry", icon: <FolderKanban size={iconSize} /> },
 ];
@@ -309,7 +310,7 @@ export function Header() {
                                 {!isBalance ? (
                                     <div className="group relative flex cursor-pointer items-center gap-2 rounded-[9px] border border-transparent px-5 py-1.5 transition-all duration-200 hover:border-white/[0.08] hover:bg-white/[0.05]">
                                         <div className="flex flex-col gap-px transition-opacity duration-150 group-hover:opacity-0">
-                                            <span className="whitespace-nowrap text-[12px] font-light uppercase tracking-[0.2em] text-white/30">{label}</span>
+                                            <span className="whitespace-nowrap text-[12px] font-light uppercase tracking-[0.2em] text-white/30 text-start">{label}</span>
                                             <span className={`whitespace-nowrap text-[15px] font-normal ${amountColor}`} style={{ fontFamily: "'Azeret Mono', monospace" }}>
                                                 R$ {amount.toFixed(2)}
                                             </span>
@@ -331,7 +332,7 @@ export function Header() {
                                 ) : (
                                     <div className="flex items-center gap-2 rounded-[9px] border border-transparent px-5 py-1.5">
                                         <div className="flex flex-col gap-px">
-                                            <span className="whitespace-nowrap text-[12px] font-light uppercase tracking-[0.2em] text-white/30">{label}</span>
+                                            <span className="whitespace-nowrap text-[12px] font-light uppercase tracking-[0.2em] text-white/30 text-start">{label}</span>
                                             <span className={`whitespace-nowrap text-[15px] font-normal ${amountColor}`} style={{ fontFamily: "'Azeret Mono', monospace" }}>
                                                 R$ {amount.toFixed(2)}
                                             </span>
@@ -344,7 +345,7 @@ export function Header() {
                     <div className="mx-0.5 h-5 w-px bg-white/[0.06]" />
                     <div className="group relative flex cursor-pointer items-center gap-2 rounded-[9px] border border-transparent px-5 py-1.5 transition-all duration-200 hover:border-white/[0.08] hover:bg-white/[0.05]">
                         <div className="flex flex-col gap-px transition-opacity duration-150 group-hover:opacity-0">
-                            <span className="whitespace-nowrap text-[12px] font-light uppercase tracking-[0.2em] text-white/30">Faturas</span>
+                            <span className="whitespace-nowrap text-[12px] font-light uppercase tracking-[0.2em] text-white/30 text-start">Faturas</span>
                             <span className="whitespace-nowrap text-[15px] font-normal text-white/85" style={{ fontFamily: "'Azeret Mono', monospace" }}>
                                 R$ {pendingInvoicesAmount.toFixed(2)}
                             </span>

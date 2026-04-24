@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
     type CreditCard,
     type CreditCardInvoice,
@@ -6,6 +6,7 @@ import {
     useFinanceCreditCardInvoices,
     useFinanceCreditCards,
     useFinanceActions,
+    useFinanceSession,
     useFinanceTransactions,
 } from "../../context/FinanceContext";
 import { buildCreditCardInvoiceId, getMonthKeyFromDateValue, resolveCreditCardInvoiceCycleFromCycleKey } from "../../context/financeTypes";
@@ -22,6 +23,7 @@ import {
     buildStatementSummary,
     compareInvoicesByDueDate,
     INITIAL_STATEMENT_FILTER_STATE,
+    resolveDefaultStatementMonth,
     shiftMonth,
     type StatementFilterState,
 } from "./statement/statementPageShared";
@@ -32,23 +34,43 @@ export function StatementPage() {
     const creditCards = useFinanceCreditCards();
     const creditCardInvoices = useFinanceCreditCardInvoices();
     const favoriteCreditCardId = useFinanceFavoriteCreditCard();
+    const { loading: sessionLoading } = useFinanceSession();
     const { deleteTransaction } = useFinanceActions();
     const { openModal } = useModal();
     const { consumePendingNavigation } = usePage();
     const [filters, setFilters] = useState<StatementFilterState>(INITIAL_STATEMENT_FILTER_STATE);
+    const hasResolvedEntryFiltersRef = useRef(false);
 
     useEffect(() => {
-        const pendingNavigation = consumePendingNavigation();
-        if (pendingNavigation?.page !== "statement") {
+        if (hasResolvedEntryFiltersRef.current) {
             return;
         }
 
+        const pendingNavigation = consumePendingNavigation();
+        if (pendingNavigation?.page === "statement") {
+            hasResolvedEntryFiltersRef.current = true;
+
+            setFilters((current) => ({
+                ...current,
+                selectedCardId: pendingNavigation.selectedCardId,
+                selectedMonth: pendingNavigation.selectedMonth,
+            }));
+
+            return;
+        }
+
+        if (sessionLoading) {
+            return;
+        }
+
+        hasResolvedEntryFiltersRef.current = true;
+        const defaultOpenMonth = resolveDefaultStatementMonth(creditCardInvoices, INITIAL_STATEMENT_FILTER_STATE.selectedMonth);
+
         setFilters((current) => ({
             ...current,
-            selectedCardId: pendingNavigation.selectedCardId,
-            selectedMonth: pendingNavigation.selectedMonth,
+            selectedMonth: defaultOpenMonth,
         }));
-    }, [consumePendingNavigation]);
+    }, [consumePendingNavigation, creditCardInvoices, sessionLoading]);
 
     const { selectedMonth: selectedDueMonth, selectedCardId } = filters;
 

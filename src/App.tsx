@@ -9,6 +9,7 @@ import "./lib/chart";
 const LoginPage = lazy(() => import("./components/pages/Login").then((module) => ({ default: module.LoginPage })));
 const HomePage = lazy(() => import("./components/pages/Home").then((module) => ({ default: module.HomePage })));
 const BalancePage = lazy(() => import("./components/pages/Balance").then((module) => ({ default: module.BalancePage })));
+const PlanningPage = lazy(() => import("./components/pages/Planning").then((module) => ({ default: module.PlanningPage })));
 const StatementPage = lazy(() => import("./components/pages/Statement").then((module) => ({ default: module.StatementPage })));
 const RegistryPage = lazy(() => import("./components/pages/Registry").then((module) => ({ default: module.RegistryPage })));
 const TransactionsPage = lazy(() => import("./components/pages/TransactionsPage").then((module) => ({ default: module.TransactionsPage })));
@@ -49,6 +50,7 @@ function MainApp() {
 
     if (currentPage === "transactions") page = <TransactionsPage />;
     if (currentPage === "balance") page = <BalancePage />;
+    if (currentPage === "planning") page = <PlanningPage />;
     if (currentPage === "statement") page = <StatementPage />;
     if (currentPage === "registry" || currentPage === "beneficiaries" || currentPage === "categories" || currentPage === "tags") page = <RegistryPage />;
 

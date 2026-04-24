@@ -6,6 +6,7 @@ import type {
     CreditCardInvoice,
     FinanceSnapshot,
     LedgerEntry,
+    PlanningState,
     StoredTransaction,
     Tag,
     Transaction,
@@ -59,6 +60,7 @@ export interface FinanceActionsValue {
     deleteTransaction: (transaction: Transaction) => Promise<void>;
     deleteTransactionWithScope: (transaction: Transaction, scope?: TransactionSeriesScope) => Promise<void>;
     updateInvoicePaymentTransaction: (draft: UpdateInvoicePaymentTransactionDraft) => Promise<void>;
+    updatePlanningState: (planning: PlanningState) => Promise<void>;
     clearTransactions: () => Promise<void>;
     addWallet: (newWallet: Wallet) => Promise<void>;
     addBeneficiary: (newBeneficiary: Beneficiary) => Promise<void>;
@@ -90,6 +92,7 @@ export interface FinanceContextType extends FinanceActionsValue {
     categories: Category[];
     tags: Tag[];
     transactions: Transaction[];
+    planning: PlanningState;
     despesas: number;
     receitas: number;
     balance: number;
@@ -108,6 +111,7 @@ export interface PersistFields {
     creditCards?: CreditCard[];
     creditCardInvoices?: CreditCardInvoice[];
     favoriteCreditCardId?: string | null;
+    planning?: PlanningState;
 }
 
 export interface FinanceStoreValue extends FinanceActionsValue {
@@ -126,6 +130,7 @@ export interface FinanceStoreValue extends FinanceActionsValue {
     transactionTags: TransactionTag[];
     ledgerEntries: LedgerEntry[];
     transactions: Transaction[];
+    planning: PlanningState;
     despesas: number;
     receitas: number;
     balance: number;

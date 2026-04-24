@@ -1,52 +1,8 @@
-import { ChevronLeft, ChevronRight, GalleryVerticalEnd } from "lucide-react";
+import { GalleryVerticalEnd } from "lucide-react";
 import type { CreditCard } from "../../../context/FinanceContext";
+import { StatementMonthSelector } from "../../common/StatementMonthSelector";
 import { WalletAvatar } from "../../common/WalletAvatar";
-import { shiftMonth } from "./statementPageShared";
 import { usePage } from "../../../context/PageContext";
-
-interface StatementMonthSelectorProps {
-    selectedMonth: string;
-    onMonthChange: (value: string) => void;
-}
-
-function StatementMonthSelector({ selectedMonth, onMonthChange }: StatementMonthSelectorProps) {
-    return (
-        <div className="inline-flex items-center gap-1 rounded-full border border-white/[0.12] bg-neutral-900 px-1 py-1">
-            <button
-                type="button"
-                onClick={() => onMonthChange(shiftMonth(selectedMonth, -1))}
-                className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-transparent text-white/80 transition-colors hover:border-white/[0.16] hover:bg-white/[0.06] hover:text-white"
-                aria-label="Mes anterior"
-                title="Mes anterior"
-            >
-                <ChevronLeft size={16} />
-            </button>
-            <label htmlFor="statement-month-selector" className="sr-only">
-                Mes e ano de vencimento da fatura
-            </label>
-            <input
-                id="statement-month-selector"
-                type="month"
-                value={selectedMonth}
-                onChange={(event) => {
-                    if (event.target.value) {
-                        onMonthChange(event.target.value);
-                    }
-                }}
-                className="rounded-full border border-white/[0.08] bg-black/25 px-3 py-1.5 text-sm text-white outline-none transition-colors focus:border-white/[0.24] [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:invert"
-            />
-            <button
-                type="button"
-                onClick={() => onMonthChange(shiftMonth(selectedMonth, 1))}
-                className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-transparent text-white/80 transition-colors hover:border-white/[0.16] hover:bg-white/[0.06] hover:text-white"
-                aria-label="Proximo mes"
-                title="Proximo mes"
-            >
-                <ChevronRight size={16} />
-            </button>
-        </div>
-    );
-}
 
 interface StatementFiltersPanelProps {
     selectedMonth: string;
@@ -59,8 +15,8 @@ interface StatementFiltersPanelProps {
 }
 
 export function StatementFiltersPanel({ selectedMonth, selectedCardId, selectedCardName: _selectedCardName, creditCards, openInMonth: _openInMonth, onMonthChange, onCardChange }: StatementFiltersPanelProps) {
-    const { goToPage } = usePage()
-    
+    const { goToPage } = usePage();
+
     return (
         <section className="pt-1">
             <div className="relative flex flex-col gap-4">
@@ -68,7 +24,7 @@ export function StatementFiltersPanel({ selectedMonth, selectedCardId, selectedC
                     <div className="text-left">
                         <h1 className="text-2xl font-semibold text-white">Faturas</h1>
                     </div>
-                    <StatementMonthSelector selectedMonth={selectedMonth} onMonthChange={onMonthChange} />
+                    <StatementMonthSelector selectedMonth={selectedMonth} onMonthChange={onMonthChange} ariaLabel="Selecionar mes e ano de vencimento da fatura" />
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">

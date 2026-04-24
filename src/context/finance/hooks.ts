@@ -8,6 +8,10 @@ import {
     type FinanceSnapshot,
     type InvoiceStatus,
     type PaymentMethod,
+    type PlanningGoal,
+    type PlanningRevenueOverride,
+    type PlanningSimulatedExpense,
+    type PlanningState,
     type ResolvedTransactionCategory,
     type Tag,
     type Transaction,
@@ -29,6 +33,7 @@ import {
     FinanceFavoriteWalletContext,
     FinanceFavoriteCreditCardContext,
     FinanceLedgerEntriesContext,
+    FinancePlanningContext,
     FinanceSessionContext,
     FinanceStoredTransactionsContext,
     FinanceSummaryContext,
@@ -49,6 +54,10 @@ export type {
     FinanceSnapshot,
     InvoiceStatus,
     PaymentMethod,
+    PlanningGoal,
+    PlanningRevenueOverride,
+    PlanningSimulatedExpense,
+    PlanningState,
     ResolvedTransactionCategory,
     Tag,
     Transaction,
@@ -118,6 +127,10 @@ export function useFinanceTransactions() {
     return useRequiredContext(FinanceTransactionsContext, "useFinanceTransactions");
 }
 
+export function useFinancePlanning() {
+    return useRequiredContext(FinancePlanningContext, "useFinancePlanning");
+}
+
 export function useFinanceSummary() {
     return useRequiredContext(FinanceSummaryContext, "useFinanceSummary");
 }
@@ -141,6 +154,7 @@ export function useFinance(): FinanceContextType {
     const transactionTags = useFinanceTransactionTags();
     const ledgerEntries = useFinanceLedgerEntries();
     const transactions = useFinanceTransactions();
+    const planning = useFinancePlanning();
     const { despesas, receitas, balance } = useFinanceSummary();
     const actions = useFinanceActions();
 
@@ -160,8 +174,9 @@ export function useFinance(): FinanceContextType {
             categories,
             tags,
             transactionTags,
+            planning,
         );
-    }, [beneficiaries, categories, creditCardInvoices, creditCards, favoriteCreditCardId, ledgerEntries, storedTransactions, tags, transactionGroups, transactionTags, user, wallets]);
+    }, [beneficiaries, categories, creditCardInvoices, creditCards, favoriteCreditCardId, ledgerEntries, planning, storedTransactions, tags, transactionGroups, transactionTags, user, wallets]);
 
     return useMemo(
         () => ({
@@ -177,6 +192,7 @@ export function useFinance(): FinanceContextType {
             categories,
             tags,
             transactions,
+            planning,
             despesas,
             receitas,
             balance,
@@ -194,6 +210,7 @@ export function useFinance(): FinanceContextType {
             favoriteWalletId,
             finance,
             loading,
+            planning,
             receitas,
             tags,
             transactions,

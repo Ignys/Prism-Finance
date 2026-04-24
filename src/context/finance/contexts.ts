@@ -5,6 +5,7 @@ import type {
     CreditCard,
     CreditCardInvoice,
     LedgerEntry,
+    PlanningState,
     StoredTransaction,
     Tag,
     Transaction,
@@ -28,6 +29,7 @@ export const FinanceStoredTransactionsContext = createContext<StoredTransaction[
 export const FinanceTransactionTagsContext = createContext<TransactionTag[] | undefined>(undefined);
 export const FinanceLedgerEntriesContext = createContext<LedgerEntry[] | undefined>(undefined);
 export const FinanceTransactionsContext = createContext<Transaction[] | undefined>(undefined);
+export const FinancePlanningContext = createContext<PlanningState | undefined>(undefined);
 export const FinanceSummaryContext = createContext<FinanceSummaryValue | undefined>(undefined);
 export const FinanceActionsContext = createContext<FinanceActionsValue | undefined>(undefined);
 

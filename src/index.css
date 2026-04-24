@@ -34,6 +34,40 @@ body::-webkit-scrollbar-thumb {
     border-radius: 32px;
 }
 
+.barra { 
+        --sb-track-color: #242424;
+    --sb-thumb-color: #424242;
+    --sb-size: 8px;
+}
+
+.elegant-scrollbar {
+    --sb-track-color: rgba(255, 255, 255, 0.03);
+    --sb-thumb-color: rgba(255, 255, 255, 0.18);
+    --sb-thumb-hover-color: rgba(255, 255, 255, 0.3);
+    --sb-size: 7px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--sb-thumb-color) var(--sb-track-color);
+}
+
+.elegant-scrollbar::-webkit-scrollbar {
+    width: var(--sb-size);
+}
+
+.elegant-scrollbar::-webkit-scrollbar-track {
+    background: var(--sb-track-color);
+    border-radius: 999px;
+}
+
+.elegant-scrollbar::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0.14));
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.elegant-scrollbar:hover::-webkit-scrollbar-thumb {
+    background: var(--sb-thumb-hover-color);
+}
+
 @supports not selector(::-webkit-scrollbar) {
     body {
         scrollbar-color: var(--sb-thumb-color) var(--sb-track-color);

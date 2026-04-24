@@ -181,6 +181,35 @@ export interface TransactionTag {
     tagId: string;
 }
 
+export interface PlanningSimulatedExpense {
+    id: string;
+    monthKey: string;
+    description: string;
+    amount: number;
+    createdAt: string;
+}
+
+export interface PlanningRevenueOverride {
+    monthKey: string;
+    amount: number;
+    updatedAt: string;
+}
+
+export interface PlanningGoal {
+    id: string;
+    title: string;
+    targetAmount: number;
+    targetMonth: string;
+    createdAt: string;
+}
+
+export interface PlanningState {
+    simulatedExpenses: PlanningSimulatedExpense[];
+    revenueOverrides: PlanningRevenueOverride[];
+    goals: PlanningGoal[];
+    disabledInheritedExpenseIds: string[];
+}
+
 export interface FinanceSnapshot {
     despesas: number;
     receitas: number;
@@ -195,6 +224,7 @@ export interface FinanceSnapshot {
     categories: Category[];
     tags: Tag[];
     transactionTags: TransactionTag[];
+    planning: PlanningState;
 }
 
 export interface TransactionDraft {
@@ -247,6 +277,16 @@ interface CreditCardInvoiceInput extends Partial<CreditCardInvoice> {
     id: string;
 }
 
+interface PlanningSimulatedExpenseInput extends Partial<PlanningSimulatedExpense> {
+    id?: string;
+}
+
+type PlanningRevenueOverrideInput = Partial<PlanningRevenueOverride>;
+
+interface PlanningGoalInput extends Partial<PlanningGoal> {
+    id?: string;
+}
+
 interface BeneficiaryInput extends Partial<Beneficiary> {
     id: string;
 }
@@ -281,6 +321,13 @@ export const DEFAULT_WALLET: Wallet = {
     color: DEFAULT_WALLET_COLOR,
     isActive: true,
     createdAt: new Date().toISOString(),
+};
+
+export const DEFAULT_PLANNING_STATE: PlanningState = {
+    simulatedExpenses: [],
+    revenueOverrides: [],
+    goals: [],
+    disabledInheritedExpenseIds: [],
 };
 
 interface SystemCategorySeed {
@@ -902,6 +949,118 @@ export function normalizeLedgerEntry(entry: Partial<LedgerEntry> & { id: string;
     };
 }
 
+function normalizePlanningMonthKey(value: unknown, fallback = getMonthKeyFromDateValue(getTodayDate())): string {
+    if (typeof value !== "string") {
+        return fallback;
+    }
+
+    const parsedMonth = parseYearMonthKey(value);
+    if (!parsedMonth) {
+        return fallback;
+    }
+
+    return formatYearMonth(parsedMonth.year, parsedMonth.monthIndex);
+}
+
+function normalizePlanningSimulatedExpense(input: PlanningSimulatedExpenseInput, index: number): PlanningSimulatedExpense {
+    const now = getNowIso();
+
+    return {
+        id: asString(input.id, `planning-expense-${index}-${Date.now()}`),
+        monthKey: normalizePlanningMonthKey(input.monthKey),
+        description: asString(input.description, "Gasto simulado"),
+        amount: roundToCents(Math.max(0, Math.abs(asNumber(input.amount, 0)))),
+        createdAt: asDateTimeString(input.createdAt, now),
+    };
+}
+
+function normalizePlanningRevenueOverride(input: PlanningRevenueOverrideInput): PlanningRevenueOverride {
+    return {
+        monthKey: normalizePlanningMonthKey(input.monthKey),
+        amount: roundToCents(Math.max(0, asNumber(input.amount, 0))),
+        updatedAt: asDateTimeString(input.updatedAt, getNowIso()),
+    };
+}
+
+function normalizePlanningGoal(input: PlanningGoalInput, index: number): PlanningGoal {
+    const now = getNowIso();
+
+    return {
+        id: asString(input.id, `planning-goal-${index}-${Date.now()}`),
+        title: asString(input.title, "Meta"),
+        targetAmount: roundToCents(Math.max(0, Math.abs(asNumber(input.targetAmount, 0)))),
+        targetMonth: normalizePlanningMonthKey(input.targetMonth),
+        createdAt: asDateTimeString(input.createdAt, now),
+    };
+}
+
+export function normalizePlanningState(rawPlanning: unknown): PlanningState {
+    if (!isRecord(rawPlanning)) {
+        return DEFAULT_PLANNING_STATE;
+    }
+
+    const expensesById = new Map<string, PlanningSimulatedExpense>();
+    asArray(rawPlanning.simulatedExpenses).forEach((rawExpense, index) => {
+        if (!isRecord(rawExpense)) {
+            return;
+        }
+
+        const expense = normalizePlanningSimulatedExpense(rawExpense, index);
+        if (expense.amount <= 0) {
+            return;
+        }
+
+        expensesById.set(expense.id, expense);
+    });
+
+    const overridesByMonth = new Map<string, PlanningRevenueOverride>();
+    asArray(rawPlanning.revenueOverrides).forEach((rawOverride) => {
+        if (!isRecord(rawOverride)) {
+            return;
+        }
+
+        const revenueOverride = normalizePlanningRevenueOverride(rawOverride);
+        overridesByMonth.set(revenueOverride.monthKey, revenueOverride);
+    });
+
+    const goalsById = new Map<string, PlanningGoal>();
+    asArray(rawPlanning.goals).forEach((rawGoal, index) => {
+        if (!isRecord(rawGoal)) {
+            return;
+        }
+
+        const goal = normalizePlanningGoal(rawGoal, index);
+        if (goal.targetAmount <= 0) {
+            return;
+        }
+
+        goalsById.set(goal.id, goal);
+    });
+
+    return {
+        simulatedExpenses: Array.from(expensesById.values()).sort((a, b) => {
+            if (a.monthKey === b.monthKey) {
+                return a.createdAt.localeCompare(b.createdAt);
+            }
+            return a.monthKey.localeCompare(b.monthKey);
+        }),
+        revenueOverrides: Array.from(overridesByMonth.values()).sort((a, b) => a.monthKey.localeCompare(b.monthKey)),
+        goals: Array.from(goalsById.values()).sort((a, b) => {
+            if (a.targetMonth === b.targetMonth) {
+                return a.createdAt.localeCompare(b.createdAt);
+            }
+            return a.targetMonth.localeCompare(b.targetMonth);
+        }),
+        disabledInheritedExpenseIds: Array.from(
+            new Set(
+                asArray(rawPlanning.disabledInheritedExpenseIds).filter(
+                    (value): value is string => typeof value === "string" && value.trim().length > 0,
+                ),
+            ),
+        ).sort((a, b) => a.localeCompare(b)),
+    };
+}
+
 export function applyLedgerToWallets(wallets: Wallet[], ledgerEntries: LedgerEntry[]): { wallets: Wallet[]; ledgerEntries: LedgerEntry[] } {
     const initialBalanceByWallet = new Map<string, number>();
     wallets.forEach((wallet) => {
@@ -1169,6 +1328,7 @@ export function createFinanceSnapshot(
     categories: Category[] = [],
     tags: Tag[] = [],
     transactionTags: TransactionTag[] = [],
+    planning: PlanningState = DEFAULT_PLANNING_STATE,
 ): FinanceSnapshot {
     const withLedgerApplied = applyLedgerToWallets(wallets, ledgerEntries);
     const summary = calculateFinanceSummary(transactionGroups, transactions);
@@ -1187,6 +1347,7 @@ export function createFinanceSnapshot(
         categories,
         tags,
         transactionTags,
+        planning: normalizePlanningState(planning),
     };
 }
 
@@ -2269,6 +2430,7 @@ export function normalizeFinanceSnapshot(rawFinance: unknown, userId: string | n
             normalizedCategories,
             normalizedTags,
             cleanedTransactionTags.links,
+            normalizePlanningState(financeRecord.planning),
         ),
         changed,
     };

@@ -61,7 +61,7 @@ export function RegistryCategoriesSection() {
     const visibleCount = showInactive ? groupedCategories.totalCount : groupedCategories.activeCount;
 
     return (
-        <section className="row-span-2 rounded-xl border border-white/[0.08] bg-[#111111] p-4">
+        <section className="row-span-2 flex h-full min-h-0 flex-col rounded-xl border border-white/[0.08] bg-[#111111] p-4">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
                     <FolderKanban size={18} className="text-white/80" />
@@ -86,7 +86,7 @@ export function RegistryCategoriesSection() {
                 </div>
             </div>
 
-            <div className="grid gap-3 lg:grid-cols-2">
+            <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-2">
                 <CategoryColumn title="Despesas" items={groupedCategories.expense} childrenByParent={groupedCategories.childrenByParent} onEdit={handleEdit} onReorder={handleReorder} />
                 <CategoryColumn title="Receitas" items={groupedCategories.income} childrenByParent={groupedCategories.childrenByParent} onEdit={handleEdit} onReorder={handleReorder} />
             </div>
@@ -106,7 +106,7 @@ function CategoryColumn({ title, items, childrenByParent, onEdit, onReorder }: C
     };
 
     return (
-        <div className="rounded-lg border border-white/6 bg-white/[0.02] p-3">
+        <div className="elegant-scrollbar h-full min-h-0 overflow-y-auto overflow-x-hidden rounded-lg border border-white/6 bg-white/[0.02] p-3 pr-2">
             <p className="mb-2 text-xs uppercase tracking-[0.12em] text-white/45">{title}</p>
 
             {orderedRoots.length < 1 ? (

@@ -22,6 +22,7 @@ const FINANCE_KEYS = [
     "categories",
     "tags",
     "transactionTags",
+    "planning",
     "favoriteWalletId",
 ] as const;
 
@@ -92,6 +93,10 @@ function buildFinancePayload(fields: FinanceFieldsUpdate): UserFieldUpdate {
 
     if (fields.transactionTags !== undefined) {
         financePayload.transactionTags = fields.transactionTags;
+    }
+
+    if (fields.planning !== undefined) {
+        financePayload.planning = fields.planning;
     }
 
     if (fields.favoriteWalletId !== undefined) {
@@ -179,6 +184,7 @@ interface FinanceFieldsUpdate {
     categories?: unknown[];
     tags?: unknown[];
     transactionTags?: unknown[];
+    planning?: unknown;
     favoriteWalletId?: string;
     favoriteCreditCardId?: string | null;
 }
