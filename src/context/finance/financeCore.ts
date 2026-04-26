@@ -189,6 +189,14 @@ export interface PlanningSimulatedExpense {
     createdAt: string;
 }
 
+export interface PlanningSimulatedIncome {
+    id: string;
+    monthKey: string;
+    description: string;
+    amount: number;
+    createdAt: string;
+}
+
 export interface PlanningRevenueOverride {
     monthKey: string;
     amount: number;
@@ -205,6 +213,7 @@ export interface PlanningGoal {
 
 export interface PlanningState {
     simulatedExpenses: PlanningSimulatedExpense[];
+    simulatedIncomes: PlanningSimulatedIncome[];
     revenueOverrides: PlanningRevenueOverride[];
     goals: PlanningGoal[];
     disabledInheritedExpenseIds: string[];
@@ -281,6 +290,10 @@ interface PlanningSimulatedExpenseInput extends Partial<PlanningSimulatedExpense
     id?: string;
 }
 
+interface PlanningSimulatedIncomeInput extends Partial<PlanningSimulatedIncome> {
+    id?: string;
+}
+
 type PlanningRevenueOverrideInput = Partial<PlanningRevenueOverride>;
 
 interface PlanningGoalInput extends Partial<PlanningGoal> {
@@ -325,6 +338,7 @@ export const DEFAULT_WALLET: Wallet = {
 
 export const DEFAULT_PLANNING_STATE: PlanningState = {
     simulatedExpenses: [],
+    simulatedIncomes: [],
     revenueOverrides: [],
     goals: [],
     disabledInheritedExpenseIds: [],
@@ -974,6 +988,18 @@ function normalizePlanningSimulatedExpense(input: PlanningSimulatedExpenseInput,
     };
 }
 
+function normalizePlanningSimulatedIncome(input: PlanningSimulatedIncomeInput, index: number): PlanningSimulatedIncome {
+    const now = getNowIso();
+
+    return {
+        id: asString(input.id, `planning-income-${index}-${Date.now()}`),
+        monthKey: normalizePlanningMonthKey(input.monthKey),
+        description: asString(input.description, "Receita simulada"),
+        amount: roundToCents(asNumber(input.amount, 0)),
+        createdAt: asDateTimeString(input.createdAt, now),
+    };
+}
+
 function normalizePlanningRevenueOverride(input: PlanningRevenueOverrideInput): PlanningRevenueOverride {
     return {
         monthKey: normalizePlanningMonthKey(input.monthKey),
@@ -1023,6 +1049,20 @@ export function normalizePlanningState(rawPlanning: unknown): PlanningState {
         overridesByMonth.set(revenueOverride.monthKey, revenueOverride);
     });
 
+    const incomesById = new Map<string, PlanningSimulatedIncome>();
+    asArray(rawPlanning.simulatedIncomes).forEach((rawIncome, index) => {
+        if (!isRecord(rawIncome)) {
+            return;
+        }
+
+        const income = normalizePlanningSimulatedIncome(rawIncome, index);
+        if (Math.abs(income.amount) <= 0.009) {
+            return;
+        }
+
+        incomesById.set(income.id, income);
+    });
+
     const goalsById = new Map<string, PlanningGoal>();
     asArray(rawPlanning.goals).forEach((rawGoal, index) => {
         if (!isRecord(rawGoal)) {
@@ -1039,6 +1079,12 @@ export function normalizePlanningState(rawPlanning: unknown): PlanningState {
 
     return {
         simulatedExpenses: Array.from(expensesById.values()).sort((a, b) => {
+            if (a.monthKey === b.monthKey) {
+                return a.createdAt.localeCompare(b.createdAt);
+            }
+            return a.monthKey.localeCompare(b.monthKey);
+        }),
+        simulatedIncomes: Array.from(incomesById.values()).sort((a, b) => {
             if (a.monthKey === b.monthKey) {
                 return a.createdAt.localeCompare(b.createdAt);
             }
