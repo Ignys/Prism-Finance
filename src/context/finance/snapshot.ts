@@ -3,6 +3,7 @@ export {
     buildCreditCardInvoiceId,
     calculateFinanceSummary,
     createFinanceSnapshot,
+    findCreditCardInvoiceAssignmentIssues,
     getCreditCardInvoiceMonthKey,
     getMonthKeyFromDateValue,
     normalizeFinanceSnapshot,
@@ -11,6 +12,7 @@ export {
     resolveCreditCardInvoiceCycle,
     resolveCreditCardInvoiceCycleFromCycleKey,
     resolveCreditCardInvoiceStatus,
+    resolveExpectedCreditCardInvoiceId,
     resolveOpenCreditCardInvoiceCycle,
     toTransactionList,
 } from "./financeCore";

@@ -54,6 +54,7 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
             markTransactionAsPaid: store.markTransactionAsPaid,
             deleteTransaction: store.deleteTransaction,
             deleteTransactionWithScope: store.deleteTransactionWithScope,
+            repairCreditCardInvoiceAssignments: store.repairCreditCardInvoiceAssignments,
             updateInvoicePaymentTransaction: store.updateInvoicePaymentTransaction,
             updatePlanningState: store.updatePlanningState,
             clearTransactions: store.clearTransactions,
@@ -72,6 +73,7 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
             setCreditCardActive: store.setCreditCardActive,
             deleteCreditCard: store.deleteCreditCard,
             payCreditCardInvoice: store.payCreditCardInvoice,
+            setCreditCardInvoicesPaidState: store.setCreditCardInvoicesPaidState,
         }),
         [
             store.addBeneficiary,
@@ -83,6 +85,7 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
             store.clearTransactions,
             store.deleteTransaction,
             store.deleteTransactionWithScope,
+            store.repairCreditCardInvoiceAssignments,
             store.updateInvoicePaymentTransaction,
             store.updatePlanningState,
             store.markTransactionAsPaid,
@@ -101,6 +104,7 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
             store.setCreditCardActive,
             store.deleteCreditCard,
             store.payCreditCardInvoice,
+            store.setCreditCardInvoicesPaidState,
             store.updateFinance,
         ],
     );

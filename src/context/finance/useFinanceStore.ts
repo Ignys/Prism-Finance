@@ -21,6 +21,7 @@ import {
     DEFAULT_WALLET,
     DEFAULT_WALLET_ID,
     findDefaultCategoryId,
+    findCreditCardInvoiceAssignmentIssues,
     parseInvoicePaymentNote,
     type FinanceSnapshot,
     type LedgerEntry,
@@ -52,9 +53,17 @@ import {
     resolveCreditCardInvoiceStatus,
     resolveCreditCardInvoiceCycle,
     resolveCreditCardInvoiceCycleFromCycleKey,
+    resolveExpectedCreditCardInvoiceId,
     SYSTEM_EXPENSE_CARD_INVOICE_CATEGORY_ID,
 } from "../financeTypes";
-import type { FinanceStoreValue, PayCreditCardInvoiceDraft, PersistFields, UpdateInvoicePaymentTransactionDraft, UpdateTransactionDraft } from "./contextTypes";
+import type {
+    FinanceStoreValue,
+    PayCreditCardInvoiceDraft,
+    PersistFields,
+    SetCreditCardInvoicesPaidStateDraft,
+    UpdateInvoicePaymentTransactionDraft,
+    UpdateTransactionDraft,
+} from "./contextTypes";
 import {
     createId,
     ensureWalletId,
@@ -487,14 +496,13 @@ function syncCreditCardInvoices(params: {
             });
         }
 
-        const cycleFromDate = resolveCreditCardInvoiceCycle(transaction.scheduledDate, card.closingDay, card.dueDay);
         const requestedInvoiceId = transaction.invoiceId?.trim() ?? "";
         const parsedRequestedInvoice = requestedInvoiceId ? parseCreditCardInvoiceId(requestedInvoiceId) : null;
         const hasExplicitCycle = Boolean(parsedRequestedInvoice && parsedRequestedInvoice.creditCardId === card.id);
         const resolvedCycle =
             hasExplicitCycle && parsedRequestedInvoice
                 ? resolveCreditCardInvoiceCycleFromCycleKey(parsedRequestedInvoice.cycleKey, card.closingDay, card.dueDay)
-                : cycleFromDate;
+                : resolveCreditCardInvoiceCycle(transaction.scheduledDate, card.closingDay, card.dueDay);
         const resolvedInvoiceId = hasExplicitCycle && requestedInvoiceId ? requestedInvoiceId : buildCreditCardInvoiceId(card.id, resolvedCycle.cycleKey);
         const existingInvoice = existingInvoicesById.get(resolvedInvoiceId);
         const includeInInvoice = transaction.status !== "cancelled" && transaction.status !== "skipped";
@@ -1263,7 +1271,7 @@ export function useFinanceStore(): FinanceStoreValue {
 
             const resolvedWalletId = ensureWalletId(normalizeWalletId(walletId), walletsRef.current);
             const wallet = walletsRef.current.find((item) => item.id === resolvedWalletId);
-            if (!wallet || wallet.balance < safeAmount) {
+            if (!wallet) {
                 return;
             }
 
@@ -1373,6 +1381,56 @@ export function useFinanceStore(): FinanceStoreValue {
             await persistFullSnapshot(snapshot);
         },
         [buildSnapshot, persistFullSnapshot, setSnapshotState, user?.uid],
+    );
+
+    const setCreditCardInvoicesPaidState = useCallback(
+        async ({ invoiceIds, markAsPaid }: SetCreditCardInvoicesPaidStateDraft) => {
+            const requestedInvoiceIds = new Set(invoiceIds.map((invoiceId) => invoiceId.trim()).filter(Boolean));
+            if (requestedInvoiceIds.size < 1) {
+                return;
+            }
+
+            const nowIso = new Date().toISOString();
+            let changed = false;
+
+            const nextInvoices = creditCardInvoicesRef.current.map((invoice) => {
+                if (!requestedInvoiceIds.has(invoice.id)) {
+                    return invoice;
+                }
+
+                const nextPaidAmount = markAsPaid ? invoice.totalAmount : 0;
+                const nextStatus = markAsPaid && invoice.totalAmount > 0 ? "paid" : "open";
+                const nextPaidAt = markAsPaid && invoice.totalAmount > 0 ? nowIso : null;
+
+                if (invoice.paidAmount === nextPaidAmount && invoice.status === nextStatus && invoice.paidAt === nextPaidAt) {
+                    return invoice;
+                }
+
+                changed = true;
+                return normalizeCreditCardInvoice(
+                    {
+                        ...invoice,
+                        paidAmount: nextPaidAmount,
+                        status: nextStatus,
+                        paidAt: nextPaidAt,
+                        updatedAt: nowIso,
+                    },
+                    new Set(creditCardsRef.current.map((card) => card.id)),
+                );
+            });
+
+            if (!changed) {
+                return;
+            }
+
+            const snapshot = buildSnapshot({
+                creditCardInvoices: nextInvoices,
+            });
+
+            setSnapshotState(snapshot);
+            await persistFullSnapshot(snapshot);
+        },
+        [buildSnapshot, persistFullSnapshot, setSnapshotState],
     );
 
     const updateInvoicePaymentTransaction = useCallback(
@@ -2003,9 +2061,15 @@ export function useFinanceStore(): FinanceStoreValue {
                     return buildCreditCardInvoiceId(linkedCard.id, nextCycleKey);
                 }
 
-                const cycle = resolveCreditCardInvoiceCycle(dateValue, linkedCard.closingDay, linkedCard.dueDay);
-                const nextCycleKey = shiftInvoiceCycleKey(cycle.cycleKey, installmentOffset);
-                return buildCreditCardInvoiceId(linkedCard.id, nextCycleKey);
+                const expectedInvoiceId = resolveExpectedCreditCardInvoiceId({
+                    creditCardId: linkedCard.id,
+                    transactionDate: dateValue,
+                    closingDay: linkedCard.closingDay,
+                    dueDay: linkedCard.dueDay,
+                });
+                const parsedExpectedInvoice = expectedInvoiceId ? parseCreditCardInvoiceId(expectedInvoiceId) : null;
+                const nextCycleKey = parsedExpectedInvoice ? shiftInvoiceCycleKey(parsedExpectedInvoice.cycleKey, installmentOffset) : "";
+                return nextCycleKey ? buildCreditCardInvoiceId(linkedCard.id, nextCycleKey) : null;
             };
 
             const createdTransactions: StoredTransaction[] = [];
@@ -2293,6 +2357,65 @@ export function useFinanceStore(): FinanceStoreValue {
         [deleteTransactionWithScope],
     );
 
+    const repairCreditCardInvoiceAssignments = useCallback(
+        async (transactionIds: string[]) => {
+            const requestedTransactionIds = new Set(transactionIds);
+            if (requestedTransactionIds.size < 1) {
+                return;
+            }
+
+            const issues = findCreditCardInvoiceAssignmentIssues({
+                transactions: storedTransactionsRef.current,
+                transactionGroups: transactionGroupsRef.current,
+                creditCards: creditCardsRef.current,
+            });
+            const expectedInvoiceByTransactionId = new Map(
+                issues
+                    .filter((issue) => requestedTransactionIds.has(issue.transactionId))
+                    .map((issue) => [issue.transactionId, issue.expectedInvoiceId]),
+            );
+
+            if (expectedInvoiceByTransactionId.size < 1) {
+                return;
+            }
+
+            let changed = false;
+            const nextTransactions = storedTransactionsRef.current.map((transaction) => {
+                const expectedInvoiceId = expectedInvoiceByTransactionId.get(transaction.id);
+                if (!expectedInvoiceId || transaction.invoiceId === expectedInvoiceId) {
+                    return transaction;
+                }
+
+                changed = true;
+                return normalizeStoredTransaction({
+                    ...transaction,
+                    invoiceId: expectedInvoiceId,
+                });
+            });
+
+            if (!changed) {
+                return;
+            }
+
+            const syncedInvoices = syncCreditCardInvoices({
+                creditCards: creditCardsRef.current,
+                transactionGroups: transactionGroupsRef.current,
+                transactions: nextTransactions,
+                existingInvoices: creditCardInvoicesRef.current,
+            });
+            const nextGroups = recalculateGroupTotals(transactionGroupsRef.current, syncedInvoices.transactions);
+            const snapshot = buildSnapshot({
+                transactionGroups: nextGroups,
+                transactions: syncedInvoices.transactions,
+                creditCardInvoices: syncedInvoices.creditCardInvoices,
+            });
+
+            setSnapshotState(snapshot);
+            await persistFullSnapshot(snapshot);
+        },
+        [buildSnapshot, persistFullSnapshot, setSnapshotState],
+    );
+
     const updateTransaction = useCallback(
         async ({ transaction, draft, scope = "single" }: UpdateTransactionDraft) => {
             const transactionToUpdate = storedTransactionsRef.current.find((item) => item.id === transaction.id);
@@ -2368,6 +2491,7 @@ export function useFinanceStore(): FinanceStoreValue {
             markTransactionAsPaid,
             deleteTransaction,
             deleteTransactionWithScope,
+            repairCreditCardInvoiceAssignments,
             updateInvoicePaymentTransaction,
             updatePlanningState,
             clearTransactions,
@@ -2386,6 +2510,7 @@ export function useFinanceStore(): FinanceStoreValue {
             setCreditCardActive,
             deleteCreditCard,
             payCreditCardInvoice,
+            setCreditCardInvoicesPaidState,
         }),
         [
             addBeneficiary,
@@ -2404,6 +2529,7 @@ export function useFinanceStore(): FinanceStoreValue {
             creditCards,
             deleteTransaction,
             deleteTransactionWithScope,
+            repairCreditCardInvoiceAssignments,
             updateInvoicePaymentTransaction,
             favoriteCreditCardId,
             favoriteWalletId,
@@ -2411,6 +2537,7 @@ export function useFinanceStore(): FinanceStoreValue {
             loading,
             markTransactionAsPaid,
             payCreditCardInvoice,
+            setCreditCardInvoicesPaidState,
             planning,
             reorderBeneficiaries,
             reorderCategories,

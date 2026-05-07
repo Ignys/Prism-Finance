@@ -307,7 +307,11 @@ function resolveInvoiceVisualStatus(
         const cycleComparison = params.cycleKey.localeCompare(params.currentOpenCycleKey);
 
         if (cycleComparison === 0) {
-            return "open";
+            if (params.status === "paid") {
+                return "paid";
+            }
+
+            return today >= params.closingDate ? "closed" : "open";
         }
 
         if (cycleComparison > 0) {
@@ -333,7 +337,7 @@ function resolveInvoiceVisualStatus(
         return "paid";
     }
 
-    if (today > params.closingDate && today <= params.dueDate) {
+    if (today >= params.closingDate && today <= params.dueDate) {
         return "closed";
     }
 

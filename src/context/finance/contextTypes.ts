@@ -24,6 +24,11 @@ export interface PayCreditCardInvoiceDraft {
     paymentDate: string;
 }
 
+export interface SetCreditCardInvoicesPaidStateDraft {
+    invoiceIds: string[];
+    markAsPaid: boolean;
+}
+
 export interface UpdateInvoicePaymentTransactionDraft {
     transactionId: string;
     description: string;
@@ -59,6 +64,7 @@ export interface FinanceActionsValue {
     markTransactionAsPaid: (transaction: Transaction) => Promise<void>;
     deleteTransaction: (transaction: Transaction) => Promise<void>;
     deleteTransactionWithScope: (transaction: Transaction, scope?: TransactionSeriesScope) => Promise<void>;
+    repairCreditCardInvoiceAssignments: (transactionIds: string[]) => Promise<void>;
     updateInvoicePaymentTransaction: (draft: UpdateInvoicePaymentTransactionDraft) => Promise<void>;
     updatePlanningState: (planning: PlanningState) => Promise<void>;
     clearTransactions: () => Promise<void>;
@@ -77,6 +83,7 @@ export interface FinanceActionsValue {
     setCreditCardActive: (creditCardId: string, isActive: boolean) => Promise<void>;
     deleteCreditCard: (creditCardId: string) => Promise<void>;
     payCreditCardInvoice: (draft: PayCreditCardInvoiceDraft) => Promise<void>;
+    setCreditCardInvoicesPaidState: (draft: SetCreditCardInvoicesPaidStateDraft) => Promise<void>;
 }
 
 export interface FinanceContextType extends FinanceActionsValue {

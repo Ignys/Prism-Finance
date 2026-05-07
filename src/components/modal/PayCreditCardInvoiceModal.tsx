@@ -43,7 +43,6 @@ function WalletOptionContent({ option }: { option: WalletOption }) {
             <WalletAvatar wallet={option.wallet} className="h-7 w-7 rounded-md border border-white/[0.12]" iconSize={14} iconStrokeWidth={1.7} />
             <div className="min-w-0">
                 <p className="truncate">{option.wallet.name}</p>
-                <p className="truncate text-xs text-white/55">{formatMoney(option.wallet.balance)}</p>
             </div>
         </div>
     );
@@ -101,11 +100,6 @@ export function PayCreditCardInvoiceModal({ invoice, creditCard }: PayCreditCard
             return;
         }
 
-        if (selectedWallet.balance < amount) {
-            setError("Saldo insuficiente na carteira selecionada.");
-            return;
-        }
-
         if (!parseAppDate(paymentDate)) {
             setError("Informe uma data de pagamento valida.");
             return;
@@ -134,7 +128,7 @@ export function PayCreditCardInvoiceModal({ invoice, creditCard }: PayCreditCard
             <div className="rounded-2xl border border-white/[0.09] bg-[#131313] p-4 text-white shadow-[0_26px_70px_-38px_rgba(0,0,0,0.95)]">
                 <h2 className="text-xl font-medium uppercase">Pagar fatura</h2>
                 <p className="mt-1 text-sm text-white/60">
-                    {creditCard.name} - ciclo {invoice.cycleKey}
+                    {creditCard.name} - Fatura de {invoice.cycleKey}
                 </p>
 
                 <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
@@ -152,9 +146,22 @@ export function PayCreditCardInvoiceModal({ invoice, creditCard }: PayCreditCard
                     </div>
                 </div>
 
-                <div className="mt-4 flex flex-col gap-3">
+                <div>
+                    <label className="mt-4 flex flex-col gap-1.5 text-left">
+                        <span className="text-[11px] uppercase tracking-[0.12em] text-white/50">Valor do pagamento</span>
+                        <input
+                            value={amountInput}
+                            onChange={(event) => setAmountInput(formatCurrencyFromDigits(extractCurrencyDigits(event.target.value)))}
+                            className="rounded-xl border border-white/[0.1] bg-black/35 p-2.5 text-white outline-none placeholder:text-white/35"
+                            placeholder="R$ 0,00"
+                            inputMode="numeric"
+                        />
+                    </label>
+                </div>
+
+                <div className="mt-4 flex grid grid-cols-2 grid-rows-1 gap-3">
                     <SingleSelectCombobox
-                        label="Carteira pagadora"
+                        label="Pagamento"
                         value={walletId}
                         placeholder="Selecione uma carteira"
                         emptyMessage="Nenhuma carteira encontrada."
@@ -164,17 +171,6 @@ export function PayCreditCardInvoiceModal({ invoice, creditCard }: PayCreditCard
                     />
 
                     <DateField label="Data do pagamento" value={paymentDate} onChange={setPaymentDate} />
-
-                    <label className="flex flex-col gap-1.5 text-left">
-                        <span className="text-[11px] uppercase tracking-[0.12em] text-white/50">Valor a pagar</span>
-                        <input
-                            value={amountInput}
-                            onChange={(event) => setAmountInput(formatCurrencyFromDigits(extractCurrencyDigits(event.target.value)))}
-                            className="rounded-xl border border-white/[0.1] bg-black/35 p-2.5 text-white outline-none placeholder:text-white/35"
-                            placeholder="R$ 0,00"
-                            inputMode="numeric"
-                        />
-                    </label>
                 </div>
 
                 {error && <p className="mt-3 text-sm text-red-300">{error}</p>}

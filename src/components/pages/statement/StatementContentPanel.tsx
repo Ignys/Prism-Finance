@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { ArrowDown, ArrowUp, Circle, CreditCard as CreditCardIcon, Pencil, Plus, Repeat2, Search, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, Circle, CreditCard as CreditCardIcon, ListChecks, Pencil, Plus, Repeat2, Search, Trash2 } from "lucide-react";
 import { type Beneficiary, type CreditCard, type CreditCardInvoice, type Transaction, useFinanceBeneficiaries, useFinanceTransactionGroups } from "../../../context/FinanceContext";
 import { normalizeComparisonText } from "../../../context/finance/helpers";
 import { getCategoryIconComponent } from "../../../lib/categoryIcons";
@@ -24,9 +24,12 @@ interface StatementContentPanelProps {
     cardById: Map<string, CreditCard>;
     invoiceById: Map<string, CreditCardInvoice>;
     onPayInvoice: (invoice: CreditCardInvoice, creditCard: CreditCard) => void;
+    onInvoiceStateAdjustment: (invoices: CreditCardInvoice[], action: "close" | "reopen") => void;
     onCreateCardSpending: () => void;
+    onReviewInvoiceAssignments: () => void;
     onEdit: (transaction: Transaction) => void;
     onDelete: (transaction: Transaction) => void;
+    invoiceRepairIssuesCount: number;
 }
 
 type StatementSortField = "status" | "date" | "description" | "category" | "beneficiary" | "value";
@@ -211,9 +214,12 @@ export function StatementContentPanel({
     cardById,
     invoiceById,
     onPayInvoice,
+    onInvoiceStateAdjustment,
     onCreateCardSpending,
+    onReviewInvoiceAssignments,
     onEdit,
     onDelete,
+    invoiceRepairIssuesCount,
 }: StatementContentPanelProps) {
     const beneficiaries = useFinanceBeneficiaries();
     const transactionGroups = useFinanceTransactionGroups();
@@ -379,7 +385,17 @@ export function StatementContentPanel({
     }, [allCardsSelected, invoiceSnapshots]);
 
     const payButtonLabel = payableSnapshot?.visualStatus === "open" || payableSnapshot?.visualStatus === "future" ? "Pagar adiantado" : allCardsSelected ? "Pagar faturas" : "Pagar fatura";
+    const closeableSnapshots = useMemo(
+        () => invoiceSnapshots.filter((snapshot): snapshot is InvoiceSnapshot & { creditCard: CreditCard } => Boolean(snapshot.creditCard) && snapshot.visualStatus === "overdue" && snapshot.openAmount > 0),
+        [invoiceSnapshots],
+    );
+    const reopenableSnapshots = useMemo(() => invoiceSnapshots.filter((snapshot) => snapshot.visualStatus === "paid"), [invoiceSnapshots]);
+    const manualActionMode: "close" | "reopen" | null = closeableSnapshots.length > 0 ? "close" : reopenableSnapshots.length > 0 ? "reopen" : null;
+    const manualActionInvoices = manualActionMode === "close" ? closeableSnapshots.map((snapshot) => snapshot.invoice) : manualActionMode === "reopen" ? reopenableSnapshots.map((snapshot) => snapshot.invoice) : [];
+    const manualActionLabel =
+        manualActionMode === "close" ? (allCardsSelected && manualActionInvoices.length > 1 ? "Fechar vencidas" : "Fechar vencida") : manualActionMode === "reopen" ? (allCardsSelected && manualActionInvoices.length > 1 ? "Reabrir pagas" : "Reabrir paga") : "";
     const canCreateCardSpending = cardById.size > 0;
+    const hasInvoiceRepairIssues = invoiceRepairIssuesCount > 0;
 
     return (
         <div className="flex flex-col gap-3">
@@ -393,22 +409,36 @@ export function StatementContentPanel({
                             </span>
                         </div>
 
-                        {payableSnapshot ? (
-                            <button
-                                type="button"
-                                onClick={() => onPayInvoice(payableSnapshot.invoice, payableSnapshot.creditCard)}
-                                className="inline-flex items-center gap-2 rounded-full border border-emerald-300/30 bg-emerald-500/15 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.05em] text-emerald-100 transition-colors hover:border-emerald-300/45 hover:bg-emerald-500/20"
-                            >
-                                {payButtonLabel}
-                            </button>
-                        ) : (
-                            <button
-                                type="button"
-                                className="opacity-0 items-center gap-2 rounded-full border border-emerald-300/30 bg-emerald-500/15 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.05em] text-emerald-100 transition-colors hover:border-emerald-300/45 hover:bg-emerald-500/20"
-                            >
-                                .
-                            </button>
-                        )}
+                        <div className="flex flex-wrap items-center justify-end gap-2">
+                            {manualActionMode ? (
+                                <button
+                                    type="button"
+                                    onClick={() => onInvoiceStateAdjustment(manualActionInvoices, manualActionMode)}
+                                    className="inline-flex items-center gap-2 rounded-full border border-sky-300/30 bg-sky-500/15 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.05em] text-sky-100 transition-colors hover:border-sky-300/45 hover:bg-sky-500/20"
+                                >
+                                    {manualActionLabel}
+                                </button>
+                            ) : null}
+
+                            {payableSnapshot ? (
+                                <button
+                                    type="button"
+                                    onClick={() => onPayInvoice(payableSnapshot.invoice, payableSnapshot.creditCard)}
+                                    className="inline-flex items-center gap-2 rounded-full border border-emerald-300/30 bg-emerald-500/15 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.05em] text-emerald-100 transition-colors hover:border-emerald-300/45 hover:bg-emerald-500/20"
+                                >
+                                    {payButtonLabel}
+                                </button>
+                            ) : null}
+
+                            {!manualActionMode && !payableSnapshot ? (
+                                <button
+                                    type="button"
+                                    className="opacity-0 items-center gap-2 rounded-full border border-emerald-300/30 bg-emerald-500/15 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.05em] text-emerald-100 transition-colors hover:border-emerald-300/45 hover:bg-emerald-500/20"
+                                >
+                                    .
+                                </button>
+                            ) : null}
+                        </div>
                     </header>
                 </div>
             </section>
@@ -425,6 +455,16 @@ export function StatementContentPanel({
                     />
                 </div>
                 <div className="flex py-1.5 gap-2">
+                    {hasInvoiceRepairIssues && (
+                        <button
+                            type="button"
+                            onClick={onReviewInvoiceAssignments}
+                            className="inline-flex truncate cursor-pointer items-center gap-2 rounded-full border border-sky-300/30 bg-sky-500/15 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.05em] text-sky-100 transition-all hover:border-sky-300/45 hover:bg-sky-500/20"
+                        >
+                            <ListChecks size={14} />
+                            Revisar faturas ({invoiceRepairIssuesCount})
+                        </button>
+                    )}
                     <button
                         type="button"
                         onClick={onCreateCardSpending}

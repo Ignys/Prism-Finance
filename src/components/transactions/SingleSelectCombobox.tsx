@@ -122,25 +122,25 @@ export function SingleSelectCombobox<T extends ComboboxOptionBase>({
                 }`}
             >
                 <div className="min-w-0 flex-1">
-                    {selectedOption ? (renderSelectedContent ? renderSelectedContent(selectedOption) : renderOptionContent(selectedOption)) : <span className="text-white/40">{placeholder}</span>}
+                    {selectedOption ? renderSelectedContent ? renderSelectedContent(selectedOption) : renderOptionContent(selectedOption) : <span className="text-white/40">{placeholder}</span>}
                 </div>
                 <ChevronsUpDown size={15} className="ml-2 shrink-0 text-white/55" />
             </button>
 
             {isOpen && !disabled && (
                 <div className="absolute left-0 top-full z-30 mt-1 w-full rounded-xl border border-white/[0.1] bg-[#101010] p-2 shadow-[0_24px_60px_-30px_rgba(0,0,0,0.95)]">
-{!disableSearch && (
-                    <div className="relative mb-2">
-                        <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-white/40" />
-                        <input
-                            ref={searchInputRef}
-                            value={query}
-                            onChange={(event) => setQuery(event.target.value)}
-                            placeholder="Buscar"
-                            className="w-full rounded-lg border border-white/[0.1] bg-black/45 py-2 pl-8 pr-2 text-sm text-white outline-none transition-colors placeholder:text-white/35 focus:border-white/[0.25]"
-                        />
-                    </div>
-                   ) }
+                    {!disableSearch && (
+                        <div className="relative mb-2">
+                            <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-white/40" />
+                            <input
+                                ref={searchInputRef}
+                                value={query}
+                                onChange={(event) => setQuery(event.target.value)}
+                                placeholder="Buscar"
+                                className="w-full rounded-lg border border-white/[0.1] bg-black/45 py-2 pl-8 pr-2 text-sm text-white outline-none transition-colors placeholder:text-white/35 focus:border-white/[0.25]"
+                            />
+                        </div>
+                    )}
 
                     <div className="max-h-56 space-y-1 overflow-y-auto">
                         {filteredOptions.map((option) => {

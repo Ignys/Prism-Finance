@@ -668,14 +668,15 @@ export function resolveCreditCardInvoiceCycle(
     const safeClosingDay = asDayOfMonth(closingDay, 1);
     const safeDueDay = asDayOfMonth(dueDay, 1);
 
-    const cycleMonthOffset = transactionDay > safeClosingDay ? 1 : 0;
-    const cycleAnchor = new Date(transactionYear, transactionMonth + cycleMonthOffset, 1);
+    const dueMonthOffset = safeClosingDay <= safeDueDay ? (transactionDay > safeClosingDay ? 1 : 0) : transactionDay > safeClosingDay ? 2 : 1;
+    const cycleAnchor = new Date(transactionYear, transactionMonth + dueMonthOffset, 1);
     const cycleYear = cycleAnchor.getFullYear();
     const cycleMonth = cycleAnchor.getMonth();
+    const closingAnchor = new Date(cycleYear, cycleMonth + (safeClosingDay <= safeDueDay ? 0 : -1), 1);
 
     return {
         cycleKey: formatYearMonth(cycleYear, cycleMonth),
-        closingDate: buildDateString(cycleYear, cycleMonth, safeClosingDay),
+        closingDate: buildDateString(closingAnchor.getFullYear(), closingAnchor.getMonth(), safeClosingDay),
         dueDate: buildDateString(cycleYear, cycleMonth, safeDueDay),
     };
 }
@@ -692,10 +693,11 @@ export function resolveCreditCardInvoiceCycleFromCycleKey(
 
     const safeClosingDay = asDayOfMonth(closingDay, 1);
     const safeDueDay = asDayOfMonth(dueDay, 1);
+    const closingAnchor = new Date(parsedMonth.year, parsedMonth.monthIndex + (safeClosingDay <= safeDueDay ? 0 : -1), 1);
 
     return {
         cycleKey: formatYearMonth(parsedMonth.year, parsedMonth.monthIndex),
-        closingDate: buildDateString(parsedMonth.year, parsedMonth.monthIndex, safeClosingDay),
+        closingDate: buildDateString(closingAnchor.getFullYear(), closingAnchor.getMonth(), safeClosingDay),
         dueDate: buildDateString(parsedMonth.year, parsedMonth.monthIndex, safeDueDay),
     };
 }
@@ -735,6 +737,75 @@ export function buildCreditCardInvoiceId(creditCardId: string, cycleKey: string)
     return `invoice-${creditCardId}-${cycleKey}`;
 }
 
+export function resolveExpectedCreditCardInvoiceId(params: {
+    creditCardId: string | null;
+    transactionDate: string;
+    closingDay: number;
+    dueDay: number;
+}): string | null {
+    const creditCardId = asString(params.creditCardId, "");
+    if (!creditCardId) {
+        return null;
+    }
+
+    const cycle = resolveCreditCardInvoiceCycle(params.transactionDate, params.closingDay, params.dueDay);
+    return buildCreditCardInvoiceId(creditCardId, cycle.cycleKey);
+}
+
+export interface CreditCardInvoiceAssignmentIssue {
+    transactionId: string;
+    creditCardId: string;
+    currentInvoiceId: string | null;
+    expectedInvoiceId: string;
+    expectedCycleKey: string;
+    expectedClosingDate: string;
+    expectedDueDate: string;
+}
+
+export function findCreditCardInvoiceAssignmentIssues(params: {
+    transactions: Pick<StoredTransaction, "id" | "groupId" | "scheduledDate" | "invoiceId" | "status">[];
+    transactionGroups: Pick<TransactionGroup, "id" | "type" | "creditCardId">[];
+    creditCards: Pick<CreditCard, "id" | "closingDay" | "dueDay">[];
+}): CreditCardInvoiceAssignmentIssue[] {
+    const groupById = new Map(params.transactionGroups.map((group) => [group.id, group]));
+    const cardById = new Map(params.creditCards.map((card) => [card.id, card]));
+    const issues: CreditCardInvoiceAssignmentIssue[] = [];
+
+    params.transactions.forEach((transaction) => {
+        if (transaction.status === "cancelled") {
+            return;
+        }
+
+        const group = groupById.get(transaction.groupId);
+        if (!group || group.type !== "expense" || !group.creditCardId) {
+            return;
+        }
+
+        const creditCard = cardById.get(group.creditCardId);
+        if (!creditCard) {
+            return;
+        }
+
+        const expectedCycle = resolveCreditCardInvoiceCycle(transaction.scheduledDate, creditCard.closingDay, creditCard.dueDay);
+        const expectedInvoiceId = buildCreditCardInvoiceId(creditCard.id, expectedCycle.cycleKey);
+        if (transaction.invoiceId === expectedInvoiceId) {
+            return;
+        }
+
+        issues.push({
+            transactionId: transaction.id,
+            creditCardId: creditCard.id,
+            currentInvoiceId: transaction.invoiceId,
+            expectedInvoiceId,
+            expectedCycleKey: expectedCycle.cycleKey,
+            expectedClosingDate: expectedCycle.closingDate,
+            expectedDueDate: expectedCycle.dueDate,
+        });
+    });
+
+    return issues;
+}
+
 export function calculateCreditCardInvoiceOpenAmount(invoice: CreditCardInvoice): number {
     return roundToCents(Math.max(0, invoice.totalAmount - invoice.paidAmount));
 }
@@ -747,14 +818,7 @@ export function resolveCreditCardInvoiceStatus(params: {
     paidAmount: number;
     referenceDate?: Date;
 }): InvoiceStatus {
-    const { invoiceCycleKey, cardClosingDay, cardDueDay, totalAmount, paidAmount, referenceDate = new Date() } = params;
-    const today = getLocalTodayDate(referenceDate);
-    const currentOpenCycleKey = resolveCreditCardInvoiceCycle(today, cardClosingDay, cardDueDay).cycleKey;
-
-    if (invoiceCycleKey === currentOpenCycleKey) {
-        return "open";
-    }
-
+    const { totalAmount, paidAmount } = params;
     const safeTotalAmount = roundToCents(Math.max(0, totalAmount));
     const safePaidAmount = roundToCents(Math.min(safeTotalAmount, Math.max(0, paidAmount)));
     return safePaidAmount >= safeTotalAmount && safeTotalAmount > 0 ? "paid" : "open";
@@ -2402,14 +2466,13 @@ export function normalizeFinanceSnapshot(rawFinance: unknown, userId: string | n
             });
         }
 
-        const cycleFromDate = resolveCreditCardInvoiceCycle(transaction.scheduledDate, creditCard.closingDay, creditCard.dueDay);
         const requestedInvoiceId = transaction.invoiceId?.trim() ?? "";
         const parsedRequestedInvoice = requestedInvoiceId ? parseCreditCardInvoiceId(requestedInvoiceId) : null;
         const hasExplicitCycle = Boolean(parsedRequestedInvoice && parsedRequestedInvoice.creditCardId === creditCard.id);
         const resolvedCycle =
             hasExplicitCycle && parsedRequestedInvoice
                 ? resolveCreditCardInvoiceCycleFromCycleKey(parsedRequestedInvoice.cycleKey, creditCard.closingDay, creditCard.dueDay)
-                : cycleFromDate;
+                : resolveCreditCardInvoiceCycle(transaction.scheduledDate, creditCard.closingDay, creditCard.dueDay);
         const resolvedInvoiceId = hasExplicitCycle && requestedInvoiceId ? requestedInvoiceId : buildCreditCardInvoiceId(creditCard.id, resolvedCycle.cycleKey);
         const existingInvoice = existingInvoicesById.get(resolvedInvoiceId);
 
