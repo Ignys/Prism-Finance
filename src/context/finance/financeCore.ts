@@ -520,6 +520,21 @@ function getNowIso(): string {
     return new Date().toISOString();
 }
 
+// Ledger timestamps represent when the wallet balance should move, not when the record was created.
+export function resolveLedgerEntryDateIso(dateValue: string, fallbackIso: string): string {
+    const parsedDate = parseAppDate(dateValue);
+    if (!parsedDate) {
+        return fallbackIso;
+    }
+
+    const localMidday = new Date(parsedDate.getFullYear(), parsedDate.getMonth(), parsedDate.getDate(), 12, 0, 0, 0);
+    return localMidday.toISOString();
+}
+
+function getTransactionLedgerEntryDateIso(transaction: Pick<StoredTransaction, "scheduledDate" | "paidAt" | "createdAt">): string {
+    return resolveLedgerEntryDateIso(transaction.scheduledDate, transaction.paidAt ?? transaction.createdAt);
+}
+
 function asWalletId(value: unknown): string {
     if (typeof value === "string") {
         return value;
@@ -658,14 +673,10 @@ export function resolveCreditCardInvoiceCycle(
     const cycleYear = cycleAnchor.getFullYear();
     const cycleMonth = cycleAnchor.getMonth();
 
-    const dueAnchor = new Date(cycleYear, cycleMonth + 1, 1);
-    const dueYear = dueAnchor.getFullYear();
-    const dueMonth = dueAnchor.getMonth();
-
     return {
         cycleKey: formatYearMonth(cycleYear, cycleMonth),
         closingDate: buildDateString(cycleYear, cycleMonth, safeClosingDay),
-        dueDate: buildDateString(dueYear, dueMonth, safeDueDay),
+        dueDate: buildDateString(cycleYear, cycleMonth, safeDueDay),
     };
 }
 
@@ -681,12 +692,11 @@ export function resolveCreditCardInvoiceCycleFromCycleKey(
 
     const safeClosingDay = asDayOfMonth(closingDay, 1);
     const safeDueDay = asDayOfMonth(dueDay, 1);
-    const dueAnchor = new Date(parsedMonth.year, parsedMonth.monthIndex + 1, 1);
 
     return {
         cycleKey: formatYearMonth(parsedMonth.year, parsedMonth.monthIndex),
         closingDate: buildDateString(parsedMonth.year, parsedMonth.monthIndex, safeClosingDay),
-        dueDate: buildDateString(dueAnchor.getFullYear(), dueAnchor.getMonth(), safeDueDay),
+        dueDate: buildDateString(parsedMonth.year, parsedMonth.monthIndex, safeDueDay),
     };
 }
 
@@ -844,7 +854,7 @@ export function normalizeCreditCardInvoice(invoice: CreditCardInvoiceInput, cred
     const cycleMonth = cycleMatch ? Math.max(0, Math.min(11, Number(cycleMatch[2]) - 1)) : new Date().getMonth();
 
     const closingDate = asDateString(invoice.closingDate, buildDateString(cycleYear, cycleMonth, 10));
-    const dueDate = asDateString(invoice.dueDate, buildDateString(cycleYear, cycleMonth + 1, 15));
+    const dueDate = asDateString(invoice.dueDate, buildDateString(cycleYear, cycleMonth, 15));
 
     return {
         id: asString(invoice.id, `invoice-${Date.now()}`),
@@ -933,15 +943,16 @@ export function normalizeTransactionGroup(group: Partial<TransactionGroup> & { i
 
 export function normalizeStoredTransaction(transaction: Partial<StoredTransaction> & { id: string; groupId: string }): StoredTransaction {
     const now = getNowIso();
+    const scheduledDate = asDateString(transaction.scheduledDate, getTodayDate());
     const status = normalizeTransactionStatus(transaction.status);
-    const paidAt = status === "paid" ? asDateTimeString(transaction.paidAt, now) : null;
+    const paidAt = status === "paid" ? asDateTimeString(transaction.paidAt, resolveLedgerEntryDateIso(scheduledDate, now)) : null;
 
     return {
         id: asString(transaction.id, `tx-${Date.now()}`),
         groupId: asString(transaction.groupId, `group-${Date.now()}`),
         installmentNumber: Number.isInteger(transaction.installmentNumber) ? Number(transaction.installmentNumber) : null,
         amount: roundToCents(Math.abs(asNumber(transaction.amount, 0))),
-        scheduledDate: asDateString(transaction.scheduledDate, getTodayDate()),
+        scheduledDate,
         status,
         paidAt,
         invoiceId: asNullableString(transaction.invoiceId, null),
@@ -1160,7 +1171,7 @@ export function createLedgerEntriesForPaidTransaction(transaction: StoredTransac
         return [];
     }
 
-    const createdAt = transaction.paidAt ?? transaction.createdAt;
+    const createdAt = getTransactionLedgerEntryDateIso(transaction);
     const descriptionBase = group.title || "Transacao";
 
     if (group.type === "income") {
@@ -1227,6 +1238,51 @@ export function createLedgerEntriesForPaidTransaction(transaction: StoredTransac
     }
 
     return entries;
+}
+
+function compareLedgerEntryRepairShape(a: LedgerEntry, b: LedgerEntry): number {
+    if (a.walletId !== b.walletId) {
+        return a.walletId.localeCompare(b.walletId);
+    }
+
+    if (a.amount !== b.amount) {
+        return a.amount - b.amount;
+    }
+
+    if (a.createdAt !== b.createdAt) {
+        return a.createdAt.localeCompare(b.createdAt);
+    }
+
+    if (a.description !== b.description) {
+        return a.description.localeCompare(b.description, "pt-BR", { sensitivity: "base" });
+    }
+
+    if ((a.invoiceId ?? "") !== (b.invoiceId ?? "")) {
+        return (a.invoiceId ?? "").localeCompare(b.invoiceId ?? "");
+    }
+
+    return (a.transactionId ?? "").localeCompare(b.transactionId ?? "");
+}
+
+function canReuseTransactionLedgerEntries(existingEntries: LedgerEntry[], expectedEntries: LedgerEntry[]): boolean {
+    if (existingEntries.length !== expectedEntries.length) {
+        return false;
+    }
+
+    const sortedExisting = [...existingEntries].sort(compareLedgerEntryRepairShape);
+    const sortedExpected = [...expectedEntries].sort(compareLedgerEntryRepairShape);
+
+    return sortedExisting.every((entry, index) => {
+        const expected = sortedExpected[index];
+        return (
+            entry.walletId === expected.walletId &&
+            entry.transactionId === expected.transactionId &&
+            entry.invoiceId === expected.invoiceId &&
+            entry.amount === expected.amount &&
+            entry.description === expected.description &&
+            entry.createdAt === expected.createdAt
+        );
+    });
 }
 
 export function calculateFinanceSummary(transactionGroups: TransactionGroup[], transactions: StoredTransaction[]): Pick<FinanceSnapshot, "despesas" | "receitas"> {
@@ -2270,25 +2326,35 @@ export function normalizeFinanceSnapshot(rawFinance: unknown, userId: string | n
         } else {
             existingLedgerByTransaction.set(transaction.id, [entry]);
         }
-        cleanedLedgerEntries.push(entry);
     });
 
     normalizedTransactions.forEach((transaction) => {
-        if (transaction.status !== "paid") {
-            return;
-        }
+        const existingEntries = existingLedgerByTransaction.get(transaction.id) ?? [];
 
-        if (existingLedgerByTransaction.has(transaction.id)) {
+        if (transaction.status !== "paid") {
             return;
         }
 
         const group = groupById.get(transaction.groupId);
         if (!group) {
+            cleanedLedgerEntries.push(...existingEntries);
+            return;
+        }
+
+        const expectedEntries = createLedgerEntriesForPaidTransaction(transaction, group);
+        if (existingEntries.length < 1) {
+            changed = true;
+            cleanedLedgerEntries.push(...expectedEntries);
+            return;
+        }
+
+        if (canReuseTransactionLedgerEntries(existingEntries, expectedEntries)) {
+            cleanedLedgerEntries.push(...existingEntries);
             return;
         }
 
         changed = true;
-        cleanedLedgerEntries.push(...createLedgerEntriesForPaidTransaction(transaction, group));
+        cleanedLedgerEntries.push(...expectedEntries);
     });
 
     const normalizedGroups = Array.from(groupsById.values()).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
@@ -2350,8 +2416,8 @@ export function normalizeFinanceSnapshot(rawFinance: unknown, userId: string | n
         invoiceMetaById.set(resolvedInvoiceId, {
             creditCardId: creditCard.id,
             cycleKey: existingInvoice?.cycleKey ?? resolvedCycle.cycleKey,
-            closingDate: existingInvoice?.closingDate ?? resolvedCycle.closingDate,
-            dueDate: existingInvoice?.dueDate ?? resolvedCycle.dueDate,
+            closingDate: resolvedCycle.closingDate,
+            dueDate: resolvedCycle.dueDate,
             createdAt: existingInvoice?.createdAt ?? transaction.createdAt,
         });
 

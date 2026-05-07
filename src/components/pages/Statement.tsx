@@ -24,7 +24,6 @@ import {
     compareInvoicesByDueDate,
     INITIAL_STATEMENT_FILTER_STATE,
     resolveDefaultStatementMonth,
-    shiftMonth,
     type StatementFilterState,
 } from "./statement/statementPageShared";
 import { StatementSummaryCards } from "./statement/StatementSummaryCards";
@@ -204,7 +203,7 @@ export function StatementPage() {
             return;
         }
 
-        const prefillCycleKey = shiftMonth(selectedDueMonth, -1);
+        const prefillCycleKey = selectedDueMonth;
         const prefillInvoiceId = buildCreditCardInvoiceId(selectedCard.id, prefillCycleKey);
         const prefillDate = resolveCreditCardInvoiceCycleFromCycleKey(prefillCycleKey, selectedCard.closingDay, selectedCard.dueDay).dueDate;
 

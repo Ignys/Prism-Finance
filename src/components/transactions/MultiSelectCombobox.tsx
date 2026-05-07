@@ -104,9 +104,9 @@ export function MultiSelectCombobox<T extends ComboboxOptionBase>({
             <button
                 type="button"
                 onClick={() => setIsOpen((current) => !current)}
-                className="flex w-full items-center justify-between rounded-xl border border-white/[0.1] bg-black/35 px-3 py-2.5 text-left text-sm text-white transition-colors hover:border-white/[0.2]"
+                className="flex w-full items-center justify-between rounded-xl border border-white/[0.1] bg-black/35 px-3 py-1.5 text-left text-xs text-white transition-colors hover:border-white/[0.2]"
             >
-                <span className={`min-w-0 flex-1 truncate ${selectedOptions.length < 1 ? "text-white/40" : ""}`}>{selectedSummary}</span>
+                <span className={` min-w-0 flex-1 truncate ${selectedOptions.length < 1 ? "text-white/40" : ""}`}>{selectedSummary}</span>
                 <ChevronsUpDown size={15} className="ml-2 shrink-0 text-white/55" />
             </button>
 

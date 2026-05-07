@@ -23,7 +23,6 @@ interface TransactionsListPanelProps {
     transferTransactions: Transaction[];
     wallets: Wallet[];
     sortMode: SortMode;
-    onTabChange: (tab: TransactionsTabKey) => void;
     onSortModeChange: (sortMode: SortMode) => void;
     onEdit: (transaction: Transaction) => void;
     onConfirmPayment: (transaction: Transaction) => void;
@@ -44,7 +43,6 @@ interface TransactionsTableProps {
     beneficiariesById: Map<string, Beneficiary>;
     transactionGroupsById: Map<string, FinanceTransactionGroup>;
     sortMode: SortMode;
-    onTabChange: (tab: TransactionsTabKey) => void;
     onSortModeChange: (sortMode: SortMode) => void;
     onEdit: (transaction: Transaction) => void;
     onConfirmPayment: (transaction: Transaction) => void;
@@ -137,7 +135,6 @@ function TransactionsTable({
     beneficiariesById,
     transactionGroupsById,
     sortMode,
-    onTabChange,
     onSortModeChange,
     onEdit,
     onConfirmPayment,
@@ -149,22 +146,7 @@ function TransactionsTable({
     return (
         <section className="rounded-2xl border border-white/[0.08] bg-[#111111] p-3 shadow-[0_24px_60px_-32px_rgba(0,0,0,0.9)]">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-                <div className="flex items-end gap-2 overflow-x-auto pb-1">
-                    {tabs.map((tab) => (
-                        <button
-                            key={tab.key}
-                            type="button"
-                            onClick={() => onTabChange(tab.key)}
-                            className={`rounded-full border px-5 py-2 text-xs font-base uppercase tracking-[0.08em] transition-colors ${
-                                activeTab === tab.key
-                                    ? "border-white/[0.24] bg-white/[0.08] text-white"
-                                    : "border-white/[0.1] bg-white/[0.03] text-white/60 hover:border-white/[0.2] hover:text-white/85"
-                            }`}
-                        >
-                            {tab.label}
-                        </button>
-                    ))}
-                </div>
+                <h2 className="text-sm font-medium text-white/85">{activeTabConfig.label}</h2>
                 <span className="rounded-full border border-white/[0.12] bg-white/[0.03] px-2.5 py-1 text-xs text-white/60">{transactions.length} itens</span>
             </div>
 
@@ -321,7 +303,6 @@ export function TransactionsListPanel({
     transferTransactions,
     wallets,
     sortMode,
-    onTabChange,
     onSortModeChange,
     onEdit,
     onConfirmPayment,
@@ -379,7 +360,6 @@ export function TransactionsListPanel({
                 beneficiariesById={beneficiariesById}
                 transactionGroupsById={transactionGroupsById}
                 sortMode={sortMode}
-                onTabChange={onTabChange}
                 onSortModeChange={onSortModeChange}
                 onEdit={onEdit}
                 onConfirmPayment={onConfirmPayment}

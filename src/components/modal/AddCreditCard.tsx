@@ -517,7 +517,7 @@ export function AddCreditCard({ mode = "create", creditCardId, initialCreditCard
                             disabled={!canSubmit || isProcessingUpload || submitting}
                             className="inline-flex min-w-32 items-center justify-center rounded-xl border border-emerald-400/35 bg-emerald-500/15 px-4 py-2 text-sm font-semibold text-emerald-100 transition-colors hover:border-emerald-400/55 hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-60"
                         >
-                            {submitting ? "Processando..." : isEditMode ? "Salvar alteracoes" : "Criar cartao"}
+                            {submitting ? "Processando..." : isEditMode ? "Salvar alteracoes" : "Criar cartão"}
                         </button>
                     </div>
                 </div>

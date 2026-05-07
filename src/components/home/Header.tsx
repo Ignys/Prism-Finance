@@ -1,20 +1,19 @@
-import { lazy, Suspense, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { ArrowLeftRight, CalendarRange, FolderKanban, Home, ReceiptText, Wallet } from "lucide-react";
+import { ArrowLeftRight, CalendarRange, ChevronDown, FolderKanban, Home, LogOut, ReceiptText, Settings } from "lucide-react";
+import { signOut } from "firebase/auth";
 import {
-    type Category,
-    type TransactionDraft,
-    type TransactionStatus,
-    useFinanceActions,
     useFinanceCategories,
     useFinanceCreditCardInvoices,
     useFinanceCreditCards,
     useFinanceFavoriteCreditCard,
     useFinanceFavoriteWallet,
+    useFinanceSession,
     useFinanceSummary,
     useFinanceTransactions,
     useFinanceWallets,
 } from "../../context/FinanceContext";
+import { auth } from "../../firebase/firebaseClient";
 import { buildCreditCardInvoiceId, getMonthKeyFromDateValue, resolveCreditCardInvoiceCycle } from "../../context/financeTypes";
 import { useModal } from "../../context/ModalContext";
 import { AppPage, usePage } from "../../context/PageContext";
@@ -28,10 +27,9 @@ const iconSize = 20;
 
 const NAV_ITEMS: { label: string; page: AppPage; icon: React.ReactNode }[] = [
     { label: "Início", page: "home", icon: <Home size={iconSize} /> },
-    { label: "Carteiras", page: "balance", icon: <Wallet size={iconSize} /> },
     { label: "Transações", page: "transactions", icon: <ArrowLeftRight size={iconSize} /> },
-    { label: "Planejamentos", page: "planning", icon: <CalendarRange size={iconSize} /> },
     { label: "Fatura", page: "statement", icon: <ReceiptText size={iconSize} /> },
+    { label: "Planejamentos", page: "planning", icon: <CalendarRange size={iconSize} /> },
     { label: "Cadastros", page: "registry", icon: <FolderKanban size={iconSize} /> },
 ];
 
@@ -46,66 +44,6 @@ const METRIC_ITEMS: {
     { label: "Despesas", amountKey: "despesas", modalType: "spending" },
 ];
 
-const TEST_TRANSACTION_MARKER = "[prism-test-transaction]";
-const TEST_TRANSACTION_STATUSES: TransactionStatus[] = ["paid", "pending", "cancelled"];
-
-function buildWalletTestTransactions(categories: Category[], walletId: string): TransactionDraft[] {
-    const systemCategories = categories.filter((category) => category.isSystem);
-    const eligibleCategories = (systemCategories.length > 0 ? systemCategories : categories).filter(
-        (category) => category.type === "income" || category.type === "expense",
-    );
-    const referenceDate = new Date();
-
-    return eligibleCategories.map((category, index) => {
-        const scheduledDate = new Date(referenceDate);
-        scheduledDate.setDate(referenceDate.getDate() - index);
-        const status = TEST_TRANSACTION_STATUSES[index % TEST_TRANSACTION_STATUSES.length];
-        const isIncome = category.type === "income";
-        const amount = Number(((isIncome ? 900 : 85) + (index + 1) * 37.75).toFixed(2));
-
-        return {
-            type: isIncome ? "income" : "spending",
-            amount,
-            scheduledDate: formatLocalDateInput(scheduledDate),
-            inWallet: walletId,
-            categoryId: category.id,
-            beneficiary: isIncome ? "Entrada de teste" : "Saida de teste",
-            description: `${TEST_TRANSACTION_MARKER} ${isIncome ? "Receita" : "Despesa"} ${index + 1} - ${category.name}`,
-            status,
-            notes: TEST_TRANSACTION_MARKER,
-        };
-    });
-}
-
-function buildCardInvoiceTestTransactions(params: { categories: Category[]; walletId: string; cardId: string; invoiceId: string }): TransactionDraft[] {
-    const { categories, walletId, cardId, invoiceId } = params;
-    const systemCategories = categories.filter((category) => category.isSystem);
-    const eligibleExpenseCategories = (systemCategories.length > 0 ? systemCategories : categories).filter((category) => category.type === "expense");
-    const referenceDate = new Date();
-
-    return eligibleExpenseCategories.map((category, index) => {
-        const scheduledDate = new Date(referenceDate);
-        scheduledDate.setDate(referenceDate.getDate() - index);
-        const status = TEST_TRANSACTION_STATUSES[index % TEST_TRANSACTION_STATUSES.length];
-        const amount = Number((85 + (index + 1) * 29.5).toFixed(2));
-
-        return {
-            type: "spending",
-            amount,
-            scheduledDate: formatLocalDateInput(scheduledDate),
-            inWallet: walletId,
-            paymentMethod: "credit_card",
-            creditCardId: cardId,
-            invoiceId,
-            categoryId: category.id,
-            beneficiary: "Compra de teste",
-            description: `${TEST_TRANSACTION_MARKER} Compra cartao ${index + 1} - ${category.name}`,
-            status,
-            notes: TEST_TRANSACTION_MARKER,
-        };
-    });
-}
-
 function renderLazyModal(modalType: "income" | "spending" | "card_spending") {
     return (
         <Suspense fallback={<div className="rounded-lg bg-neutral-900 p-6 text-sm">Carregando...</div>}>
@@ -115,6 +53,7 @@ function renderLazyModal(modalType: "income" | "spending" | "card_spending") {
 }
 
 export function Header() {
+    const { user } = useFinanceSession();
     const summary = useFinanceSummary();
     const wallets = useFinanceWallets();
     const creditCards = useFinanceCreditCards();
@@ -123,20 +62,14 @@ export function Header() {
     const transactions = useFinanceTransactions();
     const favoriteWalletId = useFinanceFavoriteWallet();
     const favoriteCreditCardId = useFinanceFavoriteCreditCard();
-    const { addTransaction, deleteTransaction } = useFinanceActions();
     const { goToPage, currentPage } = usePage();
     const { openModal } = useModal();
     const [hoveredNav, setHoveredNav] = useState<string | null>(null);
-    const [isSeedingTransactions, setIsSeedingTransactions] = useState(false);
-    const [isClearingSeededTransactions, setIsClearingSeededTransactions] = useState(false);
+    const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+    const profileMenuRef = useRef<HTMLDivElement | null>(null);
 
     const resolvedWalletId = wallets.some((wallet) => wallet.id === favoriteWalletId) ? favoriteWalletId : (wallets[0]?.id ?? "default");
-    const seededTransactions = useMemo(() => transactions.filter((transaction) => transaction.description.startsWith(TEST_TRANSACTION_MARKER)), [transactions]);
-    const walletTestTransactions = useMemo(() => buildWalletTestTransactions(categories, resolvedWalletId), [categories, resolvedWalletId]);
-    const resolvedFavoriteCard = useMemo(
-        () => creditCards.find((card) => card.id === favoriteCreditCardId) ?? creditCards[0] ?? null,
-        [creditCards, favoriteCreditCardId],
-    );
+    const resolvedFavoriteCard = useMemo(() => creditCards.find((card) => card.id === favoriteCreditCardId) ?? creditCards[0] ?? null, [creditCards, favoriteCreditCardId]);
     const openFavoriteInvoiceId = useMemo(() => {
         if (!resolvedFavoriteCard) {
             return null;
@@ -145,19 +78,6 @@ export function Header() {
         const openCycle = resolveCreditCardInvoiceCycle(getLocalTodayDate(), resolvedFavoriteCard.closingDay, resolvedFavoriteCard.dueDay);
         return buildCreditCardInvoiceId(resolvedFavoriteCard.id, openCycle.cycleKey);
     }, [resolvedFavoriteCard]);
-    const cardInvoiceTestTransactions = useMemo(() => {
-        if (!resolvedFavoriteCard || !openFavoriteInvoiceId) {
-            return [];
-        }
-
-        return buildCardInvoiceTestTransactions({
-            categories,
-            walletId: resolvedWalletId,
-            cardId: resolvedFavoriteCard.id,
-            invoiceId: openFavoriteInvoiceId,
-        });
-    }, [categories, openFavoriteInvoiceId, resolvedFavoriteCard, resolvedWalletId]);
-    const testTransactions = useMemo(() => [...walletTestTransactions, ...cardInvoiceTestTransactions], [cardInvoiceTestTransactions, walletTestTransactions]);
     const pendingInvoicesAmount = useMemo(
         () =>
             Number(
@@ -211,47 +131,64 @@ export function Header() {
         [monthlySummary.despesas, monthlySummary.receitas, summary.balance],
     );
 
-    async function removeSeededTransactions() {
-        for (const transaction of seededTransactions) {
-            await deleteTransaction(transaction);
-        }
-    }
-
-    async function handleSeedTransactions() {
-        if (isSeedingTransactions || isClearingSeededTransactions || testTransactions.length === 0) {
-            return;
+    const userName = useMemo(() => {
+        const displayName = user?.displayName?.trim();
+        if (displayName) {
+            return displayName;
         }
 
-        setIsSeedingTransactions(true);
-        try {
-            await removeSeededTransactions();
-            for (const transactionDraft of testTransactions) {
-                await addTransaction(transactionDraft);
+        const emailPrefix = user?.email?.split("@")[0]?.trim();
+        if (emailPrefix) {
+            return emailPrefix;
+        }
+
+        return "Usuario";
+    }, [user?.displayName, user?.email]);
+    const userInitial = userName.charAt(0).toUpperCase();
+    const userPhotoUrl = user?.photoURL?.trim() ? user.photoURL : null;
+
+    useEffect(() => {
+        if (!isProfileMenuOpen) {
+            return undefined;
+        }
+
+        function handleClickOutside(event: MouseEvent) {
+            if (!profileMenuRef.current?.contains(event.target as Node)) {
+                setIsProfileMenuOpen(false);
             }
-        } catch (error) {
-            console.error("Falha ao popular transacoes de teste:", error);
-        } finally {
-            setIsSeedingTransactions(false);
         }
+
+        function handleKeyDown(event: KeyboardEvent) {
+            if (event.key === "Escape") {
+                setIsProfileMenuOpen(false);
+            }
+        }
+
+        document.addEventListener("mousedown", handleClickOutside);
+        document.addEventListener("keydown", handleKeyDown);
+
+        return () => {
+            document.removeEventListener("mousedown", handleClickOutside);
+            document.removeEventListener("keydown", handleKeyDown);
+        };
+    }, [isProfileMenuOpen]);
+
+    function handleOpenSettings() {
+        setIsProfileMenuOpen(false);
+        window.alert("Configuracoes em breve.");
     }
 
-    async function handleClearSeededTransactions() {
-        if (isClearingSeededTransactions || isSeedingTransactions || seededTransactions.length === 0) {
-            return;
-        }
-
-        setIsClearingSeededTransactions(true);
+    async function handleSwitchAccount() {
+        setIsProfileMenuOpen(false);
         try {
-            await removeSeededTransactions();
+            await signOut(auth);
         } catch (error) {
-            console.error("Falha ao limpar transacoes de teste:", error);
-        } finally {
-            setIsClearingSeededTransactions(false);
+            console.error("Falha ao trocar de conta:", error);
         }
     }
 
     const normalizedPage: AppPage =
-        currentPage === "beneficiaries" || currentPage === "categories" || currentPage === "tags"
+        currentPage === "wallets" || currentPage === "creditCards" || currentPage === "beneficiaries" || currentPage === "categories" || currentPage === "tags"
             ? "registry"
             : currentPage === "spending" || currentPage === "income"
               ? "transactions"
@@ -364,29 +301,48 @@ export function Header() {
                             Adicionar
                         </button>
                     </div>
-                    {import.meta.env.DEV && (
-                        <>
-                            <div className="mx-0.5 h-5 w-px bg-white/[0.06]" />
-                            <div className="flex items-center gap-1 rounded-[9px] border border-amber-300/20 bg-amber-500/10 p-1">
+                    <div className="mx-0.5 h-5 w-px bg-white/[0.06]" />
+                    <div className="relative" ref={profileMenuRef}>
+                        <button
+                            type="button"
+                            onClick={() => setIsProfileMenuOpen((current) => !current)}
+                            aria-haspopup="menu"
+                            aria-expanded={isProfileMenuOpen}
+                            className="flex items-center gap-2 rounded-[10px] border border-white/[0.08] bg-white/[0.03] px-2 py-1.5 text-left transition-colors hover:bg-white/[0.07]"
+                        >
+                            <span className="inline-flex h-8 w-8 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-neutral-700 text-xs font-semibold text-white">
+                                {userPhotoUrl ? <img src={userPhotoUrl} alt={`Foto de ${userName}`} className="h-full w-full object-cover" /> : userInitial}
+                            </span>
+                            <span className="max-w-[120px] truncate text-sm font-medium text-white/90">{userName}</span>
+                            <ChevronDown size={16} className={`text-white/60 transition-transform ${isProfileMenuOpen ? "rotate-180" : ""}`} />
+                        </button>
+                        {isProfileMenuOpen && (
+                            <div
+                                role="menu"
+                                aria-label="Menu do usuario"
+                                className="absolute right-0 top-[calc(100%+8px)] z-30 min-w-[180px] overflow-hidden rounded-xl border border-white/[0.1] bg-neutral-950/95 p-1 shadow-[0_20px_45px_-20px_rgba(0,0,0,0.85)] backdrop-blur-lg"
+                            >
                                 <button
                                     type="button"
-                                    onClick={handleSeedTransactions}
-                                    disabled={isSeedingTransactions || isClearingSeededTransactions || testTransactions.length === 0}
-                                    className="rounded-md px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.06em] text-amber-100 transition-colors hover:bg-amber-400/15 disabled:cursor-not-allowed disabled:text-amber-100/40"
+                                    role="menuitem"
+                                    onClick={handleOpenSettings}
+                                    className="w-full flex gap-2 items-center rounded-lg px-3 py-2 text-left text-sm text-white/85 transition-colors hover:bg-white/[0.08]"
                                 >
-                                    {isSeedingTransactions ? "Gerando..." : "Criar testes"}
+                                    <Settings size={18} />
+                                    Configurações
                                 </button>
                                 <button
                                     type="button"
-                                    onClick={handleClearSeededTransactions}
-                                    disabled={isSeedingTransactions || isClearingSeededTransactions || seededTransactions.length === 0}
-                                    className="rounded-md px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.06em] text-amber-100 transition-colors hover:bg-amber-400/15 disabled:cursor-not-allowed disabled:text-amber-100/40"
+                                    role="menuitem"
+                                    onClick={handleSwitchAccount}
+                                    className="w-full flex gap-2 items-center rounded-lg px-3 py-2 text-left text-sm text-white/85 transition-colors hover:bg-white/[0.08]"
                                 >
-                                    {isClearingSeededTransactions ? "Limpando..." : "Limpar testes"}
+                                    <LogOut size={18} />
+                                    Sair
                                 </button>
                             </div>
-                        </>
-                    )}
+                        )}
+                    </div>
                 </div>
             </div>
         </header>

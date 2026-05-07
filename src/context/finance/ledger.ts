@@ -3,4 +3,5 @@ export {
     calculateCreditCardInvoiceOpenAmount,
     calculateTotalBalance,
     createLedgerEntriesForPaidTransaction,
+    resolveLedgerEntryDateIso,
 } from "./financeCore";

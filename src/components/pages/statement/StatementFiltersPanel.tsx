@@ -1,8 +1,8 @@
 import { GalleryVerticalEnd } from "lucide-react";
 import type { CreditCard } from "../../../context/FinanceContext";
+import { usePage } from "../../../context/PageContext";
 import { StatementMonthSelector } from "../../common/StatementMonthSelector";
 import { WalletAvatar } from "../../common/WalletAvatar";
-import { usePage } from "../../../context/PageContext";
 
 interface StatementFiltersPanelProps {
     selectedMonth: string;
@@ -72,7 +72,13 @@ export function StatementFiltersPanel({ selectedMonth, selectedCardId, selectedC
                 </div>
 
                 {creditCards.length < 1 && (
-                    <div onClick={() => goToPage("balance")} className="rounded-xl border border-white/[0.08] bg-white/[0.02] px-3 py-2 text-sm text-white/55">Crie um cartão agora!</div>
+                    <button
+                        type="button"
+                        onClick={() => goToPage("creditCards")}
+                        className="rounded-xl border border-white/[0.08] bg-white/[0.02] px-3 py-2 text-left text-sm text-white/55 transition-colors hover:border-white/[0.16] hover:bg-white/[0.05] hover:text-white"
+                    >
+                        Crie um cartão agora!
+                    </button>
                 )}
             </div>
         </section>

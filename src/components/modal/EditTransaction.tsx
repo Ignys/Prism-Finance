@@ -14,7 +14,7 @@ export function EditTransaction({ transaction }: EditTransactionProps) {
     const isInvoicePayment = transaction.systemKind === "invoice_payment";
 
     return (
-        <ModalStructure height="auto" width={advancedOpen ? "1100px" : "700px"}>
+        <ModalStructure height="auto" width={advancedOpen ? "900px" : "600px"}>
             {isCreditCardSpending ? (
                 <CardSpendingForm transaction={transaction} onAdvancedOpenChange={setAdvancedOpen} />
             ) : (

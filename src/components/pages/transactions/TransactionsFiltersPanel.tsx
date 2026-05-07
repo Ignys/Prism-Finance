@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from "framer-motion";
-import { FunnelPlus, Plus, Search, X } from "lucide-react";
+import { ArrowDownRight, ArrowRightLeft, ArrowUpRight, FunnelPlus, Plus, Search, X } from "lucide-react";
 import type { TransactionStatus, Wallet } from "../../../context/FinanceContext";
 import { StatementMonthSelector } from "../../common/StatementMonthSelector";
 import { INPUT_CLASS, SELECT_CLASS, STATUS_LABELS, STATUS_ORDER, type SelectOption, type TagOption, type TransactionsTabKey } from "./transactionsPageShared";
@@ -23,6 +23,7 @@ interface TransactionsFiltersPanelProps {
     tagOptions: TagOption[];
     wallets: Wallet[];
     hasAdvancedFilters: boolean;
+    onTabChange: (tab: TransactionsTabKey) => void;
     onToggleAdvancedFilters: () => void;
     onClearAdvancedFilters: () => void;
     onMonthChange: (value: string) => void;
@@ -58,6 +59,7 @@ export function TransactionsFiltersPanel({
     tagOptions,
     wallets,
     hasAdvancedFilters,
+    onTabChange,
     onToggleAdvancedFilters,
     onClearAdvancedFilters,
     onMonthChange,
@@ -75,6 +77,11 @@ export function TransactionsFiltersPanel({
 }: TransactionsFiltersPanelProps) {
     const canCreateTransaction = activeTab !== "transfer";
     const createLabel = activeTab === "income" ? "Adicionar receita" : "Adicionar despesa";
+    const tabs = [
+        { key: "income" as const, label: "Receitas", icon: ArrowUpRight },
+        { key: "spending" as const, label: "Despesas", icon: ArrowDownRight },
+        { key: "transfer" as const, label: "Transferências", icon: ArrowRightLeft },
+    ];
 
     return (
         <section className="pt-1 ">
@@ -84,6 +91,43 @@ export function TransactionsFiltersPanel({
                         <h1 className="text-2xl font-semibold text-white">Transações</h1>
                     </div>
                     <StatementMonthSelector selectedMonth={selectedMonth} onMonthChange={onMonthChange} ariaLabel="Selecionar mes e ano das transacoes" />
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                    {tabs.map((tab) => {
+                        const isActive = activeTab === tab.key;
+                        const Icon = tab.icon;
+                        const iconContainerClass =
+                            tab.key === "income"
+                                ? isActive
+                                    ? "border-emerald-300/45 bg-emerald-500/18 text-emerald-100"
+                                    : "border-emerald-400/20 bg-emerald-500/10 text-emerald-300/85 group-hover:border-emerald-300/35 group-hover:bg-emerald-500/16 group-hover:text-emerald-200"
+                                : tab.key === "spending"
+                                  ? isActive
+                                      ? "border-red-300/45 bg-red-500/18 text-red-100"
+                                      : "border-red-400/20 bg-red-500/10 text-red-300/85 group-hover:border-red-300/35 group-hover:bg-red-500/16 group-hover:text-red-200"
+                                  : isActive
+                                    ? "border-neutral-300/45 text-neutral-50"
+                                    : "border-white/[0.14] text-white/80 group-hover:border-white/[0.24] group-hover:text-white";
+
+                        return (
+                            <button
+                                type="button"
+                                key={tab.key}
+                                onClick={() => onTabChange(tab.key)}
+                                aria-pressed={isActive}
+                                className={`group inline-flex items-center gap-2 rounded-xl border pl-2 pr-3 py-2 text-left transition-all duration-200 ${
+                                    isActive
+                                        ? "border-neutral-300/45 bg-neutral-500/15 text-neutral-50"
+                                        : "border-white/[0.09] bg-white/[0.02] text-white/80 hover:-translate-y-0.5 hover:border-white/[0.22] hover:bg-white/[0.06] hover:text-white"
+                                }`}
+                            >
+                                <span className={`inline-flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${iconContainerClass}`}>
+                                    <Icon size={18} strokeWidth={2.2} />
+                                </span>
+                                <span className="text-sm">{tab.label}</span>
+                            </button>
+                        );
+                    })}
                 </div>
                 <div className="flex h-10 justify-between gap-3">
                     <div className="w-full">

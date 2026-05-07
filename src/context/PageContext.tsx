@@ -1,6 +1,18 @@
 import { createContext, ReactNode, useCallback, useContext, useMemo, useRef, useState } from "react";
 
-export type AppPage = "home" | "spending" | "income" | "balance" | "planning" | "beneficiaries" | "categories" | "tags" | "statement" | "transactions" | "registry";
+export type AppPage =
+    | "home"
+    | "spending"
+    | "income"
+    | "planning"
+    | "wallets"
+    | "creditCards"
+    | "beneficiaries"
+    | "categories"
+    | "tags"
+    | "statement"
+    | "transactions"
+    | "registry";
 export type TransactionsIntentTab = "income" | "spending" | "transfer";
 export type PageNavigationIntent =
     | {

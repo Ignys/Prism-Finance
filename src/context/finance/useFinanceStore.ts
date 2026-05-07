@@ -48,6 +48,7 @@ import {
     toTransactionList,
     type Wallet,
     parseCreditCardInvoiceId,
+    resolveLedgerEntryDateIso,
     resolveCreditCardInvoiceStatus,
     resolveCreditCardInvoiceCycle,
     resolveCreditCardInvoiceCycleFromCycleKey,
@@ -113,16 +114,6 @@ function buildTransactionBackedGroupIds(transactions: StoredTransaction[]): Set<
     return new Set(transactions.map((transaction) => transaction.groupId));
 }
 
-function toLedgerDateIso(dateValue: string, fallbackIso: string): string {
-    const parsedDate = parseAppDate(dateValue);
-    if (!parsedDate) {
-        return fallbackIso;
-    }
-
-    const localMidday = new Date(parsedDate.getFullYear(), parsedDate.getMonth(), parsedDate.getDate(), 12, 0, 0, 0);
-    return localMidday.toISOString();
-}
-
 const RECURRING_MONTHS_HORIZON = 12;
 
 function normalizeSeriesScope(scope: TransactionSeriesScope | null | undefined): TransactionSeriesScope {
@@ -137,6 +128,66 @@ function compareDateValue(a: string, b: string): number {
         return 0;
     }
     return a < b ? -1 : 1;
+}
+
+function parseInvoiceCycleKey(cycleKey: string): { year: number; monthIndex: number } | null {
+    const match = /^(\d{4})-(\d{2})$/.exec(cycleKey.trim());
+    if (!match) {
+        return null;
+    }
+
+    const year = Number(match[1]);
+    const month = Number(match[2]);
+    if (!Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12) {
+        return null;
+    }
+
+    return {
+        year,
+        monthIndex: month - 1,
+    };
+}
+
+function shiftInvoiceCycleKey(cycleKey: string, offset: number): string {
+    const parsedCycleKey = parseInvoiceCycleKey(cycleKey);
+    if (!parsedCycleKey || !Number.isFinite(offset) || offset === 0) {
+        return cycleKey;
+    }
+
+    const shifted = new Date(parsedCycleKey.year, parsedCycleKey.monthIndex + offset, 1);
+    return `${shifted.getFullYear()}-${String(shifted.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function getInstallmentOrderValue(transaction: Pick<StoredTransaction, "installmentNumber">): number {
+    const installmentNumber = transaction.installmentNumber;
+    return Number.isInteger(installmentNumber) && Number(installmentNumber) > 0 ? Number(installmentNumber) : Number.MAX_SAFE_INTEGER;
+}
+
+function compareTransactionsWithinSeries(a: StoredTransaction, b: StoredTransaction, transactionMode: TransactionMode | null | undefined): number {
+    if (transactionMode === "installment") {
+        const installmentComparison = getInstallmentOrderValue(a) - getInstallmentOrderValue(b);
+        if (installmentComparison !== 0) {
+            return installmentComparison;
+        }
+
+        if (a.createdAt === b.createdAt) {
+            return a.id.localeCompare(b.id);
+        }
+        return a.createdAt.localeCompare(b.createdAt);
+    }
+
+    if (a.scheduledDate === b.scheduledDate) {
+        return a.id.localeCompare(b.id);
+    }
+    return a.scheduledDate.localeCompare(b.scheduledDate);
+}
+
+function isTransactionAtOrAfterSeriesAnchor(candidate: StoredTransaction, anchor: StoredTransaction, transactionMode: TransactionMode | null | undefined): boolean {
+    if (transactionMode === "installment") {
+        return getInstallmentOrderValue(candidate) >= getInstallmentOrderValue(anchor);
+    }
+
+    return compareDateValue(candidate.scheduledDate, anchor.scheduledDate) >= 0;
 }
 
 function addDaysToDateValue(dateValue: string, days: number): string {
@@ -451,8 +502,8 @@ function syncCreditCardInvoices(params: {
         invoiceMetaById.set(resolvedInvoiceId, {
             creditCardId: card.id,
             cycleKey: existingInvoice?.cycleKey ?? resolvedCycle.cycleKey,
-            closingDate: existingInvoice?.closingDate ?? resolvedCycle.closingDate,
-            dueDate: existingInvoice?.dueDate ?? resolvedCycle.dueDate,
+            closingDate: resolvedCycle.closingDate,
+            dueDate: resolvedCycle.dueDate,
             createdAt: existingInvoice?.createdAt ?? transaction.createdAt,
         });
 
@@ -1218,7 +1269,7 @@ export function useFinanceStore(): FinanceStoreValue {
 
             const safePaymentDate = parseAppDate(paymentDate) ? paymentDate : getTodayDate();
             const nowIso = new Date().toISOString();
-            const ledgerDateIso = toLedgerDateIso(safePaymentDate, nowIso);
+            const ledgerDateIso = resolveLedgerEntryDateIso(safePaymentDate, nowIso);
             const linkedCard = creditCardsRef.current.find((card) => card.id === invoice.creditCardId) ?? null;
             const paymentDescription = `Pagamento da fatura do ${linkedCard?.name ?? "cartao"}`;
             const invoicePaymentCategory =
@@ -1343,7 +1394,7 @@ export function useFinanceStore(): FinanceStoreValue {
 
             const nowIso = new Date().toISOString();
             const safeDate = parseAppDate(date) ? date : transactionToUpdate.scheduledDate;
-            const paidAt = toLedgerDateIso(safeDate, transactionToUpdate.paidAt ?? nowIso);
+            const paidAt = resolveLedgerEntryDateIso(safeDate, transactionToUpdate.paidAt ?? nowIso);
             const safeDescription = description.trim() || groupToUpdate.title || "Pagamento de fatura";
 
             const requestedBeneficiaryId = beneficiaryId?.trim() ?? "";
@@ -1926,7 +1977,15 @@ export function useFinanceStore(): FinanceStoreValue {
                 ? transactionGroupsRef.current.map((item) => (item.id === groupId ? group : item))
                 : [...transactionGroupsRef.current, group];
 
-            const resolveTransactionInvoiceId = (dateValue: string, allowRequestedInvoice: boolean): string | null => {
+            const resolveTransactionInvoiceId = ({
+                dateValue,
+                allowRequestedInvoice,
+                installmentOffset = 0,
+            }: {
+                dateValue: string;
+                allowRequestedInvoice: boolean;
+                installmentOffset?: number;
+            }): string | null => {
                 if (group.type !== "expense" || !group.creditCardId) {
                     return null;
                 }
@@ -1936,31 +1995,33 @@ export function useFinanceStore(): FinanceStoreValue {
                     return null;
                 }
 
-                const requestedInvoiceId = allowRequestedInvoice ? newTransaction.invoiceId?.trim() ?? "" : "";
+                const shouldUseRequestedInvoice = allowRequestedInvoice || group.transactionMode === "installment";
+                const requestedInvoiceId = shouldUseRequestedInvoice ? newTransaction.invoiceId?.trim() ?? "" : "";
                 const parsedRequestedInvoice = requestedInvoiceId ? parseCreditCardInvoiceId(requestedInvoiceId) : null;
                 if (parsedRequestedInvoice && parsedRequestedInvoice.creditCardId === linkedCard.id) {
-                    return requestedInvoiceId;
+                    const nextCycleKey = shiftInvoiceCycleKey(parsedRequestedInvoice.cycleKey, installmentOffset);
+                    return buildCreditCardInvoiceId(linkedCard.id, nextCycleKey);
                 }
 
                 const cycle = resolveCreditCardInvoiceCycle(dateValue, linkedCard.closingDay, linkedCard.dueDay);
-                return buildCreditCardInvoiceId(linkedCard.id, cycle.cycleKey);
+                const nextCycleKey = shiftInvoiceCycleKey(cycle.cycleKey, installmentOffset);
+                return buildCreditCardInvoiceId(linkedCard.id, nextCycleKey);
             };
 
             const createdTransactions: StoredTransaction[] = [];
             if (group.transactionMode === "installment" && installmentCount) {
                 const installmentAmounts = splitAmountAcrossInstallments(absoluteAmount, installmentCount);
                 installmentAmounts.forEach((installmentAmount, index) => {
-                    const occurrenceDate = addMonthsToDateValue(scheduledDate, index);
                     const transactionStatus = index < ignoredInstallmentsCount ? "skipped" : index === ignoredInstallmentsCount ? status : "pending";
                     const transaction = normalizeStoredTransaction({
                         id: index === 0 ? transactionId : createId("tx"),
                         groupId,
                         installmentNumber: index + 1,
                         amount: installmentAmount,
-                        scheduledDate: occurrenceDate,
+                        scheduledDate,
                         status: transactionStatus,
-                        paidAt: transactionStatus === "paid" ? nowIso : null,
-                        invoiceId: resolveTransactionInvoiceId(occurrenceDate, false),
+                        paidAt: transactionStatus === "paid" ? resolveLedgerEntryDateIso(scheduledDate, nowIso) : null,
+                        invoiceId: resolveTransactionInvoiceId({ dateValue: scheduledDate, allowRequestedInvoice: false, installmentOffset: index }),
                         notes: newTransaction.notes || null,
                         createdAt: nowIso,
                     });
@@ -1974,8 +2035,8 @@ export function useFinanceStore(): FinanceStoreValue {
                     amount: absoluteAmount,
                     scheduledDate,
                     status,
-                    paidAt: status === "paid" ? nowIso : null,
-                    invoiceId: resolveTransactionInvoiceId(scheduledDate, group.transactionMode === "single"),
+                    paidAt: status === "paid" ? resolveLedgerEntryDateIso(scheduledDate, nowIso) : null,
+                    invoiceId: resolveTransactionInvoiceId({ dateValue: scheduledDate, allowRequestedInvoice: group.transactionMode === "single" }),
                     notes: newTransaction.notes || null,
                     createdAt: nowIso,
                 });
@@ -2043,7 +2104,7 @@ export function useFinanceStore(): FinanceStoreValue {
             const nextTransaction = normalizeStoredTransaction({
                 ...transactionToUpdate,
                 status: "paid",
-                paidAt: nowIso,
+                paidAt: resolveLedgerEntryDateIso(transactionToUpdate.scheduledDate, nowIso),
             });
 
             const nextTransactions = storedTransactionsRef.current.map((item) => (item.id === transactionToUpdate.id ? nextTransaction : item));
@@ -2073,12 +2134,7 @@ export function useFinanceStore(): FinanceStoreValue {
             const group = transactionGroupsRef.current.find((item) => item.id === transactionToDelete.groupId) ?? null;
             const groupTransactions = storedTransactionsRef.current
                 .filter((item) => item.groupId === transactionToDelete.groupId)
-                .sort((a, b) => {
-                    if (a.scheduledDate === b.scheduledDate) {
-                        return a.id.localeCompare(b.id);
-                    }
-                    return a.scheduledDate.localeCompare(b.scheduledDate);
-                });
+                .sort((a, b) => compareTransactionsWithinSeries(a, b, group?.transactionMode));
 
             const targetTransactionIds = new Set<string>();
             if (!group || normalizedScope === "single") {
@@ -2087,7 +2143,7 @@ export function useFinanceStore(): FinanceStoreValue {
                 groupTransactions.forEach((item) => targetTransactionIds.add(item.id));
             } else {
                 groupTransactions
-                    .filter((item) => compareDateValue(item.scheduledDate, transactionToDelete.scheduledDate) >= 0)
+                    .filter((item) => isTransactionAtOrAfterSeriesAnchor(item, transactionToDelete, group.transactionMode))
                     .forEach((item) => targetTransactionIds.add(item.id));
                 targetTransactionIds.add(transactionToDelete.id);
             }

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { CircleX, Copy, ReceiptText, SlidersHorizontal, SquareSlash, Trash2, X } from "lucide-react";
+import { ArrowRight, CircleX, Copy, Info, Layers3, ReceiptText, Repeat, SlidersHorizontal, SquareSlash, Trash2, X } from "lucide-react";
 import type { Beneficiary, Category, CreditCard, CreditCardInvoice, Transaction, TransactionMode, TransactionSeriesScope, TransactionStatus } from "../../context/FinanceContext";
 import {
     useFinanceActions,
@@ -23,7 +23,7 @@ import { DateField } from "./DateField";
 import { MultiSelectCombobox } from "./MultiSelectCombobox";
 import { SingleSelectCombobox, type ComboboxOptionBase } from "./SingleSelectCombobox";
 
-const FIELD_LABEL_CLASS = "text-[11px] uppercase tracking-[0.12em] text-white/50";
+export const FIELD_LABEL_CLASS = "text-[11px] uppercase tracking-[0.12em] text-white/50 pl-1";
 const FIELD_INPUT_CLASS = "rounded-xl border border-white/[0.1] bg-black/35 p-2.5 text-white outline-none transition-colors placeholder:text-white/35 focus:border-white/[0.24]";
 
 type InvoiceVisualStatus = "paid" | "overdue" | "closed" | "open" | "future";
@@ -79,6 +79,64 @@ interface BeneficiaryOption extends ComboboxOptionBase {
 interface TagOption extends ComboboxOptionBase {
     color: string | null;
 }
+
+interface SpendingModeOption extends ComboboxOptionBase {
+    mode: TransactionMode;
+    icon: typeof ReceiptText;
+}
+
+interface EditScopeOption extends ComboboxOptionBase {
+    scope: TransactionSeriesScope;
+    icon: typeof ReceiptText;
+}
+
+const SPENDING_MODE_OPTIONS: SpendingModeOption[] = [
+    {
+        id: "single",
+        label: "Unica",
+        searchText: "unica unica avulsa single",
+        mode: "single",
+        icon: ReceiptText,
+    },
+    {
+        id: "recurring",
+        label: "Fixa mensal",
+        searchText: "fixa mensal recorrente recurring",
+        mode: "recurring",
+        icon: Repeat,
+    },
+    {
+        id: "installment",
+        label: "Parcelada",
+        searchText: "parcelada parcelas installment",
+        mode: "installment",
+        icon: Copy,
+    },
+];
+
+const EDIT_SCOPE_OPTIONS: EditScopeOption[] = [
+    {
+        id: "single",
+        label: "Apenas essa transação",
+        searchText: "so esta ocorrencia single",
+        scope: "single",
+        icon: ReceiptText,
+    },
+    {
+        id: "this_and_next",
+        label: "Essa e as próximas transações",
+        searchText: "esta e proximas this and next",
+        scope: "this_and_next",
+        icon: ArrowRight,
+    },
+    {
+        id: "all",
+        label: "Todas as transações",
+        searchText: "toda a serie all",
+        scope: "all",
+        icon: Layers3,
+    },
+];
 
 const DATE_SHORTCUTS = [
     { label: "Hoje", offsetInDays: 0 },
@@ -154,6 +212,36 @@ function TagOptionContent({ option }: { option: TagOption }) {
             <span className="truncate">{option.label}</span>
         </div>
     );
+}
+
+function SpendingModeOptionContent({ option }: { option: SpendingModeOption }) {
+    const Icon = option.icon;
+
+    return (
+        <div className="flex items-center gap-2">
+            <span className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-white/[0.12] bg-white/[0.04] text-white/80">
+                <Icon size={14} />
+            </span>
+            <span className="truncate">{option.label}</span>
+        </div>
+    );
+}
+
+function EditScopeOptionContent({ option }: { option: EditScopeOption }) {
+    const Icon = option.icon;
+
+    return (
+        <div className="flex items-center gap-2">
+            <span className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-white/[0.12] bg-white/[0.04] text-white/80">
+                <Icon size={14} />
+            </span>
+            <span className="truncate">{option.label}</span>
+        </div>
+    );
+}
+
+function EditScopeSelectedContent({ option }: { option: EditScopeOption }) {
+    return <span className="truncate">{option.label}</span>;
 }
 
 function formatAmountInputFromValue(value: number): string {
@@ -307,6 +395,7 @@ export function CardSpendingForm({ transaction = null, prefill, onAdvancedOpenCh
     const [date, setDate] = useState(transaction?.date ?? (initialPrefillDate || getLocalTodayDate()));
     const [creditCardId, setCreditCardId] = useState(transaction?.creditCardId ?? (initialPrefillCreditCardId || favoriteCreditCardId || ""));
     const [invoiceId, setInvoiceId] = useState(transaction?.invoiceId ?? initialPrefillInvoiceId);
+    const [useInvoiceFromDate, setUseInvoiceFromDate] = useState(false);
     const [categoryId, setCategoryId] = useState(transaction?.category.id ?? "");
     const [beneficiaryId, setBeneficiaryId] = useState(transaction?.beneficiaryId ?? "");
     const [selectedTagIds, setSelectedTagIds] = useState<string[]>(transaction?.tagIds ?? []);
@@ -331,6 +420,7 @@ export function CardSpendingForm({ transaction = null, prefill, onAdvancedOpenCh
         setDate(transaction.date ?? getLocalTodayDate());
         setCreditCardId(transaction.creditCardId ?? favoriteCreditCardId ?? "");
         setInvoiceId(transaction.invoiceId ?? "");
+        setUseInvoiceFromDate(false);
         setCategoryId(transaction.category.id ?? "");
         setBeneficiaryId(transaction.beneficiaryId ?? "");
         setSelectedTagIds(transaction.tagIds ?? []);
@@ -452,6 +542,13 @@ export function CardSpendingForm({ transaction = null, prefill, onAdvancedOpenCh
 
     const selectedCard = useMemo(() => selectableCreditCards.find((card) => card.id === creditCardId) ?? null, [creditCardId, selectableCreditCards]);
     const openCycle = useMemo(() => (selectedCard ? resolveCreditCardInvoiceCycle(getLocalTodayDate(), selectedCard.closingDay, selectedCard.dueDay) : null), [selectedCard]);
+    const automaticCycle = useMemo(() => {
+        if (!selectedCard) {
+            return null;
+        }
+
+        return resolveCreditCardInvoiceCycle(date || getLocalTodayDate(), selectedCard.closingDay, selectedCard.dueDay);
+    }, [date, selectedCard]);
     const currentOpenCycleKey = openCycle?.cycleKey ?? "";
     const prefillInvoiceId = !isEditing ? (prefill?.initialInvoiceId?.trim() ?? "") : "";
     const prefillParsedInvoice = useMemo(() => (prefillInvoiceId ? parseCreditCardInvoiceId(prefillInvoiceId) : null), [prefillInvoiceId]);
@@ -532,6 +629,10 @@ export function CardSpendingForm({ transaction = null, prefill, onAdvancedOpenCh
             ensureSyntheticInvoice(openCycle.cycleKey);
         }
 
+        if (automaticCycle?.cycleKey) {
+            ensureSyntheticInvoice(automaticCycle.cycleKey);
+        }
+
         if (anchorCycleKey) {
             for (let offset = 0; offset <= 4; offset += 1) {
                 const cycleKey = offset === 0 ? anchorCycleKey : shiftCycleKey(anchorCycleKey, offset);
@@ -566,7 +667,18 @@ export function CardSpendingForm({ transaction = null, prefill, onAdvancedOpenCh
                     invoice,
                 };
             });
-    }, [anchorCycleKey, creditCardInvoices, currentOpenCycleKey, openCycle, selectedCard]);
+    }, [anchorCycleKey, automaticCycle?.cycleKey, creditCardInvoices, currentOpenCycleKey, openCycle, selectedCard]);
+
+    const automaticInvoiceId = useMemo(() => {
+        if (!selectedCard || !automaticCycle?.cycleKey) {
+            return "";
+        }
+
+        return buildCreditCardInvoiceId(selectedCard.id, automaticCycle.cycleKey);
+    }, [automaticCycle?.cycleKey, selectedCard]);
+
+    const resolvedInvoiceSelectionId = useInvoiceFromDate ? automaticInvoiceId : invoiceId;
+    const selectedResolvedInvoiceOption = useMemo(() => invoiceOptions.find((option) => option.id === resolvedInvoiceSelectionId) ?? null, [invoiceOptions, resolvedInvoiceSelectionId]);
 
     useEffect(() => {
         if (invoiceOptions.length < 1) {
@@ -641,8 +753,9 @@ export function CardSpendingForm({ transaction = null, prefill, onAdvancedOpenCh
 
         const resolvedMode: TransactionMode =
             isEditing && isSeriesTransaction && editScope === "single" ? "single" : spendingMode === "installment" ? "installment" : spendingMode === "recurring" ? "recurring" : "single";
-        const selectedInvoiceOption = invoiceOptions.find((option) => option.id === invoiceId) ?? null;
-        if (resolvedMode === "single" && (!invoiceId || !selectedInvoiceOption)) {
+        const requiresInvoiceSelection = resolvedMode === "single" || resolvedMode === "installment";
+        const selectedInvoiceOption = selectedResolvedInvoiceOption;
+        if (requiresInvoiceSelection && (!resolvedInvoiceSelectionId || !selectedInvoiceOption)) {
             return null;
         }
 
@@ -660,7 +773,7 @@ export function CardSpendingForm({ transaction = null, prefill, onAdvancedOpenCh
             inWallet: selectedCard.bankWalletId ?? "default",
             paymentMethod: "credit_card" as const,
             creditCardId: selectedCard.id,
-            invoiceId: resolvedMode === "single" && selectedInvoiceOption ? selectedInvoiceOption.invoice.id : null,
+            invoiceId: requiresInvoiceSelection && selectedInvoiceOption ? selectedInvoiceOption.invoice.id : null,
             categoryId: categoryId || null,
             beneficiaryId: beneficiaryId || null,
             tagIds: selectedTagIds,
@@ -780,253 +893,299 @@ export function CardSpendingForm({ transaction = null, prefill, onAdvancedOpenCh
         setSubmitting(false);
     };
 
+    const invoiceLabelContent = (
+        <div className="flex flex-wrap items-center justify-between gap-2 pr-2">
+            <span className={FIELD_LABEL_CLASS}>Fatura</span>
+            <div className="flex items-center gap-2">
+                <button
+                    type="button"
+                    disabled={!selectedCard}
+                    onClick={() => setUseInvoiceFromDate((current) => !current)}
+                    className={`${FIELD_LABEL_CLASS} inline-flex items-center gap-2 transition-colors`}
+                    aria-pressed={useInvoiceFromDate}
+                    aria-label="Selecionar fatura pela data"
+                >
+                    <span
+                        className={`relative inline-flex h-4 w-8 shrink-0 items-center rounded-full border transition-colors ${
+                            useInvoiceFromDate ? "border-emerald-300/45 bg-emerald-400/30" : "border-white/[0.14] bg-black/30"
+                        }`}
+                    >
+                        <span
+                            className={`inline-flex h-3.5 w-3.5 rounded-full bg-white shadow-[0_2px_10px_rgba(0,0,0,0.35)] transition-transform ${
+                                useInvoiceFromDate ? "translate-x-4" : "translate-x-0.5"
+                            }`}
+                        />
+                    </span>
+                    <span className={FIELD_LABEL_CLASS}>Escolher pela data</span>
+                    <div className="group relative">
+                        <span className="inline-flex items-center justify-center rounded-ful text-white/55 transition-colors group-hover:border-white/[0.24] group-hover:text-white/80">
+                            <Info size={15} />
+                        </span>
+                        <div className="pointer-events-none absolute right-0 top-full z-20 mt-2 w-64 rounded-lg border border-white/[0.12] bg-[#101010] p-2 text-[11px] normal-case tracking-normal text-white/75 opacity-0 shadow-[0_18px_45px_-25px_rgba(0,0,0,0.95)] transition-opacity group-hover:opacity-100">
+                            Quando ativo, a fatura deixa de ser escolhida manualmente e passa a ser calculada pela data do gasto e pelos dias de fechamento e vencimento do cartao.
+                        </div>
+                    </div>
+                </button>
+            </div>
+        </div>
+    );
+
     return (
         <>
-            <div className="rounded-2xl border border-white/[0.09] bg-[#131313] p-4 text-white shadow-[0_26px_70px_-38px_rgba(0,0,0,0.95)]">
-                <div className="flex items-start justify-between gap-3">
-                    <h1 className="flex items-center gap-2 text-2xl font-medium uppercase">
-                        <ReceiptText size={30} className="rounded-2xl p-1" strokeWidth={2.5} />
-                        {isEditing ? "Editar gasto no cartao" : "Novo gasto no cartao"}
-                    </h1>
-                    <div className="flex items-center gap-2">
+            <div className="rounded-xl flex flex-col justify-between border h-149 border-white/[0.09] bg-[#131313] p-4 text-white shadow-[0_26px_70px_-38px_rgba(0,0,0,0.95)]">
+                <div>
+                    <header className="flex items-center justify-between">
+                        <h1 className="text-sm ml-1 uppercase opacity-50">{isEditing ? (isSeriesTransaction ? "Editando gasto da série" : "Editando gasto no cartão") : "Novo gasto no cartão"}</h1>
+                        <div className="flex items-center gap-2">
+                            <button
+                                type="button"
+                                onClick={closeModal}
+                                disabled={submitting}
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/[0.12] bg-white/[0.03] text-white/70 transition-colors hover:border-white/[0.22] hover:text-white disabled:cursor-not-allowed disabled:opacity-55"
+                                aria-label="Fechar modal"
+                                title="Fechar"
+                            >
+                                <X size={15} />
+                            </button>
+                        </div>
+                    </header>
+
+                    <div className={`mt-2 flex justify-between gap-3`}>
+                        <section className="flex flex-col gap-3 grow">
+                            <label className="flex flex-col gap-1.5">
+                                <input
+                                    className={
+                                        "text-2xl rounded-xl border border-white/[0.1] bg-black/35 px-3 py-2 text-white outline-none transition-colors placeholder:text-white/35 focus:border-white/[0.24]"
+                                    }
+                                    inputMode="numeric"
+                                    placeholder="R$ 0,00"
+                                    value={amountInput}
+                                    onChange={(event) => setAmountInput(event.target.value)}
+                                />
+                            </label>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                <DateField value={date} onChange={setDate} shortcuts={DATE_SHORTCUTS} />
+                                <SingleSelectCombobox
+                                    label="Fatura"
+                                    value={resolvedInvoiceSelectionId}
+                                    placeholder="Selecione uma fatura"
+                                    emptyMessage="Nenhuma fatura disponível."
+                                    options={invoiceOptions}
+                                    onChange={setInvoiceId}
+                                    renderOptionContent={(option) => <InvoiceOptionContent option={option} />}
+                                    labelClassName={FIELD_LABEL_CLASS}
+                                    labelContent={invoiceLabelContent}
+                                    disabled={useInvoiceFromDate}
+                                />
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                <SingleSelectCombobox
+                                    label="Cartão"
+                                    value={creditCardId}
+                                    placeholder="Selecione um cartão"
+                                    emptyMessage="Nenhum cartão encontrado."
+                                    options={creditCardOptions}
+                                    onChange={setCreditCardId}
+                                    renderOptionContent={(option) => <CreditCardOptionContent option={option} />}
+                                    labelClassName={FIELD_LABEL_CLASS}
+                                />
+                                <SingleSelectCombobox
+                                    label="Beneficiario"
+                                    value={beneficiaryId}
+                                    placeholder="Selecione um beneficiario"
+                                    emptyMessage="Nenhum beneficiario encontrado."
+                                    options={beneficiaryOptions}
+                                    onChange={setBeneficiaryId}
+                                    renderOptionContent={(option) => <BeneficiaryOptionContent option={option} />}
+                                    labelClassName={FIELD_LABEL_CLASS}
+                                />
+                            </div>
+
+                            <SingleSelectCombobox
+                                label="Categoria"
+                                value={selectedCategoryOptionId}
+                                placeholder="Selecione uma categoria"
+                                emptyMessage="Nenhuma categoria disponível."
+                                options={categoryOptions}
+                                onChange={handleCategorySelect}
+                                renderOptionContent={(option) => <CategoryOptionContent option={option} />}
+                                labelClassName={FIELD_LABEL_CLASS}
+                            />
+
+                            <label className="flex flex-col gap-1.5 md:col-span-2">
+                                <span className={FIELD_LABEL_CLASS}>Descrição</span>
+                                <input className={FIELD_INPUT_CLASS} placeholder="Descrição da transação" value={description} onChange={(event) => setDescription(event.target.value)} />
+                            </label>
+                        </section>
+
+                        {advancedOpen && (
+                            <>
+                                <div className="w-px bg-white/5 rounded-full"></div>
+
+                                <aside className="flex flex-col gap-3 w-70">
+                                    {isEditing && isSeriesTransaction && (
+                                        <label className="flex flex-col gap-1.5">
+                                            <SingleSelectCombobox
+                                                disableSearch
+                                                compactTrigger
+                                                label="Editar"
+                                                value={editScope}
+                                                placeholder="Selecione um escopo"
+                                                emptyMessage="Nenhum escopo encontrado."
+                                                options={EDIT_SCOPE_OPTIONS}
+                                                onChange={(value) => {
+                                                    if (value === "all" || value === "this_and_next" || value === "single") {
+                                                        setEditScope(value);
+                                                        return;
+                                            }
+
+                                            setEditScope("single");
+                                        }}
+                                            renderOptionContent={(option) => <EditScopeOptionContent option={option} />}
+                                            renderSelectedContent={(option) => <EditScopeSelectedContent option={option} />}
+                                            labelClassName={FIELD_LABEL_CLASS}
+                                        />
+                                        </label>
+                                    )}
+                                    <MultiSelectCombobox
+                                        label={"Tags"}
+                                        values={selectedTagIds}
+                                        placeholder="Nenhuma tag selecionada"
+                                        emptyMessage="Nenhuma tag cadastrada."
+                                        options={tagOptions}
+                                        onChange={setSelectedTagIds}
+                                        renderOptionContent={(option) => <TagOptionContent option={option} />}
+                                        labelClassName={FIELD_LABEL_CLASS}
+                                    />
+                                    <label className="flex flex-col gap-1.5">
+                                        <SingleSelectCombobox
+                                            disableSearch
+                                            label="Tipo"
+                                            value={spendingMode}
+                                            placeholder="Selecione um modo"
+                                            emptyMessage="Nenhum modo encontrado."
+                                            options={SPENDING_MODE_OPTIONS}
+                                            onChange={(value) => {
+                                                if (value === "installment" || value === "recurring" || value === "single") {
+                                                    setSpendingMode(value);
+                                                    return;
+                                                }
+
+                                                setSpendingMode("single");
+                                            }}
+                                            renderOptionContent={(option) => <SpendingModeOptionContent option={option} />}
+                                            labelClassName={FIELD_LABEL_CLASS}
+                                        />
+                                    </label>
+
+                                    {spendingMode === "installment" && (
+                                        <>
+                                            <label className="flex flex-col gap-1.5">
+                                                <span className={FIELD_LABEL_CLASS}>Parcelas</span>
+                                                <input
+                                                    className={FIELD_INPUT_CLASS}
+                                                    type="number"
+                                                    min={2}
+                                                    step={1}
+                                                    value={installmentCountInput}
+                                                    onChange={(event) => setInstallmentCountInput(event.target.value)}
+                                                />
+                                            </label>
+
+                                            <label className="flex flex-col gap-1.5">
+                                                <span className={FIELD_LABEL_CLASS}>PARCELAS IGNORADAS</span>
+                                                <input
+                                                    className={FIELD_INPUT_CLASS}
+                                                    type="number"
+                                                    min={0}
+                                                    step={1}
+                                                    value={ignoredInstallmentsCountInput}
+                                                    onChange={(event) => setIgnoredInstallmentsCountInput(event.target.value)}
+                                                    onBlur={() => {
+                                                        const parsedInstallmentCount = Number(installmentCountInput);
+                                                        const resolvedInstallmentCount = Number.isInteger(parsedInstallmentCount) && parsedInstallmentCount >= 2 ? parsedInstallmentCount : null;
+                                                        const normalizedIgnoredCount = normalizeIgnoredInstallmentsCountInput(ignoredInstallmentsCountInput, resolvedInstallmentCount);
+                                                        setIgnoredInstallmentsCountInput(String(normalizedIgnoredCount));
+                                                    }}
+                                                />
+                                                <span className="text-[11px] text-white/45">Parcelas ignoradas entram nas faturas, mas seus valores não serão considerados.</span>
+                                            </label>
+                                        </>
+                                    )}
+                                </aside>
+                            </>
+                        )}
+                    </div>
+                </div>
+
+                <footer className="mt-4 flex flex-col gap-3">
+                    <div className="flex justify-end">
                         <button
                             type="button"
                             onClick={() => setAdvancedOpen((current) => !current)}
                             disabled={submitting}
-                            className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-medium uppercase tracking-[0.08em] transition-colors ${
+                            className={`inline-flex items-center gap-2 border px-3 py-2 text-xs font-medium uppercase tracking-[0.08em]  rounded-full transition-colors duration-150 ${
                                 advancedOpen
                                     ? "border-emerald-400/45 bg-emerald-500/15 text-emerald-100"
                                     : "border-white/[0.14] bg-white/[0.03] text-white/70 hover:border-white/[0.22] hover:text-white"
                             } disabled:cursor-not-allowed disabled:opacity-60`}
                         >
                             <SlidersHorizontal size={14} />
-                            {advancedOpen ? "Ocultar avancadas" : "Opcoes avancadas"}
-                        </button>
-                        <button
-                            type="button"
-                            onClick={closeModal}
-                            disabled={submitting}
-                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-white/[0.12] bg-white/[0.03] text-white/70 transition-colors hover:border-white/[0.22] hover:text-white disabled:cursor-not-allowed disabled:opacity-55"
-                            aria-label="Fechar modal"
-                            title="Fechar"
-                        >
-                            <X size={15} />
+                            {advancedOpen ? "Esconder opções" : "Mais opções"}
                         </button>
                     </div>
-                </div>
-
-                <div className={`mt-4 grid gap-4 ${advancedOpen ? "grid-cols-1 lg:grid-cols-[minmax(0,1fr)_320px]" : "grid-cols-1"}`}>
-                    <section className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                        <label className="flex flex-col gap-1.5">
-                            <span className={FIELD_LABEL_CLASS}>Valor</span>
-                            <input className={FIELD_INPUT_CLASS} inputMode="numeric" placeholder="R$ 0,00" value={amountInput} onChange={(event) => setAmountInput(event.target.value)} />
-                        </label>
-
-                        <SingleSelectCombobox
-                            label="Fatura"
-                            value={invoiceId}
-                            placeholder="Selecione uma fatura"
-                            emptyMessage="Nenhuma fatura disponivel."
-                            options={invoiceOptions}
-                            onChange={setInvoiceId}
-                            renderOptionContent={(option) => <InvoiceOptionContent option={option} />}
-                            labelClassName={FIELD_LABEL_CLASS}
-                        />
-
-                        <DateField value={date} onChange={setDate} shortcuts={DATE_SHORTCUTS} />
-
-                        <SingleSelectCombobox
-                            label="Cartao"
-                            value={creditCardId}
-                            placeholder="Selecione um cartao"
-                            emptyMessage="Nenhum cartao encontrado."
-                            options={creditCardOptions}
-                            onChange={setCreditCardId}
-                            renderOptionContent={(option) => <CreditCardOptionContent option={option} />}
-                            labelClassName={FIELD_LABEL_CLASS}
-                        />
-
-                        <SingleSelectCombobox
-                            label="Categoria"
-                            value={selectedCategoryOptionId}
-                            placeholder="Selecione uma categoria"
-                            emptyMessage="Nenhuma categoria disponivel."
-                            options={categoryOptions}
-                            onChange={handleCategorySelect}
-                            renderOptionContent={(option) => <CategoryOptionContent option={option} />}
-                            labelClassName={FIELD_LABEL_CLASS}
-                        />
-
-                        <SingleSelectCombobox
-                            label="Beneficiario"
-                            value={beneficiaryId}
-                            placeholder="Selecione um beneficiario"
-                            emptyMessage="Nenhum beneficiario encontrado."
-                            options={beneficiaryOptions}
-                            onChange={setBeneficiaryId}
-                            renderOptionContent={(option) => <BeneficiaryOptionContent option={option} />}
-                            labelClassName={FIELD_LABEL_CLASS}
-                        />
-
-                        <label className="flex flex-col gap-1.5 md:col-span-2">
-                            <span className={FIELD_LABEL_CLASS}>Descricao</span>
-                            <input className={FIELD_INPUT_CLASS} placeholder="Descricao da compra" value={description} onChange={(event) => setDescription(event.target.value)} />
-                        </label>
-                    </section>
-
-                    {advancedOpen && (
-                        <aside className="h-fit rounded-2xl border border-white/[0.09] bg-black/25 p-3">
-                            <div className="space-y-3">
-                                <label className="flex flex-col gap-1.5">
-                                    <span className={FIELD_LABEL_CLASS}>Modo</span>
-                                    <select
-                                        className={FIELD_INPUT_CLASS}
-                                        value={spendingMode}
-                                        onChange={(event) => {
-                                            const value = event.target.value;
-                                            if (value === "installment" || value === "recurring" || value === "single") {
-                                                setSpendingMode(value);
-                                            } else {
-                                                setSpendingMode("single");
-                                            }
-                                        }}
+                    <div className="flex justify-between">
+                        <div className="flex gap-1">
+                            {isEditing && (
+                                <>
+                                    <button
+                                        type="button"
+                                        onClick={() => void runAction(remove)}
+                                        disabled={submitting}
+                                        className="inline-flex px-2 gap-1.5 text-xs uppercase items-center justify-center rounded-lg border border-red-400/25 bg-red-500/10 text-red-200 transition-colors hover:border-red-400/45 hover:text-red-100 disabled:cursor-not-allowed disabled:opacity-60"
                                     >
-                                        <option value="single">Unica</option>
-                                        <option value="recurring">Fixa mensal</option>
-                                        <option value="installment">Parcelada</option>
-                                    </select>
-                                </label>
-
-                                {spendingMode === "installment" && (
-                                    <>
-                                        <label className="flex flex-col gap-1.5">
-                                            <span className={FIELD_LABEL_CLASS}>Parcelas</span>
-                                            <input
-                                                className={FIELD_INPUT_CLASS}
-                                                type="number"
-                                                min={2}
-                                                step={1}
-                                                value={installmentCountInput}
-                                                onChange={(event) => setInstallmentCountInput(event.target.value)}
-                                            />
-                                        </label>
-
-                                        <label className="flex flex-col gap-1.5">
-                                            <span className={FIELD_LABEL_CLASS}>Parcelas ja pagas (ignorar faturas antigas)</span>
-                                            <input
-                                                className={FIELD_INPUT_CLASS}
-                                                type="number"
-                                                min={0}
-                                                step={1}
-                                                value={ignoredInstallmentsCountInput}
-                                                onChange={(event) => setIgnoredInstallmentsCountInput(event.target.value)}
-                                                onBlur={() => {
-                                                    const parsedInstallmentCount = Number(installmentCountInput);
-                                                    const resolvedInstallmentCount = Number.isInteger(parsedInstallmentCount) && parsedInstallmentCount >= 2 ? parsedInstallmentCount : null;
-                                                    const normalizedIgnoredCount = normalizeIgnoredInstallmentsCountInput(ignoredInstallmentsCountInput, resolvedInstallmentCount);
-                                                    setIgnoredInstallmentsCountInput(String(normalizedIgnoredCount));
-                                                }}
-                                            />
-                                            <span className="text-[11px] text-white/45">Parcelas ignoradas nao entram em faturas, alertas e cobrancas.</span>
-                                        </label>
-                                    </>
-                                )}
-
-                                {isEditing && isSeriesTransaction && (
-                                    <label className="flex flex-col gap-1.5">
-                                        <span className={FIELD_LABEL_CLASS}>Escopo</span>
-                                        <select
-                                            className={FIELD_INPUT_CLASS}
-                                            value={editScope}
-                                            onChange={(event) => {
-                                                const value = event.target.value;
-                                                if (value === "all" || value === "this_and_next") {
-                                                    setEditScope(value);
-                                                } else {
-                                                    setEditScope("single");
-                                                }
-                                            }}
-                                        >
-                                            <option value="single">So esta ocorrencia</option>
-                                            <option value="this_and_next">Esta e proximas</option>
-                                            <option value="all">Toda a serie</option>
-                                        </select>
-                                    </label>
-                                )}
-
-                                <MultiSelectCombobox
-                                    label="Tags"
-                                    values={selectedTagIds}
-                                    placeholder="Selecione tags"
-                                    emptyMessage="Nenhuma tag cadastrada."
-                                    options={tagOptions}
-                                    onChange={setSelectedTagIds}
-                                    renderOptionContent={(option) => <TagOptionContent option={option} />}
-                                    labelClassName={FIELD_LABEL_CLASS}
-                                />
-                            </div>
-                        </aside>
-                    )}
-                </div>
-
-                <div className="mt-4 flex items-center justify-between gap-3">
-                    <div className="flex gap-1">
-                        {isEditing && (
-                            <>
-                                <button
-                                    type="button"
-                                    onClick={() => void runAction(remove)}
-                                    disabled={submitting}
-                                    className="inline-flex p-2 gap-1.5 text-xs uppercase items-center justify-center rounded-lg border border-red-400/25 bg-red-500/10 text-red-200 transition-colors hover:border-red-400/45 hover:text-red-100 disabled:cursor-not-allowed disabled:opacity-60"
-                                >
-                                    <Trash2 size={15} /> Excluir
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => void runAction(duplicate)}
-                                    disabled={submitting}
-                                    className="inline-flex p-2 gap-1.5 text-xs uppercase items-center justify-center rounded-lg border border-white/[0.12] bg-white/[0.03] text-white/70 transition-colors hover:border-white/[0.24] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
-                                >
-                                    <Copy size={15} /> Duplicar
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => void runAction(ignore)}
-                                    disabled={submitting}
-                                    className="inline-flex p-2 gap-1.5 text-xs uppercase items-center justify-center rounded-lg border border-white/[0.12] bg-white/[0.03] text-white/70 transition-colors hover:border-white/[0.24] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
-                                >
-                                    <SquareSlash size={15} /> Ignorar
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => void runAction(cancelTransaction)}
-                                    disabled={submitting}
-                                    className="inline-flex p-2 gap-1.5 text-xs uppercase items-center justify-center rounded-lg border border-white/[0.12] bg-white/[0.03] text-white/70 transition-colors hover:border-white/[0.24] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
-                                >
-                                    <CircleX size={15} /> Cancelar transacao
-                                </button>
-                            </>
-                        )}
+                                        <Trash2 size={15} /> Excluir
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => void runAction(cancelTransaction)}
+                                        disabled={submitting}
+                                        className="inline-flex p-2 gap-1.5 text-xs uppercase items-center justify-center rounded-lg border border-white/[0.12] bg-white/[0.03] text-white/70 transition-colors hover:border-white/[0.24] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                                    >
+                                        <CircleX size={15} /> Anular
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => void runAction(duplicate)}
+                                        disabled={submitting}
+                                        className="inline-flex p-2 gap-1.5 text-xs uppercase items-center justify-center rounded-lg border border-white/[0.12] bg-white/[0.03] text-white/70 transition-colors hover:border-white/[0.24] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                                    >
+                                        <Copy size={15} /> Duplicar
+                                    </button>
+                                </>
+                            )}
+                        </div>
+                        <div className="flex items-center gap-1">
+                            <button
+                                type="button"
+                                onClick={closeModal}
+                                disabled={submitting}
+                                className="inline-flex min-w-24 items-center justify-center rounded-xl border border-white/[0.12] bg-white/[0.03] px-4 py-2 text-sm font-medium text-white/70 transition-colors hover:border-white/[0.2] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => void runAction(submit)}
+                                disabled={submitting}
+                                className="inline-flex min-w-28 items-center justify-center rounded-xl border border-emerald-400/35 bg-emerald-500/15 px-4 py-2 text-sm font-semibold text-emerald-100 transition-colors hover:border-emerald-400/55 hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                                {submitting ? "Carregando..." : "Concluir"}
+                            </button>
+                        </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                        <button
-                            type="button"
-                            onClick={closeModal}
-                            disabled={submitting}
-                            className="inline-flex min-w-24 items-center justify-center rounded-xl border border-white/[0.12] bg-white/[0.03] px-4 py-2 text-sm font-medium text-white/70 transition-colors hover:border-white/[0.2] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                            Cancelar
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => void runAction(submit)}
-                            disabled={submitting}
-                            className="inline-flex min-w-28 items-center justify-center rounded-xl border border-emerald-400/35 bg-emerald-500/15 px-4 py-2 text-sm font-semibold text-emerald-100 transition-colors hover:border-emerald-400/55 hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                            {submitting ? "Processando..." : "Concluir"}
-                        </button>
-                    </div>
-                </div>
+                </footer>
             </div>
         </>
     );

@@ -1,3 +1,5 @@
+import { addMonths, format, isValid, parse, startOfMonth } from "date-fns";
+import { ptBR } from "date-fns/locale";
 import { Check, ChevronDown, CreditCard as CreditCardIcon, MapPin, Plus, Target, Trash2, TrendingUp, WalletCards } from "lucide-react";
 import { useMemo, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
 import {
@@ -129,6 +131,7 @@ interface PlanningDraftCardProps {
 }
 
 const TIMELINE_MONTHS = 7;
+const MONTH_KEY_FORMAT = "yyyy-MM";
 
 const currencyFormatter = new Intl.NumberFormat("pt-BR", {
     style: "currency",
@@ -136,43 +139,31 @@ const currencyFormatter = new Intl.NumberFormat("pt-BR", {
     minimumFractionDigits: 2,
 });
 
-const monthLabelFormatter = new Intl.DateTimeFormat("pt-BR", {
-    month: "long",
-    year: "numeric",
-});
-
-const shortMonthLabelFormatter = new Intl.DateTimeFormat("pt-BR", {
-    month: "short",
-});
+const BALANCE_TONE_CLASS_NAMES: Record<BalanceTone, string> = {
+    negative: "text-red-300",
+    tight: "text-amber-300",
+    positive: "text-emerald-300",
+};
 
 function roundToCents(value: number): number {
     return Math.round(value * 100) / 100;
 }
 
-function padMonthPart(value: number): string {
-    return String(value).padStart(2, "0");
+function capitalizeLabel(value: string): string {
+    return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
-function parseMonthKey(monthKey: string): { year: number; monthIndex: number } | null {
-    const match = /^(\d{4})-(\d{2})$/.exec(monthKey.trim());
-    if (!match) {
+function parseMonthKey(monthKey: string): Date | null {
+    const parsedDate = parse(monthKey.trim(), MONTH_KEY_FORMAT, new Date());
+    if (!isValid(parsedDate)) {
         return null;
     }
 
-    const year = Number(match[1]);
-    const month = Number(match[2]);
-    if (!Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12) {
-        return null;
-    }
-
-    return {
-        year,
-        monthIndex: month - 1,
-    };
+    return startOfMonth(parsedDate);
 }
 
 function getCurrentMonthKey(referenceDate = new Date()): string {
-    return `${referenceDate.getFullYear()}-${padMonthPart(referenceDate.getMonth() + 1)}`;
+    return format(startOfMonth(referenceDate), MONTH_KEY_FORMAT);
 }
 
 function shiftMonth(monthKey: string, offset: number): string {
@@ -181,28 +172,12 @@ function shiftMonth(monthKey: string, offset: number): string {
         return getCurrentMonthKey();
     }
 
-    const shifted = new Date(parsedMonth.year, parsedMonth.monthIndex + offset, 1);
-    return `${shifted.getFullYear()}-${padMonthPart(shifted.getMonth() + 1)}`;
+    return format(addMonths(parsedMonth, offset), MONTH_KEY_FORMAT);
 }
 
-function formatMonthLabel(monthKey: string): string {
+function formatMonthLabel(monthKey: string, pattern = "MMMM 'de' yyyy"): string {
     const parsedMonth = parseMonthKey(monthKey);
-    if (!parsedMonth) {
-        return monthKey;
-    }
-
-    const formatted = monthLabelFormatter.format(new Date(parsedMonth.year, parsedMonth.monthIndex, 1));
-    return formatted.charAt(0).toUpperCase() + formatted.slice(1);
-}
-
-function formatShortMonthLabel(monthKey: string): string {
-    const parsedMonth = parseMonthKey(monthKey);
-    if (!parsedMonth) {
-        return monthKey;
-    }
-
-    const formatted = shortMonthLabelFormatter.format(new Date(parsedMonth.year, parsedMonth.monthIndex, 1)).replace(".", "");
-    return formatted.charAt(0).toUpperCase() + formatted.slice(1);
+    return parsedMonth ? capitalizeLabel(format(parsedMonth, pattern, { locale: ptBR }).replace(".", "")) : monthKey;
 }
 
 function formatCurrency(value: number): string {
@@ -229,12 +204,7 @@ function isIncludedStatus(status: Transaction["status"]): boolean {
 }
 
 function getMonthStartTime(monthKey: string): number {
-    const parsedMonth = parseMonthKey(monthKey);
-    if (!parsedMonth) {
-        return Date.now();
-    }
-
-    return new Date(parsedMonth.year, parsedMonth.monthIndex, 1).getTime();
+    return parseMonthKey(monthKey)?.getTime() ?? Date.now();
 }
 
 function getOpeningBalance(monthKey: string, wallets: Wallet[], ledgerEntries: LedgerEntry[]): number {
@@ -262,20 +232,8 @@ function sumAmounts<T extends { amount: number }>(items: T[]): number {
     return roundToCents(items.reduce((sum, item) => sum + item.amount, 0));
 }
 
-function formatItemCount(count: number): string {
-    return `${count} ${count === 1 ? "item" : "itens"}`;
-}
-
-function getAmountClassName(tone: "income" | "expense" | "simulation", amount: number): string {
-    if (tone === "income") {
-        return amount < 0 ? "text-red-200" : "text-emerald-200";
-    }
-
-    if (tone === "expense") {
-        return "text-red-200";
-    }
-
-    return "text-orange-200";
+function getAmountClassName(tone: "income" | "simulation", amount: number): string {
+    return tone === "simulation" ? "text-orange-200" : amount < 0 ? "text-red-200" : "text-emerald-200";
 }
 
 function pushPlanningItemByMonth<T extends { monthKey: string }>(map: Map<string, T[]>, item: T) {
@@ -390,18 +348,6 @@ function getBalanceTone(value: number, income: number): BalanceTone {
     return "positive";
 }
 
-function getToneClassName(tone: BalanceTone): string {
-    if (tone === "negative") {
-        return "text-red-300";
-    }
-
-    if (tone === "tight") {
-        return "text-amber-300";
-    }
-
-    return "text-emerald-300";
-}
-
 function buildTimelineProjection(params: {
     wallets: Wallet[];
     creditCards: CreditCard[];
@@ -492,7 +438,7 @@ function buildTimelineProjection(params: {
                 ...reality,
                 monthKey,
                 monthLabel: formatMonthLabel(monthKey),
-                shortMonthLabel: formatShortMonthLabel(monthKey),
+                shortMonthLabel: formatMonthLabel(monthKey, "MMMM"),
                 isCurrentMonth: index === 0,
                 simulatedIncome,
                 simulatedIncomeItems,
@@ -552,7 +498,7 @@ function PlanningTimelineSection({
             </button>
             <div className="ml-0.5 flex flex-col border-l border-white/[0.3] pl-2">
                 <p className="flex justify-between text-sm text-white/78">
-                    <span>{formatItemCount(itemCount)}</span>
+                    <span>{itemCount} {itemCount === 1 ? "item" : "itens"}</span>
                     <span className={totalClassName}>{formatCurrency(total)}</span>
                 </p>
                 {disabledText ? <p className="text-xs text-red-400/30">{disabledText}</p> : null}
@@ -889,14 +835,14 @@ export function PlanningPage() {
                         </div>
 
                         <div className="mt-4 grid gap-2">
+                            <PlanningMetric label="Saldo inicial do mês" value={projection.openingBalance} className="text-white" />
                             <PlanningMetric label="Renda mensal liquida" value={currentMonth?.currentIncome ?? 0} className="text-emerald-300" />
-                            <PlanningMetric label="Compromissos cadastrados" value={currentMonth?.activeInheritedExpenses ?? 0} className="text-red-300" />
-                            <PlanningMetric label="Saldo livre" value={currentFreeBalance} className={getToneClassName(getBalanceTone(currentFreeBalance, currentMonth?.currentIncome ?? 0))} />
+                            <PlanningMetric label="Despesas cadastradas" value={currentMonth?.activeInheritedExpenses ?? 0} className="text-red-300" />
                         </div>
 
                         <div className="mt-4 rounded-lg border border-white/[0.08] bg-white/[0.03] p-3">
-                            <p className="text-[10px] uppercase tracking-[0.14em] text-white/42">Saldo inicial projetado</p>
-                            <p className="mt-1 text-lg font-semibold text-white">{formatCurrency(projection.openingBalance)}</p>
+                            <p className="text-[10px] uppercase tracking-[0.14em] text-white/42">Saldo livre projetado</p>
+                            <p className="mt-1 text-lg font-semibold text-white">{formatCurrency(currentFreeBalance)}</p>
                         </div>
                     </aside>
 
@@ -913,11 +859,9 @@ export function PlanningPage() {
 
                         <div className="elegant-scrollbar grow -mx-1 flex gap-3 overflow-x-auto px-1">
                             {projection.months.map((month) => {
-                                const originalBalanceTone = getBalanceTone(month.originalMonthBalance, month.income);
-                                const balanceTone = getBalanceTone(month.currentMonthBalance, month.currentIncome);
                                 const visibleMonthBalance = compareMode ? month.currentMonthBalance : month.originalMonthBalance;
                                 const visibleAccumulated = compareMode ? month.currentAccumulated : month.originalAccumulated;
-                                const footerBalanceTone = compareMode ? balanceTone : getBalanceTone(month.originalMonthBalance, month.income);
+                                const footerBalanceTone = getBalanceTone(visibleMonthBalance, compareMode ? month.currentIncome : month.income);
                                 const incomeDraft = incomeDrafts[month.monthKey] ?? { description: "", amount: "" };
                                 const expenseDraft = expenseDrafts[month.monthKey] ?? { description: "", amount: "" };
                                 const activeInheritedItemsCount = month.inheritedItems.filter((item) => !item.isDisabled).length;
@@ -929,45 +873,11 @@ export function PlanningPage() {
 
                                 return (
                                     <article key={month.monthKey} className="flex w-[300px] shrink-0 flex-col rounded-lg border border-white/[0.08] bg-white/[0.035] p-4">
-                                        <div>
-                                            <div className="flex items-start justify-between gap-3">
-                                                <div>
-                                                    <p className="text-xl font-semibold text-white">{month.shortMonthLabel}</p>
-                                                </div>
-                                                {month.isCurrentMonth ? <span className="rounded-full bg-cyan-500/12 px-2 py-1 text-[10px] uppercase tracking-[0.12em] text-cyan-200">Atual</span> : null}
+                                        <div className="flex items-start justify-between gap-3">
+                                            <div>
+                                                <p className="text-xl font-semibold text-white">{month.shortMonthLabel}</p>
                                             </div>
-
-                                            <div className="hidden">
-                                                <div className="min-w-0 rounded-lg border border-white/[0.06] bg-black/[0.15] p-1">
-                                                    <p className="text-[10px] uppercase tracking-[0.12em] text-white/38">Original</p>
-                                                    <div className="mt-2">
-                                                        <p className="text-[10px] uppercase tracking-[0.12em] text-white/34">Balanco do mês</p>
-                                                        <p className={`mt-1 text-sm font-semibold ${getToneClassName(originalBalanceTone)}`}>
-                                                            {formatCurrency(month.originalMonthBalance)}
-                                                        </p>
-                                                    </div>
-                                                    <div className="mt-2 border-t border-white/[0.06] pt-2">
-                                                        <p className="text-[10px] uppercase tracking-[0.12em] text-white/34">Saldo final</p>
-                                                        <p className={`mt-1 text-sm font-semibold ${month.originalAccumulated < 0 ? "text-red-300" : "text-white"}`}>
-                                                            {formatCurrency(month.originalAccumulated)}
-                                                        </p>
-                                                    </div>
-                                                </div>
-
-                                                <div className="min-w-0 rounded-lg border border-cyan-400/12 bg-cyan-500/[0.03]">
-                                                    <p className="text-[10px] uppercase tracking-[0.12em] text-cyan-100/70">Simulado</p>
-                                                    <div className="mt-2">
-                                                        <p className="text-[10px] uppercase tracking-[0.12em] text-white/34">Balanco do mês</p>
-                                                        <p className={`mt-1 text-sm font-semibold ${getToneClassName(balanceTone)}`}>{formatCurrency(month.currentMonthBalance)}</p>
-                                                    </div>
-                                                    <div className="mt-2 border-t border-white/[0.06] pt-2">
-                                                        <p className="text-[10px] uppercase tracking-[0.12em] text-white/34">Saldo final</p>
-                                                        <p className={`mt-1 text-sm font-semibold ${month.currentAccumulated < 0 ? "text-red-300" : "text-white"}`}>
-                                                            {formatCurrency(month.currentAccumulated)}
-                                                        </p>
-                                                    </div>
-                                                </div>
-                                            </div>
+                                            {month.isCurrentMonth ? <span className="rounded-full bg-cyan-500/12 px-2 py-1 text-[10px] uppercase tracking-[0.12em] text-cyan-200">Atual</span> : null}
                                         </div>
 
                                         <div className="mt-4 space-y-2">
@@ -1120,7 +1030,7 @@ export function PlanningPage() {
                                                         {compareMode ? "Simulado" : "Original"}
                                                     </span>
                                                 </div>
-                                                <p className={`mt-1 text-2xl font-semibold ${getToneClassName(footerBalanceTone)}`}>{formatCurrency(visibleMonthBalance)}</p>
+                                                <p className={`mt-1 text-2xl font-semibold ${BALANCE_TONE_CLASS_NAMES[footerBalanceTone]}`}>{formatCurrency(visibleMonthBalance)}</p>
                                                 <div>
                                                     <p className="text-[10px] uppercase tracking-[0.14em] text-white/42">Saldo final</p>
                                                     <p className={`mt-1 text-xl font-semibold ${visibleAccumulated < 0 ? "text-red-300" : "text-white"}`}>{formatCurrency(visibleAccumulated)}</p>

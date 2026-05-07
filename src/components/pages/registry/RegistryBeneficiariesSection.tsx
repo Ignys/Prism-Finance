@@ -1,9 +1,10 @@
 import { Reorder } from "framer-motion";
-import { Eye, EyeOff, GripVertical, UserRound } from "lucide-react";
+import { GripVertical, UserRound } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { type Beneficiary, useFinanceActions, useFinanceBeneficiaries } from "../../../context/FinanceContext";
 import { useModal } from "../../../context/ModalContext";
 import { AddBeneficiary } from "../../modal/AddBeneficiary";
+import { RegistrySectionActions } from "./RegistrySectionActions";
 
 const BENEFICIARY_TYPE_LABELS: Record<string, string> = {
     person: "Pessoa",
@@ -42,23 +43,14 @@ export function RegistryBeneficiariesSection() {
                     <UserRound size={18} className="text-white/80" />
                     <p className="text-sm uppercase tracking-[0.12em] text-white/60">Beneficiarios ({visibleCount})</p>
                 </div>
-                <div className="flex items-center gap-2">
-                    <button
-                        type="button"
-                        onClick={() => setShowInactive((current) => !current)}
-                        className="inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-white/[0.12] bg-white/[0.03] px-2.5 py-1 text-xs uppercase tracking-[0.08em] text-white/70 transition-colors hover:border-white/[0.24] hover:text-white"
-                    >
-                        {showInactive ? <EyeOff size={13} /> : <Eye size={13} />}
-                        {showInactive ? "Ocultar inativos" : "Mostrar inativos"}
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => openModal(<AddBeneficiary mode="create" />)}
-                        className="cursor-pointer rounded-full border border-white/[0.09] bg-white/[0.04] px-2.5 py-1 text-sm uppercase tracking-wide text-neutral-300 transition-colors hover:bg-white/[0.06]"
-                    >
-                        Criar beneficiario
-                    </button>
-                </div>
+                <RegistrySectionActions
+                    isShowingInactive={showInactive}
+                    showLabel="Mostrar inativos"
+                    hideLabel="Ocultar inativos"
+                    createLabel="Novo beneficiário"
+                    onToggleInactive={() => setShowInactive((current) => !current)}
+                    onCreate={() => openModal(<AddBeneficiary mode="create" />)}
+                />
             </div>
 
             <div className="elegant-scrollbar min-h-0 flex-1 overflow-y-auto overflow-x-hidden pr-2">

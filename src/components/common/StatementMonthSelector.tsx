@@ -106,13 +106,13 @@ export function StatementMonthSelector({ selectedMonth, onMonthChange, ariaLabel
     const currentMonth = getCurrentMonthKey();
 
     return (
-        <div ref={pickerRef} className="relative inline-flex items-center gap-1 rounded-full border border-white/[0.12] bg-neutral-900 px-1 py-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.1)]">
+        <div ref={pickerRef} className=" relative inline-flex items-center gap-1 rounded-full border border-white/[0.12] bg-neutral-900 px-1 py-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.1)]">
             <button
                 type="button"
                 onClick={() => onMonthChange(shiftMonth(selectedMonth, -1))}
                 className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-transparent text-white/80 transition-colors hover:border-white/[0.16] hover:bg-white/[0.06] hover:text-white"
-                aria-label="Mes anterior"
-                title="Mes anterior"
+                aria-label="Mês anterior"
+                title="Mês anterior"
             >
                 <ChevronLeft size={16} />
             </button>
@@ -122,7 +122,7 @@ export function StatementMonthSelector({ selectedMonth, onMonthChange, ariaLabel
                 aria-expanded={isPickerOpen}
                 aria-haspopup="dialog"
                 aria-label={ariaLabel}
-                className="inline-flex items-center justify-between gap-2 rounded-lg border border-white/0 bg-gradient-to-tl pl-1 py-1 pr-4.5 text-sm text-white outline-none transition-all hover:border-white/[0.24] hover:from-white/[0.12] hover:to-white/[0.04] focus-visible:border-white/[0.5]"
+                className="inline-flex items-center justify-center gap-2 w-50 rounded-lg border border-white/0 bg-gradient-to-tl pl-1 py-1 pr-4.5 text-sm text-white outline-none transition-all hover:border-white/[0.24] hover:from-white/[0.12] hover:to-white/[0.04] focus-visible:border-white/[0.5]"
             >
                 <span className="inline-flex items-center gap-1.5">
                     <span className="inline-flex h-6 w-6 items-center justify-center">
@@ -135,8 +135,8 @@ export function StatementMonthSelector({ selectedMonth, onMonthChange, ariaLabel
                 type="button"
                 onClick={() => onMonthChange(shiftMonth(selectedMonth, 1))}
                 className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-transparent text-white/80 transition-colors hover:border-white/[0.16] hover:bg-white/[0.06] hover:text-white"
-                aria-label="Proximo mes"
-                title="Proximo mes"
+                aria-label="Próximo mês"
+                title="Próximo mês"
             >
                 <ChevronRight size={16} />
             </button>
@@ -162,8 +162,8 @@ export function StatementMonthSelector({ selectedMonth, onMonthChange, ariaLabel
                                 type="button"
                                 onClick={() => setPickerYear((current) => current + 1)}
                                 className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/[0.12] bg-white/[0.02] text-white/75 transition-colors hover:border-white/[0.24] hover:bg-white/[0.06] hover:text-white"
-                                aria-label="Proximo ano"
-                                title="Proximo ano"
+                                aria-label="Próximo ano"
+                                title="Próximo ano"
                             >
                                 <ChevronRight size={15} />
                             </button>
@@ -200,7 +200,7 @@ export function StatementMonthSelector({ selectedMonth, onMonthChange, ariaLabel
                             }}
                             className="mt-3 w-full rounded-xl border border-white/[0.12] bg-white/[0.03] px-3 py-2 text-xs font-semibold uppercase tracking-[0.08em] text-white/75 transition-colors hover:border-white/[0.24] hover:bg-white/[0.08] hover:text-white"
                         >
-                            Ir para o mes atual
+                            Ir para o mês atual
                         </button>
                     </div>
                 </div>

@@ -347,6 +347,7 @@ export function TransactionsPage() {
                             tagOptions={tagOptions}
                             wallets={wallets}
                             hasAdvancedFilters={hasAdvancedFilters}
+                            onTabChange={setActiveTab}
                             onToggleAdvancedFilters={toggleAdvancedFilters}
                             onClearAdvancedFilters={clearAdvancedFilters}
                             onMonthChange={(value) => setFilter("selectedMonth", value)}
@@ -369,7 +370,6 @@ export function TransactionsPage() {
                             transferTransactions={transferTransactions}
                             wallets={wallets}
                             sortMode={sortMode}
-                            onTabChange={setActiveTab}
                             onSortModeChange={(value) => setFilter("sortMode", value)}
                             onEdit={handleEditTransaction}
                             onConfirmPayment={handleConfirmPayment}
