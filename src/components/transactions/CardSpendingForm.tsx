@@ -1,29 +1,33 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowRight, CircleX, Copy, Info, Layers3, ReceiptText, Repeat, SlidersHorizontal, SquareSlash, Trash2, X } from "lucide-react";
+import { ArrowRight, CircleX, Copy, Eye, Info, Layers3, ReceiptText, Repeat, SlidersHorizontal, Trash2, X } from "lucide-react";
 import type { Beneficiary, Category, CreditCard, CreditCardInvoice, Transaction, TransactionMode, TransactionSeriesScope, TransactionStatus } from "../../context/FinanceContext";
 import {
+    SYSTEM_EXPENSE_CARD_INVOICE_CATEGORY_ID,
     useFinanceActions,
     useFinanceBeneficiaries,
     useFinanceCategories,
     useFinanceCreditCardInvoices,
     useFinanceCreditCards,
     useFinanceFavoriteCreditCard,
+    useFinanceSession,
     useFinanceTags,
     useFinanceTransactions,
     useFinanceTransactionGroups,
 } from "../../context/FinanceContext";
 import { buildCreditCardInvoiceId, getCreditCardInvoiceMonthKey, parseCreditCardInvoiceId, resolveCreditCardInvoiceCycle, resolveCreditCardInvoiceCycleFromCycleKey } from "../../context/financeTypes";
-import { normalizeComparisonText } from "../../context/finance/helpers";
+import { findCurrentUserSelfBeneficiary, roundToCents, splitAmountAcrossInstallments } from "../../context/finance/helpers";
 import { useModal } from "../../context/ModalContext";
 import { extractCurrencyDigits, formatCurrencyFromDigits, parseCurrencyDigitsToNumber } from "../../lib/currencyMask";
 import { getCategoryIconComponent } from "../../lib/categoryIcons";
 import { getLocalTodayDate } from "../../lib/localDate";
+import { BeneficiaryAvatar } from "../common/BeneficiaryAvatar";
 import { WalletAvatar } from "../common/WalletAvatar";
 import { DateField } from "./DateField";
 import { MultiSelectCombobox } from "./MultiSelectCombobox";
 import { SingleSelectCombobox, type ComboboxOptionBase } from "./SingleSelectCombobox";
+import { FIELD_LABEL_CLASS } from "./transactionForm.constants";
+import { formatCurrencyBRL } from "./transactionView";
 
-export const FIELD_LABEL_CLASS = "text-[11px] uppercase tracking-[0.12em] text-white/50 pl-1";
 const FIELD_INPUT_CLASS = "rounded-xl border border-white/[0.1] bg-black/35 p-2.5 text-white outline-none transition-colors placeholder:text-white/35 focus:border-white/[0.24]";
 
 type InvoiceVisualStatus = "paid" | "overdue" | "closed" | "open" | "future";
@@ -45,6 +49,7 @@ interface CardSpendingFormProps {
     transaction?: Transaction | null;
     prefill?: CardSpendingFormPrefill;
     onAdvancedOpenChange?: (isOpen: boolean) => void;
+    onInstallmentPreviewOpenChange?: (isOpen: boolean) => void;
 }
 
 export interface CardSpendingFormPrefill {
@@ -88,6 +93,23 @@ interface SpendingModeOption extends ComboboxOptionBase {
 interface EditScopeOption extends ComboboxOptionBase {
     scope: TransactionSeriesScope;
     icon: typeof ReceiptText;
+}
+
+interface InstallmentPreviewRow {
+    installmentNumber: number;
+    cycleKey: string;
+    monthLabel: string;
+    amount: number;
+    ignored: boolean;
+}
+
+interface InstallmentPreviewData {
+    rows: InstallmentPreviewRow[];
+    installmentCount: number;
+    ignoredInstallmentsCount: number;
+    totalAmount: number;
+    effectiveTotalAmount: number;
+    startMonthLabel: string;
 }
 
 const SPENDING_MODE_OPTIONS: SpendingModeOption[] = [
@@ -193,13 +215,7 @@ function CategoryOptionContent({ option }: { option: CategoryOption }) {
 function BeneficiaryOptionContent({ option }: { option: BeneficiaryOption }) {
     return (
         <div className="flex items-center gap-2">
-            <span className="inline-flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border border-white/[0.12] bg-white/[0.03]">
-                {option.beneficiary.avatarImage ? (
-                    <img src={option.beneficiary.avatarImage} alt={option.beneficiary.name} className="h-full w-full object-cover" />
-                ) : (
-                    <span className="h-full w-full" style={{ backgroundColor: option.beneficiary.avatarColor ?? "#4B5563" }} />
-                )}
-            </span>
+            <BeneficiaryAvatar beneficiary={option.beneficiary} />
             <span className="truncate">{option.label}</span>
         </div>
     );
@@ -344,7 +360,117 @@ function resolveInvoiceVisualStatus(
     return "open";
 }
 
-export function CardSpendingForm({ transaction = null, prefill, onAdvancedOpenChange }: CardSpendingFormProps) {
+function formatPreviewCurrency(value: number): string {
+    return `R$ ${formatCurrencyBRL(value)}`;
+}
+
+function InstallmentPreviewModal({ data, onClose }: { data: InstallmentPreviewData; onClose: () => void }) {
+    useEffect(() => {
+        const handleKeyDown = (event: KeyboardEvent) => {
+            if (event.key === "Escape") {
+                onClose();
+            }
+        };
+
+        document.addEventListener("keydown", handleKeyDown, true);
+        return () => document.removeEventListener("keydown", handleKeyDown, true);
+    }, [onClose]);
+
+    return (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center px-4 py-6 text-white" role="dialog" aria-modal="true" aria-labelledby="installment-preview-title">
+            <button type="button" className="absolute inset-0 cursor-default bg-black/70 backdrop-blur-sm" aria-label="Fechar preview de parcelas" onMouseDown={onClose} />
+            <div
+                className="relative flex max-h-[86vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-white/[0.1] bg-[#151515] shadow-[0_30px_90px_-35px_rgba(0,0,0,0.95)]"
+                onMouseDown={(event) => event.stopPropagation()}
+            >
+                <header className="flex items-start justify-between gap-4 border-b border-white/[0.08] px-5 py-4">
+                    <div>
+                        <p className="text-[11px] uppercase tracking-[0.14em] text-white/45">Preview</p>
+                        <h2 id="installment-preview-title" className="mt-1 text-lg font-semibold text-white">
+                            Parcelamento previsto
+                        </h2>
+                        <p className="mt-1 text-sm text-white/55">
+                            Comecando em {data.startMonthLabel}, com {data.installmentCount} parcelas.
+                        </p>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/[0.12] bg-white/[0.03] text-white/70 transition-colors hover:border-white/[0.22] hover:text-white"
+                        aria-label="Fechar preview"
+                    >
+                        <X size={15} />
+                    </button>
+                </header>
+
+                <div className="overflow-auto px-5 py-4">
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                        <div className="rounded-xl border border-white/[0.08] bg-white/[0.03] p-3">
+                            <p className="text-[10px] uppercase tracking-[0.12em] text-white/40">Total parcelado</p>
+                            <p className="mt-1 font-semibold text-white">{formatPreviewCurrency(data.totalAmount)}</p>
+                        </div>
+                        <div className="rounded-xl border border-emerald-400/20 bg-emerald-500/10 p-3">
+                            <p className="text-[10px] uppercase tracking-[0.12em] text-emerald-100/55">Entra nas faturas</p>
+                            <p className="mt-1 font-semibold text-emerald-100">{formatPreviewCurrency(data.effectiveTotalAmount)}</p>
+                        </div>
+                        <div className="rounded-xl border border-slate-400/20 bg-slate-500/10 p-3">
+                            <p className="text-[10px] uppercase tracking-[0.12em] text-slate-100/55">Ignoradas</p>
+                            <p className="mt-1 font-semibold text-slate-100">{data.ignoredInstallmentsCount}</p>
+                        </div>
+                    </div>
+
+                    <div className="mt-4 overflow-hidden rounded-xl border border-white/[0.08]">
+                        <div className="max-h-[42vh] overflow-auto">
+                            <table className="min-w-full divide-y divide-white/[0.06] text-sm">
+                                <thead className="sticky top-0 bg-[#1b1b1b] text-[10px] uppercase tracking-[0.12em] text-white/45">
+                                    <tr>
+                                        <th className="px-3 py-2 text-left font-medium">Parcela</th>
+                                        <th className="px-3 py-2 text-left font-medium">Mes</th>
+                                        <th className="px-3 py-2 text-right font-medium">Valor</th>
+                                        <th className="px-3 py-2 text-left font-medium">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-white/[0.05] bg-black/10">
+                                    {data.rows.map((row) => (
+                                        <tr key={`${row.cycleKey}-${row.installmentNumber}`} className={row.ignored ? "text-white/60" : "text-white/90"}>
+                                            <td className="whitespace-nowrap px-3 py-2">
+                                                {row.installmentNumber}/{data.installmentCount}
+                                            </td>
+                                            <td className="px-3 py-2">
+                                                <div className="flex flex-col">
+                                                    <span>{row.monthLabel}</span>
+                                                    <span className="text-[10px] uppercase tracking-[0.08em] text-white/35">{row.cycleKey}</span>
+                                                </div>
+                                            </td>
+                                            <td className="whitespace-nowrap px-3 py-2 text-right font-semibold">{formatPreviewCurrency(row.amount)}</td>
+                                            <td className="px-3 py-2">
+                                                <span
+                                                    className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] ${
+                                                        row.ignored
+                                                            ? "border-slate-400/25 bg-slate-500/10 text-slate-200"
+                                                            : "border-emerald-400/25 bg-emerald-500/10 text-emerald-200"
+                                                    }`}
+                                                >
+                                                    {row.ignored ? "Ignorada" : "Entra na fatura"}
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <p className="mt-3 text-xs leading-5 text-white/45">
+                        Parcelas ignoradas mantem o valor original no historico, mas nao entram no total da fatura.
+                    </p>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+export function CardSpendingForm({ transaction = null, prefill, onAdvancedOpenChange, onInstallmentPreviewOpenChange }: CardSpendingFormProps) {
     const { closeModal } = useModal();
     const { addTransaction, deleteTransactionWithScope, updateTransaction } = useFinanceActions();
     const creditCards = useFinanceCreditCards();
@@ -353,6 +479,7 @@ export function CardSpendingForm({ transaction = null, prefill, onAdvancedOpenCh
     const transactionGroups = useFinanceTransactionGroups();
     const transactions = useFinanceTransactions();
     const categories = useFinanceCategories();
+    const { user } = useFinanceSession();
     const beneficiaries = useFinanceBeneficiaries();
     const allTags = useFinanceTags();
     const isEditing = Boolean(transaction);
@@ -394,6 +521,7 @@ export function CardSpendingForm({ transaction = null, prefill, onAdvancedOpenCh
 
     const [submitting, setSubmitting] = useState(false);
     const [advancedOpen, setAdvancedOpen] = useState(false);
+    const [installmentPreviewOpen, setInstallmentPreviewOpen] = useState(false);
     const [amountInput, setAmountInputState] = useState(() => (transaction ? formatAmountInputFromValue(transaction.value) : "R$ 0,00"));
     const [description, setDescription] = useState(transaction?.description ?? "");
     const [date, setDate] = useState(transaction?.date ?? (initialPrefillDate || getLocalTodayDate()));
@@ -439,6 +567,14 @@ export function CardSpendingForm({ transaction = null, prefill, onAdvancedOpenCh
     }, [advancedOpen, onAdvancedOpenChange]);
 
     useEffect(() => {
+        onInstallmentPreviewOpenChange?.(installmentPreviewOpen);
+    }, [installmentPreviewOpen, onInstallmentPreviewOpenChange]);
+
+    useEffect(() => {
+        return () => onInstallmentPreviewOpenChange?.(false);
+    }, [onInstallmentPreviewOpenChange]);
+
+    useEffect(() => {
         const fallbackCardId =
             activeCreditCards.find((card) => card.id === favoriteCreditCardId)?.id ??
             activeCreditCards[0]?.id ??
@@ -470,7 +606,9 @@ export function CardSpendingForm({ transaction = null, prefill, onAdvancedOpenCh
     }, [categories, categoryId]);
 
     const categoryOptions = useMemo<CategoryOption[]>(() => {
-        const expenseCategories = categories.filter((item) => item.type === "expense" && (item.isActive || selectedCategoryIdsToKeep.has(item.id)));
+        const expenseCategories = categories.filter(
+            (item) => item.type === "expense" && item.id !== SYSTEM_EXPENSE_CARD_INVOICE_CATEGORY_ID && (item.isActive || selectedCategoryIdsToKeep.has(item.id)),
+        );
         const subCategoriesByRoot = new Map<string, Category[]>();
 
         for (const category of expenseCategories) {
@@ -534,7 +672,7 @@ export function CardSpendingForm({ transaction = null, prefill, onAdvancedOpenCh
     );
 
     useEffect(() => {
-        const defaultBeneficiary = beneficiaries.find((item) => normalizeComparisonText(item.name) === "eu") ?? beneficiaries.find((item) => item.isActive) ?? beneficiaries[0];
+        const defaultBeneficiary = findCurrentUserSelfBeneficiary(beneficiaries, user?.uid) ?? beneficiaries.find((item) => item.isActive) ?? beneficiaries[0];
         if (!defaultBeneficiary) {
             setBeneficiaryId("");
             return;
@@ -542,7 +680,7 @@ export function CardSpendingForm({ transaction = null, prefill, onAdvancedOpenCh
         if (!beneficiaries.some((item) => item.id === beneficiaryId)) {
             setBeneficiaryId(defaultBeneficiary.id);
         }
-    }, [beneficiaries, beneficiaryId]);
+    }, [beneficiaries, beneficiaryId, user?.uid]);
 
     const selectedCard = useMemo(() => selectableCreditCards.find((card) => card.id === creditCardId) ?? null, [creditCardId, selectableCreditCards]);
     const openCycle = useMemo(() => (selectedCard ? resolveCreditCardInvoiceCycle(getLocalTodayDate(), selectedCard.closingDay, selectedCard.dueDay) : null), [selectedCard]);
@@ -683,6 +821,48 @@ export function CardSpendingForm({ transaction = null, prefill, onAdvancedOpenCh
 
     const resolvedInvoiceSelectionId = useInvoiceFromDate ? automaticInvoiceId : invoiceId;
     const selectedResolvedInvoiceOption = useMemo(() => invoiceOptions.find((option) => option.id === resolvedInvoiceSelectionId) ?? null, [invoiceOptions, resolvedInvoiceSelectionId]);
+    const installmentPreviewData = useMemo<InstallmentPreviewData | null>(() => {
+        if (spendingMode !== "installment" || !selectedCard || !selectedResolvedInvoiceOption) {
+            return null;
+        }
+
+        const parsedInstallmentCount = Number(installmentCountInput);
+        const installmentCount = Number.isInteger(parsedInstallmentCount) && parsedInstallmentCount >= 2 ? parsedInstallmentCount : null;
+        if (!installmentCount || !Number.isFinite(amountValue) || amountValue <= 0) {
+            return null;
+        }
+
+        const ignoredInstallmentsCount = normalizeIgnoredInstallmentsCountInput(ignoredInstallmentsCountInput, installmentCount);
+        const installmentAmounts = splitAmountAcrossInstallments(amountValue, installmentCount);
+        const rows = installmentAmounts.map<InstallmentPreviewRow>((installmentAmount, index) => {
+            const cycleKey = shiftCycleKey(selectedResolvedInvoiceOption.cycleKey, index);
+            const cycle = cycleKey ? resolveCreditCardInvoiceCycleFromCycleKey(cycleKey, selectedCard.closingDay, selectedCard.dueDay) : null;
+            const monthKey = cycle ? getCreditCardInvoiceMonthKey({ dueDate: cycle.dueDate }) : cycleKey;
+
+            return {
+                installmentNumber: index + 1,
+                cycleKey,
+                monthLabel: monthKey ? formatMonthLabel(monthKey) : selectedResolvedInvoiceOption.monthLabel,
+                amount: installmentAmount,
+                ignored: index < ignoredInstallmentsCount,
+            };
+        });
+
+        return {
+            rows,
+            installmentCount,
+            ignoredInstallmentsCount,
+            totalAmount: roundToCents(rows.reduce((sum, row) => sum + row.amount, 0)),
+            effectiveTotalAmount: roundToCents(rows.reduce((sum, row) => sum + (row.ignored ? 0 : row.amount), 0)),
+            startMonthLabel: selectedResolvedInvoiceOption.monthLabel,
+        };
+    }, [amountValue, ignoredInstallmentsCountInput, installmentCountInput, selectedCard, selectedResolvedInvoiceOption, spendingMode]);
+
+    useEffect(() => {
+        if (installmentPreviewOpen && !installmentPreviewData) {
+            setInstallmentPreviewOpen(false);
+        }
+    }, [installmentPreviewData, installmentPreviewOpen]);
 
     useEffect(() => {
         if (invoiceOptions.length < 1) {
@@ -841,24 +1021,6 @@ export function CardSpendingForm({ transaction = null, prefill, onAdvancedOpenCh
         return true;
     };
 
-    const ignore = async () => {
-        if (!transaction) {
-            return false;
-        }
-
-        const draft = buildDraft("skipped");
-        if (!draft) {
-            return false;
-        }
-
-        await updateTransaction({
-            transaction,
-            draft,
-            scope: editScope,
-        });
-        return true;
-    };
-
     const cancelTransaction = async () => {
         if (!transaction) {
             return false;
@@ -936,6 +1098,7 @@ export function CardSpendingForm({ transaction = null, prefill, onAdvancedOpenCh
 
     return (
         <>
+            {installmentPreviewOpen && installmentPreviewData && <InstallmentPreviewModal data={installmentPreviewData} onClose={() => setInstallmentPreviewOpen(false)} />}
             <div className="rounded-xl flex flex-col justify-between border h-149 border-white/[0.09] bg-[#131313] p-4 text-white shadow-[0_26px_70px_-38px_rgba(0,0,0,0.95)]">
                 <div>
                     <header className="flex items-center justify-between">
@@ -1042,14 +1205,14 @@ export function CardSpendingForm({ transaction = null, prefill, onAdvancedOpenCh
                                                     if (value === "all" || value === "this_and_next" || value === "single") {
                                                         setEditScope(value);
                                                         return;
-                                            }
+                                                    }
 
-                                            setEditScope("single");
-                                        }}
-                                            renderOptionContent={(option) => <EditScopeOptionContent option={option} />}
-                                            renderSelectedContent={(option) => <EditScopeSelectedContent option={option} />}
-                                            labelClassName={FIELD_LABEL_CLASS}
-                                        />
+                                                    setEditScope("single");
+                                                }}
+                                                renderOptionContent={(option) => <EditScopeOptionContent option={option} />}
+                                                renderSelectedContent={(option) => <EditScopeSelectedContent option={option} />}
+                                                labelClassName={FIELD_LABEL_CLASS}
+                                            />
                                         </label>
                                     )}
                                     <MultiSelectCombobox
@@ -1062,61 +1225,73 @@ export function CardSpendingForm({ transaction = null, prefill, onAdvancedOpenCh
                                         renderOptionContent={(option) => <TagOptionContent option={option} />}
                                         labelClassName={FIELD_LABEL_CLASS}
                                     />
-                                    <label className="flex flex-col gap-1.5">
-                                        <SingleSelectCombobox
-                                            disableSearch
-                                            label="Tipo"
-                                            value={spendingMode}
-                                            placeholder="Selecione um modo"
-                                            emptyMessage="Nenhum modo encontrado."
-                                            options={SPENDING_MODE_OPTIONS}
-                                            onChange={(value) => {
-                                                if (value === "installment" || value === "recurring" || value === "single") {
-                                                    setSpendingMode(value);
-                                                    return;
-                                                }
+                                    <div>
+                                        <label className="flex flex-col gap-1.5">
+                                            <SingleSelectCombobox
+                                                disableSearch
+                                                label="Tipo"
+                                                value={spendingMode}
+                                                placeholder="Selecione um modo"
+                                                emptyMessage="Nenhum modo encontrado."
+                                                options={SPENDING_MODE_OPTIONS}
+                                                onChange={(value) => {
+                                                    if (value === "installment" || value === "recurring" || value === "single") {
+                                                        setSpendingMode(value);
+                                                        return;
+                                                    }
 
-                                                setSpendingMode("single");
-                                            }}
-                                            renderOptionContent={(option) => <SpendingModeOptionContent option={option} />}
-                                            labelClassName={FIELD_LABEL_CLASS}
-                                        />
-                                    </label>
-
-                                    {spendingMode === "installment" && (
-                                        <>
-                                            <label className="flex flex-col gap-1.5">
-                                                <span className={FIELD_LABEL_CLASS}>Parcelas</span>
-                                                <input
-                                                    className={FIELD_INPUT_CLASS}
-                                                    type="number"
-                                                    min={2}
-                                                    step={1}
-                                                    value={installmentCountInput}
-                                                    onChange={(event) => setInstallmentCountInput(event.target.value)}
-                                                />
-                                            </label>
-
-                                            <label className="flex flex-col gap-1.5">
-                                                <span className={FIELD_LABEL_CLASS}>PARCELAS IGNORADAS</span>
-                                                <input
-                                                    className={FIELD_INPUT_CLASS}
-                                                    type="number"
-                                                    min={0}
-                                                    step={1}
-                                                    value={ignoredInstallmentsCountInput}
-                                                    onChange={(event) => setIgnoredInstallmentsCountInput(event.target.value)}
-                                                    onBlur={() => {
-                                                        const parsedInstallmentCount = Number(installmentCountInput);
-                                                        const resolvedInstallmentCount = Number.isInteger(parsedInstallmentCount) && parsedInstallmentCount >= 2 ? parsedInstallmentCount : null;
-                                                        const normalizedIgnoredCount = normalizeIgnoredInstallmentsCountInput(ignoredInstallmentsCountInput, resolvedInstallmentCount);
-                                                        setIgnoredInstallmentsCountInput(String(normalizedIgnoredCount));
-                                                    }}
-                                                />
-                                                <span className="text-[11px] text-white/45">Parcelas ignoradas entram nas faturas, mas seus valores não serão considerados.</span>
-                                            </label>
-                                        </>
-                                    )}
+                                                    setSpendingMode("single");
+                                                }}
+                                                renderOptionContent={(option) => <SpendingModeOptionContent option={option} />}
+                                                labelClassName={FIELD_LABEL_CLASS}
+                                            />
+                                        </label>
+                                        {spendingMode === "installment" && (
+                                            <>
+                                                <div className="flex rounded-b flex-col gap-1 bg-black/20 mx-0.5 border-white/10 border-dashed border-x border-b py-4 px-3 ">
+                                                    <label className="flex justify-between items-center gap-1.5 ">
+                                                        <span className={"text-[12px] text-white/50 uppercase"}>Parcelas <br /> ignoradas</span>
+                                                        <input
+                                                            className={"w-25 rounded-xl border border-white/[0.1] bg-black/35 p-2.5 text-white outline-none transition-colors placeholder:text-white/35 focus:border-white/[0.24]"}
+                                                            type="number"
+                                                            min={0}
+                                                            max={installmentCountInput ? Number(installmentCountInput) - 1 : undefined}
+                                                            step={1}
+                                                            value={ignoredInstallmentsCountInput}
+                                                            onChange={(event) => setIgnoredInstallmentsCountInput(event.target.value)}
+                                                            onBlur={() => {
+                                                                const parsedInstallmentCount = Number(installmentCountInput);
+                                                                const resolvedInstallmentCount =
+                                                                    Number.isInteger(parsedInstallmentCount) && parsedInstallmentCount >= 2 ? parsedInstallmentCount : null;
+                                                                const normalizedIgnoredCount = normalizeIgnoredInstallmentsCountInput(ignoredInstallmentsCountInput, resolvedInstallmentCount);
+                                                                setIgnoredInstallmentsCountInput(String(normalizedIgnoredCount));
+                                                            }}
+                                                        />
+                                                    </label>
+                                                    <label className="flex justify-between items-center gap-1.5">
+                                                        <span className={"text-[12px] text-white/50 uppercase"}>QUANTIDADE DE PARCELAS</span>
+                                                        <input
+                                                            className={"w-25 rounded-xl border border-white/[0.1] bg-black/35 p-2.5 text-white outline-none transition-colors placeholder:text-white/35 focus:border-white/[0.24]"}
+                                                            type="number"
+                                                            min={2}
+                                                            step={1}
+                                                            value={installmentCountInput}
+                                                            onChange={(event) => setInstallmentCountInput(event.target.value)}
+                                                        />
+                                                    </label>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setInstallmentPreviewOpen(true)}
+                                                        disabled={!installmentPreviewData}
+                                                        className="mt-2 inline-flex items-center justify-center gap-2 rounded-xl border border-white/[0.12] bg-white/[0.04] py-2 text-[11px] font-medium uppercase tracking-[0.08em] text-white/70 transition-colors hover:border-white/[0.24] hover:text-white disabled:cursor-not-allowed disabled:opacity-45"
+                                                    >
+                                                        <Eye size={13} />
+                                                        Pré-visualizar
+                                                    </button>
+                                                </div>
+                                            </>
+                                        )}
+                                    </div>
                                 </aside>
                             </>
                         )}

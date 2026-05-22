@@ -1,8 +1,9 @@
 import { useMemo, useState } from "react";
-import { ArrowDown, ArrowUp, Circle, CreditCard as CreditCardIcon, ListChecks, Pencil, Plus, Repeat2, Search, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, Circle, CreditCard as CreditCardIcon, Pencil, Plus, Repeat2, Search, Trash2 } from "lucide-react";
 import { type Beneficiary, type CreditCard, type CreditCardInvoice, type Transaction, useFinanceBeneficiaries, useFinanceTransactionGroups } from "../../../context/FinanceContext";
 import { normalizeComparisonText } from "../../../context/finance/helpers";
 import { getCategoryIconComponent } from "../../../lib/categoryIcons";
+import { BeneficiaryAvatar } from "../../common/BeneficiaryAvatar";
 import { WalletAvatar } from "../../common/WalletAvatar";
 import { formatTransactionDate } from "../../transactions/transactionView";
 import {
@@ -26,10 +27,8 @@ interface StatementContentPanelProps {
     onPayInvoice: (invoice: CreditCardInvoice, creditCard: CreditCard) => void;
     onInvoiceStateAdjustment: (invoices: CreditCardInvoice[], action: "close" | "reopen") => void;
     onCreateCardSpending: () => void;
-    onReviewInvoiceAssignments: () => void;
     onEdit: (transaction: Transaction) => void;
     onDelete: (transaction: Transaction) => void;
-    invoiceRepairIssuesCount: number;
 }
 
 type StatementSortField = "status" | "date" | "description" | "category" | "beneficiary" | "value";
@@ -216,10 +215,8 @@ export function StatementContentPanel({
     onPayInvoice,
     onInvoiceStateAdjustment,
     onCreateCardSpending,
-    onReviewInvoiceAssignments,
     onEdit,
     onDelete,
-    invoiceRepairIssuesCount,
 }: StatementContentPanelProps) {
     const beneficiaries = useFinanceBeneficiaries();
     const transactionGroups = useFinanceTransactionGroups();
@@ -395,8 +392,6 @@ export function StatementContentPanel({
     const manualActionLabel =
         manualActionMode === "close" ? (allCardsSelected && manualActionInvoices.length > 1 ? "Fechar vencidas" : "Fechar vencida") : manualActionMode === "reopen" ? (allCardsSelected && manualActionInvoices.length > 1 ? "Reabrir pagas" : "Reabrir paga") : "";
     const canCreateCardSpending = cardById.size > 0;
-    const hasInvoiceRepairIssues = invoiceRepairIssuesCount > 0;
-
     return (
         <div className="flex flex-col gap-3">
             <section className="rounded-2xl border border-white/[0.08] bg-[#111111] p-4 shadow-[0_24px_60px_-32px_rgba(0,0,0,0.9)]">
@@ -455,16 +450,6 @@ export function StatementContentPanel({
                     />
                 </div>
                 <div className="flex py-1.5 gap-2">
-                    {hasInvoiceRepairIssues && (
-                        <button
-                            type="button"
-                            onClick={onReviewInvoiceAssignments}
-                            className="inline-flex truncate cursor-pointer items-center gap-2 rounded-full border border-sky-300/30 bg-sky-500/15 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.05em] text-sky-100 transition-all hover:border-sky-300/45 hover:bg-sky-500/20"
-                        >
-                            <ListChecks size={14} />
-                            Revisar faturas ({invoiceRepairIssuesCount})
-                        </button>
-                    )}
                     <button
                         type="button"
                         onClick={onCreateCardSpending}
@@ -511,8 +496,6 @@ export function StatementContentPanel({
                                 const categoryColor = transaction.category.color ?? "#9CA3AF";
                                 const categoryBackground = `${categoryColor}22`;
                                 const beneficiary = transaction.beneficiaryId ? beneficiariesById.get(transaction.beneficiaryId) : null;
-                                const beneficiaryAvatarImage = beneficiary?.avatarImage ?? null;
-                                const beneficiaryAvatarColor = beneficiary?.avatarColor ?? "#4B5563";
                                 const visibleTags = transaction.tags.slice(0, 2);
                                 const hiddenTagsCount = Math.max(transaction.tags.length - visibleTags.length, 0);
 
@@ -585,13 +568,7 @@ export function StatementContentPanel({
                                         </td>
                                         <td className="border-b border-white/[0.04] px-3 py-2.5">
                                             <div className="flex items-center gap-2 text-white/70">
-                                                <span className="inline-flex h-7 w-7 items-center overflow-hidden rounded-full border border-white/[0.12] bg-white/[0.03]">
-                                                    {beneficiaryAvatarImage ? (
-                                                        <img src={beneficiaryAvatarImage} alt={beneficiary?.name ?? "Beneficiario"} className="h-full w-full object-cover" />
-                                                    ) : (
-                                                        <span className="block h-full w-full" style={{ backgroundColor: beneficiary ? beneficiaryAvatarColor : "#374151" }} aria-hidden="true" />
-                                                    )}
-                                                </span>
+                                                <BeneficiaryAvatar beneficiary={{ name: beneficiary?.name ?? transaction.beneficiary, avatarImage: beneficiary?.avatarImage ?? null, avatarColor: beneficiary?.avatarColor ?? "#374151" }} />
                                                 <span>{beneficiary?.name ?? transaction.beneficiary}</span>
                                             </div>
                                         </td>

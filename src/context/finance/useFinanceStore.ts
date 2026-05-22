@@ -2,6 +2,16 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { doc, getDoc } from "firebase/firestore";
 import { useAuthListener } from "../../hooks/useAuthListener";
 import { db } from "../../firebase/firebaseClient";
+import type { FamilySummary, SharedWishlistSnapshot } from "../familyTypes";
+import {
+    createFamily as createFamilyRecord,
+    generateFamilyInvite as generateFamilyInviteRecord,
+    joinFamilyByCode as joinFamilyByCodeRecord,
+    loadFamilyState,
+    removeFamilyMember as removeFamilyMemberRecord,
+    syncFamilyBeneficiary,
+    syncSharedWishlist,
+} from "../../firebase/familyService";
 import { mergeFinanceFields, readFinanceFromUserData } from "../../firebase/userService";
 import {
     buildInvoicePaymentNote,
@@ -21,7 +31,6 @@ import {
     DEFAULT_WALLET,
     DEFAULT_WALLET_ID,
     findDefaultCategoryId,
-    findCreditCardInvoiceAssignmentIssues,
     parseInvoicePaymentNote,
     type FinanceSnapshot,
     type LedgerEntry,
@@ -36,6 +45,7 @@ import {
     normalizeTag,
     normalizeTransactionGroup,
     normalizeTransactionStatus,
+    normalizeWishItem,
     normalizeWallet,
     normalizeWalletId,
     type StoredTransaction,
@@ -46,6 +56,7 @@ import {
     type TransactionMode,
     type TransactionSeriesScope,
     type TransactionTag,
+    type WishItem,
     toTransactionList,
     type Wallet,
     parseCreditCardInvoiceId,
@@ -67,15 +78,18 @@ import type {
 import {
     createId,
     ensureWalletId,
+    findCurrentUserSelfBeneficiary,
     findBeneficiaryByName,
     findCategoryByName,
     getTodayDate,
     resolveGroupType,
     roundToCents,
+    splitAmountAcrossInstallments,
     toCategoryTypeFromGroupType,
 } from "./helpers";
 import { getDefaultCategoryIconName } from "../../lib/categoryIcons";
 import { parseAppDate } from "../../lib/localDate";
+import { buildUserProfileData, type UserProfileData } from "../../lib/userProfile";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === "object" && value !== null;
@@ -221,20 +235,6 @@ function addMonthsToDateValue(dateValue: string, months: number): string {
     const targetDay = Math.min(day, lastDay);
     const shifted = new Date(shiftedBase.getFullYear(), shiftedBase.getMonth(), targetDay);
     return `${shifted.getFullYear()}-${String(shifted.getMonth() + 1).padStart(2, "0")}-${String(shifted.getDate()).padStart(2, "0")}`;
-}
-
-function splitAmountAcrossInstallments(amount: number, installmentCount: number): number[] {
-    const safeCount = Math.max(2, Math.floor(installmentCount));
-    const cents = Math.round(Math.abs(amount) * 100);
-    const base = Math.floor(cents / safeCount);
-    const remainder = cents - base * safeCount;
-
-    const parts: number[] = [];
-    for (let index = 0; index < safeCount; index += 1) {
-        const partCents = base + (index < remainder ? 1 : 0);
-        parts.push(roundToCents(partCents / 100));
-    }
-    return parts;
 }
 
 function normalizeIgnoredInstallmentsCount(value: unknown, installmentCount: number | null): number {
@@ -657,9 +657,76 @@ function collectCategoryDescendantIds(categories: Category[], rootId: string): S
     return descendants;
 }
 
-export function useFinanceStore(): FinanceStoreValue {
-    const { user, loading: authLoading } = useAuthListener();
+function compareSharedWishlists(a: SharedWishlistSnapshot, b: SharedWishlistSnapshot): number {
+    if (a.owner.isCurrentUser !== b.owner.isCurrentUser) {
+        return a.owner.isCurrentUser ? -1 : 1;
+    }
 
+    return a.owner.name.localeCompare(b.owner.name, "pt-BR");
+}
+
+function upsertSharedWishlistSnapshot(list: SharedWishlistSnapshot[], nextSnapshot: SharedWishlistSnapshot): SharedWishlistSnapshot[] {
+    const nextList = list.some((snapshot) => snapshot.owner.uid === nextSnapshot.owner.uid)
+        ? list.map((snapshot) => (snapshot.owner.uid === nextSnapshot.owner.uid ? nextSnapshot : snapshot))
+        : [...list, nextSnapshot];
+
+    return nextList.sort(compareSharedWishlists);
+}
+
+function getPersistableBeneficiaries(beneficiaries: Beneficiary[]): Beneficiary[] {
+    return beneficiaries.filter((beneficiary) => beneficiary.source !== "family_shared");
+}
+
+function mergeFamilySharedBeneficiaries(baseBeneficiaries: Beneficiary[], sharedBeneficiaries: Beneficiary[]): Beneficiary[] {
+    const personalBeneficiaries = baseBeneficiaries.filter((beneficiary) => beneficiary.source !== "family_shared");
+    const uniqueSharedBeneficiaries = Array.from(new Map(sharedBeneficiaries.map((beneficiary) => [beneficiary.id, beneficiary])).values());
+    return [...personalBeneficiaries, ...uniqueSharedBeneficiaries].sort(compareBySortOrderNameAndId);
+}
+
+function readBeneficiaryOrder(rawFinance: unknown): string[] {
+    if (!isRecord(rawFinance) || !Array.isArray(rawFinance.beneficiaryOrder)) {
+        return [];
+    }
+
+    return rawFinance.beneficiaryOrder.map((value) => (typeof value === "string" ? value.trim() : "")).filter(Boolean);
+}
+
+function applyBeneficiaryOrder(beneficiaries: Beneficiary[], orderedIds: string[]): Beneficiary[] {
+    if (beneficiaries.length < 2) {
+        return beneficiaries;
+    }
+
+    const byId = new Map(beneficiaries.map((beneficiary) => [beneficiary.id, beneficiary]));
+    const seen = new Set<string>();
+    const orderedBeneficiaries: Beneficiary[] = [];
+
+    orderedIds.forEach((id) => {
+        const beneficiary = byId.get(id);
+        if (!beneficiary || seen.has(id)) {
+            return;
+        }
+        seen.add(id);
+        orderedBeneficiaries.push(beneficiary);
+    });
+
+    beneficiaries.forEach((beneficiary) => {
+        if (!seen.has(beneficiary.id)) {
+            orderedBeneficiaries.push(beneficiary);
+        }
+    });
+
+    return orderedBeneficiaries.map((beneficiary, index) => ({
+        ...beneficiary,
+        sortOrder: index,
+    }));
+}
+
+export function useFinanceStore(): FinanceStoreValue {
+    const { user, loading: authLoading, profileVersion } = useAuthListener();
+
+    const [profile, setProfile] = useState<UserProfileData | null>(null);
+    const [family, setFamily] = useState<FamilySummary | null>(null);
+    const [sharedWishlists, setSharedWishlists] = useState<SharedWishlistSnapshot[]>([]);
     const [favoriteWalletId, setFavoriteWalletId] = useState(DEFAULT_WALLET_ID);
     const [favoriteCreditCardId, setFavoriteCreditCardId] = useState<string | null>(null);
     const [wallets, setWallets] = useState<Wallet[]>([DEFAULT_WALLET]);
@@ -668,6 +735,7 @@ export function useFinanceStore(): FinanceStoreValue {
     const [beneficiaries, setBeneficiaries] = useState<Beneficiary[]>([]);
     const [categories, setCategories] = useState<Category[]>([]);
     const [tags, setTags] = useState<Tag[]>([]);
+    const [wishItems, setWishItems] = useState<WishItem[]>([]);
     const [transactionGroups, setTransactionGroups] = useState<TransactionGroup[]>([]);
     const [storedTransactions, setStoredTransactions] = useState<StoredTransaction[]>([]);
     const [transactionTags, setTransactionTags] = useState<TransactionTag[]>([]);
@@ -675,7 +743,10 @@ export function useFinanceStore(): FinanceStoreValue {
     const [planning, setPlanning] = useState<PlanningState>(DEFAULT_PLANNING_STATE);
     const [financeLoading, setFinanceLoading] = useState(true);
 
+    const profileRef = useRef(profile);
     const walletsRef = useRef(wallets);
+    const familyRef = useRef(family);
+    const sharedWishlistsRef = useRef(sharedWishlists);
     const favoriteWalletIdRef = useRef(favoriteWalletId);
     const favoriteCreditCardIdRef = useRef(favoriteCreditCardId);
     const creditCardsRef = useRef(creditCards);
@@ -683,6 +754,7 @@ export function useFinanceStore(): FinanceStoreValue {
     const beneficiariesRef = useRef(beneficiaries);
     const categoriesRef = useRef(categories);
     const tagsRef = useRef(tags);
+    const wishItemsRef = useRef(wishItems);
     const transactionGroupsRef = useRef(transactionGroups);
     const storedTransactionsRef = useRef(storedTransactions);
     const transactionTagsRef = useRef(transactionTags);
@@ -690,8 +762,20 @@ export function useFinanceStore(): FinanceStoreValue {
     const planningRef = useRef(planning);
 
     useEffect(() => {
+        profileRef.current = profile;
+    }, [profile]);
+
+    useEffect(() => {
         walletsRef.current = wallets;
     }, [wallets]);
+
+    useEffect(() => {
+        familyRef.current = family;
+    }, [family]);
+
+    useEffect(() => {
+        sharedWishlistsRef.current = sharedWishlists;
+    }, [sharedWishlists]);
 
     useEffect(() => {
         favoriteWalletIdRef.current = favoriteWalletId;
@@ -722,6 +806,10 @@ export function useFinanceStore(): FinanceStoreValue {
     }, [tags]);
 
     useEffect(() => {
+        wishItemsRef.current = wishItems;
+    }, [wishItems]);
+
+    useEffect(() => {
         transactionGroupsRef.current = transactionGroups;
     }, [transactionGroups]);
 
@@ -749,6 +837,7 @@ export function useFinanceStore(): FinanceStoreValue {
         beneficiariesRef.current = snapshot.beneficiaries;
         categoriesRef.current = snapshot.categories;
         tagsRef.current = snapshot.tags;
+        wishItemsRef.current = snapshot.wishItems;
         transactionGroupsRef.current = snapshot.transactionGroups;
         storedTransactionsRef.current = snapshot.transactions;
         transactionTagsRef.current = snapshot.transactionTags;
@@ -762,11 +851,19 @@ export function useFinanceStore(): FinanceStoreValue {
         setBeneficiaries(snapshot.beneficiaries);
         setCategories(snapshot.categories);
         setTags(snapshot.tags);
+        setWishItems(snapshot.wishItems);
         setTransactionGroups(snapshot.transactionGroups);
         setStoredTransactions(snapshot.transactions);
         setTransactionTags(snapshot.transactionTags);
         setLedgerEntries(snapshot.ledgerEntries);
         setPlanning(snapshot.planning);
+    }, []);
+
+    const setFamilyState = useCallback((nextFamily: FamilySummary | null, nextSharedWishlists: SharedWishlistSnapshot[]) => {
+        familyRef.current = nextFamily;
+        sharedWishlistsRef.current = nextSharedWishlists;
+        setFamily(nextFamily);
+        setSharedWishlists(nextSharedWishlists);
     }, []);
 
     const buildSnapshot = useCallback((overrides: Partial<FinanceSnapshot> = {}): FinanceSnapshot => {
@@ -781,10 +878,77 @@ export function useFinanceStore(): FinanceStoreValue {
             overrides.beneficiaries ?? beneficiariesRef.current,
             overrides.categories ?? categoriesRef.current,
             overrides.tags ?? tagsRef.current,
+            overrides.wishItems ?? wishItemsRef.current,
             overrides.transactionTags ?? transactionTagsRef.current,
             overrides.planning ?? planningRef.current,
         );
     }, []);
+
+    const syncCurrentUserFamilyBeneficiary = useCallback(
+        async (familyId: string, snapshotOverride?: FinanceSnapshot, profileOverride?: UserProfileData | null) => {
+            if (!user) {
+                return null;
+            }
+
+            const snapshot = snapshotOverride ?? buildSnapshot();
+            const resolvedProfile = profileOverride ?? profileRef.current ?? buildUserProfileData(user);
+            const selfBeneficiary =
+                findCurrentUserSelfBeneficiary(snapshot.beneficiaries, user.uid) ??
+                normalizeBeneficiary({
+                    id: DEFAULT_BENEFICIARY_ID,
+                    userId: user.uid,
+                    familyId: null,
+                    source: "personal",
+                    isSelfProfile: true,
+                    name: resolvedProfile.displayName,
+                    type: "person",
+                    avatarColor: "#4B5563",
+                    avatarImage: resolvedProfile.photoURL,
+                    isActive: true,
+                    sortOrder: 0,
+                    createdAt: new Date().toISOString(),
+                });
+
+            return syncFamilyBeneficiary(user, selfBeneficiary, familyId, {
+                profile: resolvedProfile,
+            });
+        },
+        [buildSnapshot, user],
+    );
+
+    const syncCurrentUserSharedWishlist = useCallback(
+        async (familyId: string, snapshotOverride?: FinanceSnapshot) => {
+            if (!user) {
+                return null;
+            }
+
+            const snapshot = snapshotOverride ?? buildSnapshot();
+            const nextSharedWishlist = await syncSharedWishlist(user, snapshot.wishItems, snapshot.categories, familyId);
+            const nextSharedWishlists = upsertSharedWishlistSnapshot(sharedWishlistsRef.current, nextSharedWishlist);
+            setSharedWishlists(nextSharedWishlists);
+            sharedWishlistsRef.current = nextSharedWishlists;
+            return nextSharedWishlist;
+        },
+        [buildSnapshot, user],
+    );
+
+    const refreshFamilyState = useCallback(
+        async (rawUserData?: unknown) => {
+            if (!user) {
+                setFamilyState(null, []);
+                return {
+                    family: null,
+                    sharedWishlists: [],
+                    sharedBeneficiaries: [],
+                };
+            }
+
+            const nextFamilyState = await loadFamilyState(user, rawUserData);
+            setFamilyState(nextFamilyState.family, nextFamilyState.sharedWishlists);
+            return nextFamilyState;
+        },
+        [setFamilyState, user],
+    );
 
     useEffect(() => {
         let isActive = true;
@@ -793,7 +957,9 @@ export function useFinanceStore(): FinanceStoreValue {
             if (!user) {
                 if (isActive) {
                     const empty = normalizeFinanceSnapshot(null, null).snapshot;
+                    setProfile(null);
                     setSnapshotState(empty);
+                    setFamilyState(null, []);
                     setFavoriteWalletId(resolveFavoriteWalletId(DEFAULT_WALLET_ID, empty.wallets));
                     setFinanceLoading(false);
                 }
@@ -806,8 +972,23 @@ export function useFinanceStore(): FinanceStoreValue {
                 const ref = doc(db, "users", user.uid);
                 const snap = await getDoc(ref);
                 const rawUserData = snap.exists() ? (snap.data() as unknown) : null;
+                const currentProfile = isRecord(rawUserData) && isRecord(rawUserData.profile) ? rawUserData.profile : undefined;
+                const profile = buildUserProfileData(user, {
+                    currentProfile,
+                    preferCurrentProfilePhoto: true,
+                });
+                if (isActive) {
+                    setProfile(profile);
+                }
+                const nextFamilyState = await refreshFamilyState(rawUserData);
                 const { finance: rawFinance, hasLegacyDotFields } = readFinanceFromUserData(rawUserData);
-                const normalizedFinance = normalizeFinanceSnapshot(rawFinance, user.uid);
+                const persistedBeneficiaryOrder = readBeneficiaryOrder(rawFinance);
+                const normalizedFinance = normalizeFinanceSnapshot(rawFinance, user.uid, {
+                    defaultBeneficiaryName: profile.displayName,
+                    defaultBeneficiaryAvatarImage: profile.photoURL,
+                    sharedBeneficiaries: nextFamilyState.sharedBeneficiaries,
+                });
+                const orderedBeneficiaries = applyBeneficiaryOrder(normalizedFinance.snapshot.beneficiaries, persistedBeneficiaryOrder);
                 const recurringHydration = ensureRecurringTransactionsHorizon({
                     groups: normalizedFinance.snapshot.transactionGroups,
                     transactions: normalizedFinance.snapshot.transactions,
@@ -831,9 +1012,10 @@ export function useFinanceStore(): FinanceStoreValue {
                     hydratedGroups,
                     syncedInvoices.transactions,
                     normalizedFinance.snapshot.ledgerEntries,
-                    normalizedFinance.snapshot.beneficiaries,
+                    orderedBeneficiaries,
                     normalizedFinance.snapshot.categories,
                     normalizedFinance.snapshot.tags,
+                    normalizedFinance.snapshot.wishItems,
                     hydratedTransactionTags,
                     normalizedFinance.snapshot.planning,
                 );
@@ -857,19 +1039,36 @@ export function useFinanceStore(): FinanceStoreValue {
                         transactionGroups: snapshot.transactionGroups,
                         transactions: snapshot.transactions,
                         ledgerEntries: snapshot.ledgerEntries,
-                        beneficiaries: snapshot.beneficiaries,
+                        beneficiaries: getPersistableBeneficiaries(snapshot.beneficiaries),
                         categories: snapshot.categories,
                         tags: snapshot.tags,
+                        wishItems: snapshot.wishItems,
                         transactionTags: snapshot.transactionTags,
                         planning: snapshot.planning,
                         favoriteWalletId: normalizedFavoriteWalletId,
                     });
                 }
+
+                if (nextFamilyState.family?.id) {
+                    const nextSharedWishlist = await syncSharedWishlist(user, snapshot.wishItems, snapshot.categories, nextFamilyState.family.id);
+                    await syncCurrentUserFamilyBeneficiary(nextFamilyState.family.id, snapshot, profile);
+                    if (!isActive) {
+                        return;
+                    }
+
+                    setFamilyState(nextFamilyState.family, upsertSharedWishlistSnapshot(nextFamilyState.sharedWishlists, nextSharedWishlist));
+                }
             } catch (error) {
                 console.error("Failed to load finance data:", error);
                 if (isActive) {
-                    const empty = normalizeFinanceSnapshot(null, user.uid).snapshot;
+                    const profile = buildUserProfileData(user);
+                    setProfile(profile);
+                    const empty = normalizeFinanceSnapshot(null, user.uid, {
+                        defaultBeneficiaryName: profile.displayName,
+                        defaultBeneficiaryAvatarImage: profile.photoURL,
+                    }).snapshot;
                     setSnapshotState(empty);
+                    setFamilyState(null, []);
                     setFavoriteWalletId(resolveFavoriteWalletId(DEFAULT_WALLET_ID, empty.wallets));
                 }
             } finally {
@@ -884,14 +1083,18 @@ export function useFinanceStore(): FinanceStoreValue {
         return () => {
             isActive = false;
         };
-    }, [setSnapshotState, user]);
+    }, [profileVersion, refreshFamilyState, setFamilyState, setSnapshotState, syncCurrentUserFamilyBeneficiary, user]);
 
     const persistFinanceFields = useCallback(
         async (fields: PersistFields) => {
             if (!user) {
                 return;
             }
-            await mergeFinanceFields(user.uid, fields);
+            await mergeFinanceFields(user.uid, {
+                ...fields,
+                beneficiaries: fields.beneficiaries ? getPersistableBeneficiaries(fields.beneficiaries) : fields.beneficiaries,
+                beneficiaryOrder: fields.beneficiaryOrder,
+            });
         },
         [user],
     );
@@ -906,9 +1109,11 @@ export function useFinanceStore(): FinanceStoreValue {
                 transactionGroups: snapshot.transactionGroups,
                 transactions: snapshot.transactions,
                 ledgerEntries: snapshot.ledgerEntries,
-                beneficiaries: snapshot.beneficiaries,
+                beneficiaries: getPersistableBeneficiaries(snapshot.beneficiaries),
+                beneficiaryOrder: snapshot.beneficiaries.map((beneficiary) => beneficiary.id),
                 categories: snapshot.categories,
                 tags: snapshot.tags,
+                wishItems: snapshot.wishItems,
                 transactionTags: snapshot.transactionTags,
                 planning: snapshot.planning,
                 favoriteWalletId: favoriteWalletIdRef.current,
@@ -917,13 +1122,92 @@ export function useFinanceStore(): FinanceStoreValue {
         [persistFinanceFields],
     );
 
+    const createFamily = useCallback(
+        async (familyName?: string) => {
+            if (!user) {
+                return;
+            }
+
+            const nextFamily = await createFamilyRecord(user, familyName);
+            const nextSharedWishlist = await syncCurrentUserSharedWishlist(nextFamily.id);
+            await syncCurrentUserFamilyBeneficiary(nextFamily.id);
+            if (!nextSharedWishlist) {
+                throw new Error("Nao foi possivel sincronizar a wishlist compartilhada da familia.");
+            }
+            setFamilyState(nextFamily, [nextSharedWishlist]);
+        },
+        [setFamilyState, syncCurrentUserFamilyBeneficiary, syncCurrentUserSharedWishlist, user],
+    );
+
+    const generateFamilyInvite = useCallback(async () => {
+        const activeFamily = familyRef.current;
+        if (!user || !activeFamily?.id) {
+            throw new Error("Nenhuma familia ativa encontrada.");
+        }
+
+        const nextInvite = await generateFamilyInviteRecord(activeFamily.id, user.uid);
+        const nextFamily: FamilySummary = {
+            ...activeFamily,
+            invites: [nextInvite, ...activeFamily.invites.filter((invite) => invite.inviteId !== nextInvite.inviteId)],
+        };
+        setFamily(nextFamily);
+        familyRef.current = nextFamily;
+        return nextInvite;
+    }, [user]);
+
+    const joinFamilyByCode = useCallback(
+        async (code: string) => {
+            if (!user) {
+                return;
+            }
+
+            const joinedFamily = await joinFamilyByCodeRecord(user, code);
+            setFamily(joinedFamily);
+            familyRef.current = joinedFamily;
+            await syncCurrentUserSharedWishlist(joinedFamily.id);
+            await syncCurrentUserFamilyBeneficiary(joinedFamily.id);
+            const nextFamilyState = await refreshFamilyState();
+            setFamilyState(nextFamilyState.family, nextFamilyState.sharedWishlists);
+            const nextBeneficiaries = mergeFamilySharedBeneficiaries(beneficiariesRef.current, nextFamilyState.sharedBeneficiaries);
+            const snapshot = buildSnapshot({ beneficiaries: nextBeneficiaries });
+            setSnapshotState(snapshot);
+        },
+        [buildSnapshot, refreshFamilyState, setFamilyState, setSnapshotState, syncCurrentUserFamilyBeneficiary, syncCurrentUserSharedWishlist, user],
+    );
+
+    const removeFamilyMember = useCallback(
+        async (memberUid: string) => {
+            const activeFamily = familyRef.current;
+            if (!user || !activeFamily?.id) {
+                throw new Error("Nenhuma familia ativa encontrada.");
+            }
+
+            const nextFamily = await removeFamilyMemberRecord(activeFamily.id, user.uid, memberUid);
+            const nextSharedWishlists = sharedWishlistsRef.current.filter((snapshot) => snapshot.owner.uid !== memberUid);
+            setFamilyState(nextFamily, nextSharedWishlists);
+            const nextBeneficiaries = beneficiariesRef.current.filter((beneficiary) => !(beneficiary.source === "family_shared" && beneficiary.userId === memberUid));
+            const snapshot = buildSnapshot({ beneficiaries: nextBeneficiaries });
+            setSnapshotState(snapshot);
+        },
+        [buildSnapshot, setFamilyState, setSnapshotState, user],
+    );
+
     const updateFinance = useCallback(
         async (newFinance: FinanceSnapshot) => {
-            const normalized = normalizeFinanceSnapshot(newFinance, user?.uid ?? null).snapshot;
+            const resolvedProfile = profileRef.current ?? (user ? buildUserProfileData(user) : null);
+            const normalized = normalizeFinanceSnapshot(newFinance, user?.uid ?? null, {
+                defaultBeneficiaryName: resolvedProfile?.displayName,
+                defaultBeneficiaryAvatarImage: resolvedProfile?.photoURL ?? null,
+                sharedBeneficiaries: beneficiariesRef.current.filter((beneficiary) => beneficiary.source === "family_shared"),
+            }).snapshot;
             setSnapshotState(normalized);
             await persistFullSnapshot(normalized);
+            if (familyRef.current?.id) {
+                await syncCurrentUserSharedWishlist(familyRef.current.id, normalized);
+                await syncCurrentUserFamilyBeneficiary(familyRef.current.id, normalized);
+            }
         },
-        [persistFullSnapshot, setSnapshotState, user?.uid],
+        [persistFullSnapshot, setSnapshotState, syncCurrentUserFamilyBeneficiary, syncCurrentUserSharedWishlist, user],
     );
 
     const updatePlanningState = useCallback(
@@ -1290,7 +1574,7 @@ export function useFinanceStore(): FinanceStoreValue {
 
             const categoryParent = invoicePaymentCategory.parentId ? categoriesRef.current.find((item) => item.id === invoicePaymentCategory.parentId) ?? null : null;
             const beneficiary =
-                beneficiariesRef.current.find((item) => item.id === DEFAULT_BENEFICIARY_ID) ??
+                findCurrentUserSelfBeneficiary(beneficiariesRef.current, user?.uid) ??
                 findBeneficiaryByName(beneficiariesRef.current, DEFAULT_BENEFICIARY_NAME) ??
                 beneficiariesRef.current[0] ??
                 null;
@@ -1458,7 +1742,7 @@ export function useFinanceStore(): FinanceStoreValue {
             const requestedBeneficiaryId = beneficiaryId?.trim() ?? "";
             const resolvedBeneficiary =
                 (requestedBeneficiaryId ? beneficiariesRef.current.find((item) => item.id === requestedBeneficiaryId) : null) ??
-                beneficiariesRef.current.find((item) => item.id === DEFAULT_BENEFICIARY_ID) ??
+                findCurrentUserSelfBeneficiary(beneficiariesRef.current, user?.uid) ??
                 findBeneficiaryByName(beneficiariesRef.current, DEFAULT_BENEFICIARY_NAME) ??
                 beneficiariesRef.current[0] ??
                 null;
@@ -1502,9 +1786,16 @@ export function useFinanceStore(): FinanceStoreValue {
     const addBeneficiary = useCallback(
         async (newBeneficiary: Beneficiary) => {
             const existingBeneficiary = beneficiariesRef.current.find((item) => item.id === newBeneficiary.id) ?? null;
+            if (existingBeneficiary?.source === "family_shared") {
+                return;
+            }
+
             const beneficiary = normalizeBeneficiary({
                 ...newBeneficiary,
                 userId: newBeneficiary.userId ?? user?.uid ?? null,
+                familyId: newBeneficiary.familyId ?? null,
+                source: newBeneficiary.source ?? "personal",
+                isSelfProfile: newBeneficiary.isSelfProfile ?? false,
                 sortOrder: existingBeneficiary?.sortOrder ?? newBeneficiary.sortOrder ?? getNextSortOrder(beneficiariesRef.current),
                 createdAt: newBeneficiary.createdAt ?? new Date().toISOString(),
             });
@@ -1516,9 +1807,12 @@ export function useFinanceStore(): FinanceStoreValue {
 
             const snapshot = buildSnapshot({ beneficiaries: nextBeneficiaries });
             setSnapshotState(snapshot);
-            await persistFinanceFields({ beneficiaries: snapshot.beneficiaries });
+            await persistFinanceFields({ beneficiaries: snapshot.beneficiaries, beneficiaryOrder: snapshot.beneficiaries.map((beneficiary) => beneficiary.id) });
+            if (beneficiary.isSelfProfile && familyRef.current?.id) {
+                await syncCurrentUserFamilyBeneficiary(familyRef.current.id, snapshot);
+            }
         },
-        [buildSnapshot, persistFinanceFields, setSnapshotState, user?.uid],
+        [buildSnapshot, persistFinanceFields, setSnapshotState, syncCurrentUserFamilyBeneficiary, user?.uid],
     );
 
     const addCategory = useCallback(
@@ -1576,6 +1870,52 @@ export function useFinanceStore(): FinanceStoreValue {
         [buildSnapshot, persistFinanceFields, setSnapshotState, user?.uid],
     );
 
+    const addWishItem = useCallback(
+        async (newWishItem: WishItem) => {
+            const existingWishItem = wishItemsRef.current.find((item) => item.id === newWishItem.id) ?? null;
+            const wishItem = normalizeWishItem({
+                ...newWishItem,
+                userId: newWishItem.userId ?? user?.uid ?? null,
+                isActive: newWishItem.isActive ?? true,
+                createdAt: existingWishItem?.createdAt ?? newWishItem.createdAt ?? new Date().toISOString(),
+            });
+
+            if (!wishItem.categoryId.trim() || !wishItem.description.trim() || wishItem.value <= 0) {
+                return;
+            }
+
+            const nextWishItems = (wishItemsRef.current.some((item) => item.id === wishItem.id)
+                ? wishItemsRef.current.map((item) => (item.id === wishItem.id ? wishItem : item))
+                : [wishItem, ...wishItemsRef.current]
+            ).sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id));
+
+            const snapshot = buildSnapshot({ wishItems: nextWishItems });
+            setSnapshotState(snapshot);
+            await persistFinanceFields({ wishItems: snapshot.wishItems });
+            if (familyRef.current?.id) {
+                await syncCurrentUserSharedWishlist(familyRef.current.id, snapshot);
+            }
+        },
+        [buildSnapshot, persistFinanceFields, setSnapshotState, syncCurrentUserSharedWishlist, user?.uid],
+    );
+
+    const removeWishItem = useCallback(
+        async (wishItemId: string) => {
+            const nextWishItems = wishItemsRef.current.filter((item) => item.id !== wishItemId);
+            if (nextWishItems.length === wishItemsRef.current.length) {
+                return;
+            }
+
+            const snapshot = buildSnapshot({ wishItems: nextWishItems });
+            setSnapshotState(snapshot);
+            await persistFinanceFields({ wishItems: snapshot.wishItems });
+            if (familyRef.current?.id) {
+                await syncCurrentUserSharedWishlist(familyRef.current.id, snapshot);
+            }
+        },
+        [buildSnapshot, persistFinanceFields, setSnapshotState, syncCurrentUserSharedWishlist],
+    );
+
     const reorderBeneficiaries = useCallback(
         async (beneficiaryIds: string[]) => {
             const existingById = new Map(beneficiariesRef.current.map((item) => [item.id, item]));
@@ -1608,7 +1948,7 @@ export function useFinanceStore(): FinanceStoreValue {
 
             const snapshot = buildSnapshot({ beneficiaries: nextBeneficiaries });
             setSnapshotState(snapshot);
-            await persistFinanceFields({ beneficiaries: snapshot.beneficiaries });
+            await persistFinanceFields({ beneficiaries: snapshot.beneficiaries, beneficiaryOrder: finalIds });
         },
         [buildSnapshot, persistFinanceFields, setSnapshotState],
     );
@@ -1705,6 +2045,11 @@ export function useFinanceStore(): FinanceStoreValue {
 
     const setBeneficiaryActive = useCallback(
         async (beneficiaryId: string, isActive: boolean) => {
+            const targetBeneficiary = beneficiariesRef.current.find((beneficiary) => beneficiary.id === beneficiaryId);
+            if (!targetBeneficiary || targetBeneficiary.source === "family_shared" || targetBeneficiary.isSelfProfile) {
+                return;
+            }
+
             let changed = false;
             const nextBeneficiaries = beneficiariesRef.current
                 .map((beneficiary) => {
@@ -1722,7 +2067,7 @@ export function useFinanceStore(): FinanceStoreValue {
 
             const snapshot = buildSnapshot({ beneficiaries: nextBeneficiaries });
             setSnapshotState(snapshot);
-            await persistFinanceFields({ beneficiaries: snapshot.beneficiaries });
+            await persistFinanceFields({ beneficiaries: snapshot.beneficiaries, beneficiaryOrder: snapshot.beneficiaries.map((beneficiary) => beneficiary.id) });
         },
         [buildSnapshot, persistFinanceFields, setSnapshotState],
     );
@@ -1734,7 +2079,7 @@ export function useFinanceStore(): FinanceStoreValue {
                 return;
             }
 
-            if (targetCategory.isSystem && !isActive) {
+            if (categoryId === SYSTEM_EXPENSE_CARD_INVOICE_CATEGORY_ID && !isActive) {
                 return;
             }
 
@@ -1748,8 +2093,11 @@ export function useFinanceStore(): FinanceStoreValue {
                         return category;
                     }
 
-                    if (category.isSystem && !isActive) {
-                        return category;
+                    if (category.id === SYSTEM_EXPENSE_CARD_INVOICE_CATEGORY_ID && !isActive) {
+                        return {
+                            ...category,
+                            isActive: true,
+                        };
                     }
 
                     if (category.isActive === isActive) {
@@ -1919,9 +2267,9 @@ export function useFinanceStore(): FinanceStoreValue {
 
             if (!finalBeneficiary) {
                 finalBeneficiary =
-                    beneficiariesById.get(DEFAULT_BENEFICIARY_ID) ??
+                    findCurrentUserSelfBeneficiary(nextBeneficiaries, user?.uid) ??
                     findBeneficiaryByName(nextBeneficiaries, DEFAULT_BENEFICIARY_NAME) ??
-                    createBeneficiary(DEFAULT_BENEFICIARY_NAME);
+                    createBeneficiary(user ? buildUserProfileData(user).displayName : DEFAULT_BENEFICIARY_NAME);
             }
 
             const description = (newTransaction.description || "").trim();
@@ -2357,65 +2705,6 @@ export function useFinanceStore(): FinanceStoreValue {
         [deleteTransactionWithScope],
     );
 
-    const repairCreditCardInvoiceAssignments = useCallback(
-        async (transactionIds: string[]) => {
-            const requestedTransactionIds = new Set(transactionIds);
-            if (requestedTransactionIds.size < 1) {
-                return;
-            }
-
-            const issues = findCreditCardInvoiceAssignmentIssues({
-                transactions: storedTransactionsRef.current,
-                transactionGroups: transactionGroupsRef.current,
-                creditCards: creditCardsRef.current,
-            });
-            const expectedInvoiceByTransactionId = new Map(
-                issues
-                    .filter((issue) => requestedTransactionIds.has(issue.transactionId))
-                    .map((issue) => [issue.transactionId, issue.expectedInvoiceId]),
-            );
-
-            if (expectedInvoiceByTransactionId.size < 1) {
-                return;
-            }
-
-            let changed = false;
-            const nextTransactions = storedTransactionsRef.current.map((transaction) => {
-                const expectedInvoiceId = expectedInvoiceByTransactionId.get(transaction.id);
-                if (!expectedInvoiceId || transaction.invoiceId === expectedInvoiceId) {
-                    return transaction;
-                }
-
-                changed = true;
-                return normalizeStoredTransaction({
-                    ...transaction,
-                    invoiceId: expectedInvoiceId,
-                });
-            });
-
-            if (!changed) {
-                return;
-            }
-
-            const syncedInvoices = syncCreditCardInvoices({
-                creditCards: creditCardsRef.current,
-                transactionGroups: transactionGroupsRef.current,
-                transactions: nextTransactions,
-                existingInvoices: creditCardInvoicesRef.current,
-            });
-            const nextGroups = recalculateGroupTotals(transactionGroupsRef.current, syncedInvoices.transactions);
-            const snapshot = buildSnapshot({
-                transactionGroups: nextGroups,
-                transactions: syncedInvoices.transactions,
-                creditCardInvoices: syncedInvoices.creditCardInvoices,
-            });
-
-            setSnapshotState(snapshot);
-            await persistFullSnapshot(snapshot);
-        },
-        [buildSnapshot, persistFullSnapshot, setSnapshotState],
-    );
-
     const updateTransaction = useCallback(
         async ({ transaction, draft, scope = "single" }: UpdateTransactionDraft) => {
             const transactionToUpdate = storedTransactionsRef.current.find((item) => item.id === transaction.id);
@@ -2463,7 +2752,11 @@ export function useFinanceStore(): FinanceStoreValue {
     return useMemo(
         () => ({
             user,
+            profile,
             loading,
+            profileVersion,
+            family,
+            sharedWishlists,
             favoriteWalletId,
             favoriteCreditCardId,
             wallets,
@@ -2472,6 +2765,7 @@ export function useFinanceStore(): FinanceStoreValue {
             beneficiaries,
             categories,
             tags,
+            wishItems,
             transactionGroups,
             storedTransactions,
             transactionTags,
@@ -2491,7 +2785,6 @@ export function useFinanceStore(): FinanceStoreValue {
             markTransactionAsPaid,
             deleteTransaction,
             deleteTransactionWithScope,
-            repairCreditCardInvoiceAssignments,
             updateInvoicePaymentTransaction,
             updatePlanningState,
             clearTransactions,
@@ -2499,6 +2792,7 @@ export function useFinanceStore(): FinanceStoreValue {
             addBeneficiary,
             addCategory,
             addTag,
+            addWishItem,
             reorderBeneficiaries,
             reorderCategories,
             reorderTags,
@@ -2511,15 +2805,22 @@ export function useFinanceStore(): FinanceStoreValue {
             deleteCreditCard,
             payCreditCardInvoice,
             setCreditCardInvoicesPaidState,
+            removeWishItem,
+            createFamily,
+            generateFamilyInvite,
+            joinFamilyByCode,
+            removeFamilyMember,
         }),
         [
             addBeneficiary,
             addCategory,
             addCreditCard,
             addTag,
+            addWishItem,
             addTransaction,
             updateTransaction,
             addWallet,
+            createFamily,
             deleteWallet,
             balance,
             beneficiaries,
@@ -2529,16 +2830,22 @@ export function useFinanceStore(): FinanceStoreValue {
             creditCards,
             deleteTransaction,
             deleteTransactionWithScope,
-            repairCreditCardInvoiceAssignments,
             updateInvoicePaymentTransaction,
+            family,
             favoriteCreditCardId,
             favoriteWalletId,
+            generateFamilyInvite,
+            joinFamilyByCode,
             ledgerEntries,
             loading,
             markTransactionAsPaid,
             payCreditCardInvoice,
+            profile,
+            removeFamilyMember,
             setCreditCardInvoicesPaidState,
+            removeWishItem,
             planning,
+            profileVersion,
             reorderBeneficiaries,
             reorderCategories,
             reorderTags,
@@ -2554,7 +2861,9 @@ export function useFinanceStore(): FinanceStoreValue {
             storedTransactions,
             summary.despesas,
             summary.receitas,
+            sharedWishlists,
             tags,
+            wishItems,
             transactionGroups,
             transactionTags,
             transactions,

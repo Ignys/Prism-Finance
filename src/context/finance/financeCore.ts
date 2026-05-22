@@ -1,5 +1,6 @@
 import { getDefaultCategoryIconName, normalizeCategoryIconName } from "../../lib/categoryIcons";
 import { formatLocalDateInput, getLocalTodayDate, parseAppDate } from "../../lib/localDate";
+import { normalizeWishItemPriority, type WishItemPriority } from "../../lib/wishlistPriority";
 import { DEFAULT_CREDIT_CARD_ICON, DEFAULT_WALLET_COLOR, DEFAULT_WALLET_ICON } from "../../lib/walletVisual";
 
 export type TransactionType = "income" | "spending" | "transfer";
@@ -12,7 +13,9 @@ export type TransactionSeriesScope = "single" | "this_and_next" | "all";
 export type InvoiceStatus = "open" | "paid";
 export type WalletType = "checking" | "savings" | "cash" | "investment";
 export type BeneficiaryType = "person" | "cost_center" | "pet" | "other";
+export type BeneficiarySource = "personal" | "family_shared";
 export type CategoryType = "income" | "expense";
+export type { WishItemPriority };
 
 export interface TransactionEntity {
     id: string;
@@ -143,6 +146,9 @@ export interface Wallet {
 export interface Beneficiary {
     id: string;
     userId: string | null;
+    familyId: string | null;
+    source: BeneficiarySource;
+    isSelfProfile: boolean;
     name: string;
     type: BeneficiaryType;
     avatarColor: string | null;
@@ -176,6 +182,18 @@ export interface Tag {
     createdAt: string;
 }
 
+export interface WishItem {
+    id: string;
+    userId: string | null;
+    value: number;
+    categoryId: string;
+    priority: WishItemPriority;
+    description: string;
+    link: string | null;
+    isActive: boolean;
+    createdAt: string;
+}
+
 export interface TransactionTag {
     transactionId: string;
     tagId: string;
@@ -203,20 +221,12 @@ export interface PlanningRevenueOverride {
     updatedAt: string;
 }
 
-export interface PlanningGoal {
-    id: string;
-    title: string;
-    targetAmount: number;
-    targetMonth: string;
-    createdAt: string;
-}
-
 export interface PlanningState {
     simulatedExpenses: PlanningSimulatedExpense[];
     simulatedIncomes: PlanningSimulatedIncome[];
     revenueOverrides: PlanningRevenueOverride[];
-    goals: PlanningGoal[];
     disabledInheritedExpenseIds: string[];
+    disabledIncomeIds: string[];
 }
 
 export interface FinanceSnapshot {
@@ -232,6 +242,7 @@ export interface FinanceSnapshot {
     beneficiaries: Beneficiary[];
     categories: Category[];
     tags: Tag[];
+    wishItems: WishItem[];
     transactionTags: TransactionTag[];
     planning: PlanningState;
 }
@@ -273,6 +284,12 @@ interface NormalizeFinanceResult {
     changed: boolean;
 }
 
+interface NormalizeFinanceOptions {
+    defaultBeneficiaryName?: string;
+    defaultBeneficiaryAvatarImage?: string | null;
+    sharedBeneficiaries?: Beneficiary[];
+}
+
 interface WalletInput extends Partial<Wallet> {
     id: string;
     startBalance?: unknown;
@@ -296,10 +313,6 @@ interface PlanningSimulatedIncomeInput extends Partial<PlanningSimulatedIncome> 
 
 type PlanningRevenueOverrideInput = Partial<PlanningRevenueOverride>;
 
-interface PlanningGoalInput extends Partial<PlanningGoal> {
-    id?: string;
-}
-
 interface BeneficiaryInput extends Partial<Beneficiary> {
     id: string;
 }
@@ -309,6 +322,10 @@ interface CategoryInput extends Partial<Category> {
 }
 
 interface TagInput extends Partial<Tag> {
+    id: string;
+}
+
+interface WishItemInput extends Partial<WishItem> {
     id: string;
 }
 
@@ -340,8 +357,8 @@ export const DEFAULT_PLANNING_STATE: PlanningState = {
     simulatedExpenses: [],
     simulatedIncomes: [],
     revenueOverrides: [],
-    goals: [],
     disabledInheritedExpenseIds: [],
+    disabledIncomeIds: [],
 };
 
 interface SystemCategorySeed {
@@ -354,20 +371,22 @@ interface SystemCategorySeed {
 }
 
 const SYSTEM_CATEGORY_SEED: SystemCategorySeed[] = [
-    { id: "system-category-expense-food", parentId: null, name: "Alimentacao", type: "expense", icon: "utensils", color: "#EF4444" },
+    { id: "system-category-expense-food", parentId: null, name: "Alimentação", type: "expense", icon: "utensils", color: "#EF4444" },
     { id: "system-category-expense-housing", parentId: null, name: "Moradia", type: "expense", icon: "house", color: "#F59E0B" },
     { id: "system-category-expense-transport", parentId: null, name: "Transporte", type: "expense", icon: "car", color: "#3B82F6" },
-    { id: "system-category-expense-health", parentId: null, name: "Saude", type: "expense", icon: "heart", color: "#10B981" },
+    { id: "system-category-expense-health", parentId: null, name: "Saúde", type: "expense", icon: "heart", color: "#10B981" },
     { id: "system-category-expense-leisure", parentId: null, name: "Lazer", type: "expense", icon: "music", color: "#8B5CF6" },
-    { id: SYSTEM_EXPENSE_CARD_INVOICE_CATEGORY_ID, parentId: null, name: "Fatura do cartao", type: "expense", icon: "credit-card", color: "#06B6D4" },
+    { id: SYSTEM_EXPENSE_CARD_INVOICE_CATEGORY_ID, parentId: null, name: "Fatura do Cartão", type: "expense", icon: "credit-card", color: "#06B6D4" },
     { id: DEFAULT_EXPENSE_CATEGORY_ID, parentId: null, name: "Sem categoria", type: "expense", icon: "tag", color: "#6B7280" },
     { id: "system-category-expense-food-restaurants", parentId: "system-category-expense-food", name: "Restaurantes", type: "expense", icon: "utensils-crossed", color: "#FB7185" },
     { id: "system-category-expense-food-market", parentId: "system-category-expense-food", name: "Supermercado", type: "expense", icon: "shopping-cart", color: "#F97316" },
     { id: "system-category-expense-food-delivery", parentId: "system-category-expense-food", name: "Delivery", type: "expense", icon: "bike", color: "#22C55E" },
-    { id: "system-category-income-salary", parentId: null, name: "Salario", type: "income", icon: "briefcase", color: "#0EA5E9" },
+    { id: "system-category-income-salary", parentId: null, name: "Salário", type: "income", icon: "briefcase", color: "#0EA5E9" },
     { id: "system-category-income-investments", parentId: null, name: "Investimentos", type: "income", icon: "chart-line", color: "#14B8A6" },
     { id: DEFAULT_INCOME_CATEGORY_ID, parentId: null, name: "Outras receitas", type: "income", icon: "coins", color: "#22C55E" },
 ];
+
+const INVOICE_PAYMENT_CATEGORY_SEED = SYSTEM_CATEGORY_SEED.find((item) => item.id === SYSTEM_EXPENSE_CARD_INVOICE_CATEGORY_ID) as SystemCategorySeed;
 
 interface InvoicePaymentNotePayload {
     invoiceId: string;
@@ -827,6 +846,7 @@ export function resolveCreditCardInvoiceStatus(params: {
 export function findDefaultCategoryId(groupType: TransactionGroupType, categories: Category[]): string {
     const desiredType = toCategoryTypeFromGroupType(groupType);
     const categoryById = new Map(categories.map((item) => [item.id, item]));
+    const selectableCategories = desiredType === "expense" ? categories.filter((item) => item.id !== SYSTEM_EXPENSE_CARD_INVOICE_CATEGORY_ID) : categories;
 
     if (desiredType === "expense" && categoryById.has(DEFAULT_EXPENSE_CATEGORY_ID)) {
         return DEFAULT_EXPENSE_CATEGORY_ID;
@@ -836,12 +856,12 @@ export function findDefaultCategoryId(groupType: TransactionGroupType, categorie
         return DEFAULT_INCOME_CATEGORY_ID;
     }
 
-    const firstOfType = categories.find((item) => item.type === desiredType);
+    const firstOfType = selectableCategories.find((item) => item.type === desiredType);
     if (firstOfType) {
         return firstOfType.id;
     }
 
-    const firstCategory = categories[0];
+    const firstCategory = selectableCategories[0] ?? categories[0];
     if (firstCategory) {
         return firstCategory.id;
     }
@@ -939,6 +959,9 @@ export function normalizeBeneficiary(beneficiary: BeneficiaryInput): Beneficiary
     return {
         id: asString(beneficiary.id, `beneficiary-${Date.now()}`),
         userId: asNullableString(beneficiary.userId, null),
+        familyId: asNullableString(beneficiary.familyId, null),
+        source: beneficiary.source === "family_shared" ? "family_shared" : "personal",
+        isSelfProfile: asBoolean(beneficiary.isSelfProfile, false),
         name: asString(beneficiary.name, DEFAULT_BENEFICIARY_NAME),
         type: asBeneficiaryType(beneficiary.type),
         avatarColor: asNullableString(beneficiary.avatarColor, null),
@@ -975,6 +998,20 @@ export function normalizeTag(tag: TagInput): Tag {
         isActive: asBoolean(tag.isActive, true),
         sortOrder: asSortOrder(tag.sortOrder, 0),
         createdAt: asDateTimeString(tag.createdAt, getNowIso()),
+    };
+}
+
+export function normalizeWishItem(wishItem: WishItemInput): WishItem {
+    return {
+        id: asString(wishItem.id, `wish-${Date.now()}`),
+        userId: asNullableString(wishItem.userId, null),
+        value: roundToCents(Math.max(0, Math.abs(asNumber(wishItem.value, 0)))),
+        categoryId: asString(wishItem.categoryId, "").trim(),
+        priority: normalizeWishItemPriority(wishItem.priority),
+        description: asString(wishItem.description, "Desejo").trim() || "Desejo",
+        link: asNullableString(wishItem.link, null)?.trim() || null,
+        isActive: asBoolean(wishItem.isActive, true),
+        createdAt: asDateTimeString(wishItem.createdAt, getNowIso()),
     };
 }
 
@@ -1083,18 +1120,6 @@ function normalizePlanningRevenueOverride(input: PlanningRevenueOverrideInput): 
     };
 }
 
-function normalizePlanningGoal(input: PlanningGoalInput, index: number): PlanningGoal {
-    const now = getNowIso();
-
-    return {
-        id: asString(input.id, `planning-goal-${index}-${Date.now()}`),
-        title: asString(input.title, "Meta"),
-        targetAmount: roundToCents(Math.max(0, Math.abs(asNumber(input.targetAmount, 0)))),
-        targetMonth: normalizePlanningMonthKey(input.targetMonth),
-        createdAt: asDateTimeString(input.createdAt, now),
-    };
-}
-
 export function normalizePlanningState(rawPlanning: unknown): PlanningState {
     if (!isRecord(rawPlanning)) {
         return DEFAULT_PLANNING_STATE;
@@ -1138,20 +1163,6 @@ export function normalizePlanningState(rawPlanning: unknown): PlanningState {
         incomesById.set(income.id, income);
     });
 
-    const goalsById = new Map<string, PlanningGoal>();
-    asArray(rawPlanning.goals).forEach((rawGoal, index) => {
-        if (!isRecord(rawGoal)) {
-            return;
-        }
-
-        const goal = normalizePlanningGoal(rawGoal, index);
-        if (goal.targetAmount <= 0) {
-            return;
-        }
-
-        goalsById.set(goal.id, goal);
-    });
-
     return {
         simulatedExpenses: Array.from(expensesById.values()).sort((a, b) => {
             if (a.monthKey === b.monthKey) {
@@ -1166,15 +1177,16 @@ export function normalizePlanningState(rawPlanning: unknown): PlanningState {
             return a.monthKey.localeCompare(b.monthKey);
         }),
         revenueOverrides: Array.from(overridesByMonth.values()).sort((a, b) => a.monthKey.localeCompare(b.monthKey)),
-        goals: Array.from(goalsById.values()).sort((a, b) => {
-            if (a.targetMonth === b.targetMonth) {
-                return a.createdAt.localeCompare(b.createdAt);
-            }
-            return a.targetMonth.localeCompare(b.targetMonth);
-        }),
         disabledInheritedExpenseIds: Array.from(
             new Set(
                 asArray(rawPlanning.disabledInheritedExpenseIds).filter(
+                    (value): value is string => typeof value === "string" && value.trim().length > 0,
+                ),
+            ),
+        ).sort((a, b) => a.localeCompare(b)),
+        disabledIncomeIds: Array.from(
+            new Set(
+                asArray(rawPlanning.disabledIncomeIds).filter(
                     (value): value is string => typeof value === "string" && value.trim().length > 0,
                 ),
             ),
@@ -1493,6 +1505,7 @@ export function createFinanceSnapshot(
     beneficiaries: Beneficiary[] = [],
     categories: Category[] = [],
     tags: Tag[] = [],
+    wishItems: WishItem[] = [],
     transactionTags: TransactionTag[] = [],
     planning: PlanningState = DEFAULT_PLANNING_STATE,
 ): FinanceSnapshot {
@@ -1512,12 +1525,13 @@ export function createFinanceSnapshot(
         beneficiaries,
         categories,
         tags,
+        wishItems,
         transactionTags,
         planning: normalizePlanningState(planning),
     };
 }
 
-function buildSystemCategories(now: string): Category[] {
+function buildSeedCategories(now: string): Category[] {
     return SYSTEM_CATEGORY_SEED.map((item, index) =>
         normalizeCategory({
             id: item.id,
@@ -1528,39 +1542,74 @@ function buildSystemCategories(now: string): Category[] {
             icon: item.icon,
             color: item.color,
             isActive: true,
-            isSystem: true,
+            isSystem: false,
             sortOrder: index,
             createdAt: now,
         }),
     );
 }
 
-function ensureSystemCategories(categoriesById: Map<string, Category>, now: string): boolean {
+function buildInvoicePaymentCategory(now: string): Category {
+    return normalizeCategory({
+        id: INVOICE_PAYMENT_CATEGORY_SEED.id,
+        userId: null,
+        parentId: INVOICE_PAYMENT_CATEGORY_SEED.parentId,
+        name: INVOICE_PAYMENT_CATEGORY_SEED.name,
+        type: INVOICE_PAYMENT_CATEGORY_SEED.type,
+        icon: INVOICE_PAYMENT_CATEGORY_SEED.icon,
+        color: INVOICE_PAYMENT_CATEGORY_SEED.color,
+        isActive: true,
+        isSystem: false,
+        sortOrder: 0,
+        createdAt: now,
+    });
+}
+
+function normalizeSeedCategoryFlags(categoriesById: Map<string, Category>, now: string): boolean {
     let changed = false;
 
-    buildSystemCategories(now).forEach((systemCategory) => {
-        const existing = categoriesById.get(systemCategory.id);
-        if (!existing) {
-            categoriesById.set(systemCategory.id, systemCategory);
-            changed = true;
+    if (categoriesById.size === 0) {
+        buildSeedCategories(now).forEach((category) => {
+            categoriesById.set(category.id, category);
+        });
+        return true;
+    }
+
+    categoriesById.forEach((category) => {
+        if (!category.isSystem) {
             return;
         }
 
-        if (!existing.isSystem) {
-            categoriesById.set(
-                systemCategory.id,
-                {
-                    ...existing,
-                    isSystem: true,
-                    userId: null,
-                    parentId: systemCategory.parentId,
-                    type: systemCategory.type,
-                    isActive: true,
-                },
-            );
-            changed = true;
-        }
+        categoriesById.set(category.id, {
+            ...category,
+            isSystem: false,
+        });
+        changed = true;
     });
+
+    const invoicePaymentCategory = categoriesById.get(SYSTEM_EXPENSE_CARD_INVOICE_CATEGORY_ID);
+    if (!invoicePaymentCategory) {
+        categoriesById.set(SYSTEM_EXPENSE_CARD_INVOICE_CATEGORY_ID, buildInvoicePaymentCategory(now));
+        changed = true;
+        return changed;
+    }
+
+    const needsInvoiceRepair =
+        invoicePaymentCategory.type !== "expense" ||
+        invoicePaymentCategory.parentId !== null ||
+        !invoicePaymentCategory.isActive ||
+        invoicePaymentCategory.isSystem;
+
+    if (needsInvoiceRepair) {
+        categoriesById.set(SYSTEM_EXPENSE_CARD_INVOICE_CATEGORY_ID, {
+            ...invoicePaymentCategory,
+            type: "expense",
+            parentId: null,
+            isActive: true,
+            isSystem: false,
+        });
+        changed = true;
+    }
 
     return changed;
 }
@@ -1617,10 +1666,41 @@ function findOrCreateCategory(
     return { category: created, created: true };
 }
 
-function ensureDefaultBeneficiary(beneficiariesById: Map<string, Beneficiary>, userId: string | null, now: string): boolean {
+function ensureDefaultBeneficiary(
+    beneficiariesById: Map<string, Beneficiary>,
+    userId: string | null,
+    now: string,
+    defaultName: string,
+    defaultAvatarImage: string | null,
+): boolean {
+    const nextSortOrder = Math.max(0, ...Array.from(beneficiariesById.values()).map((item) => item.sortOrder)) + 1;
     const existingById = beneficiariesById.get(DEFAULT_BENEFICIARY_ID);
     if (existingById) {
-        return false;
+        const normalizedExisting = normalizeBeneficiary({
+            ...existingById,
+            id: DEFAULT_BENEFICIARY_ID,
+            userId,
+            familyId: null,
+            source: "personal",
+            isSelfProfile: true,
+            name: defaultName,
+            type: "person",
+            avatarImage: defaultAvatarImage,
+            avatarColor: existingById.avatarColor ?? "#4B5563",
+            isActive: true,
+            sortOrder: existingById.sortOrder,
+            createdAt: existingById.createdAt,
+        });
+        const changed =
+            existingById.name !== normalizedExisting.name ||
+            existingById.avatarImage !== normalizedExisting.avatarImage ||
+            existingById.userId !== normalizedExisting.userId ||
+            existingById.familyId !== normalizedExisting.familyId ||
+            existingById.source !== normalizedExisting.source ||
+            existingById.isSelfProfile !== normalizedExisting.isSelfProfile ||
+            existingById.isActive !== normalizedExisting.isActive;
+        beneficiariesById.set(DEFAULT_BENEFICIARY_ID, normalizedExisting);
+        return changed;
     }
 
     const existingByName = Array.from(beneficiariesById.values()).find(
@@ -1628,14 +1708,29 @@ function ensureDefaultBeneficiary(beneficiariesById: Map<string, Beneficiary>, u
     );
 
     if (existingByName) {
-        beneficiariesById.set(
-            existingByName.id,
-            {
-                ...existingByName,
-                isActive: true,
-            },
-        );
-        return false;
+        const normalizedExisting = normalizeBeneficiary({
+            ...existingByName,
+            userId,
+            familyId: null,
+            source: "personal",
+            isSelfProfile: true,
+            name: defaultName,
+            type: "person",
+            avatarImage: defaultAvatarImage,
+            avatarColor: existingByName.avatarColor ?? "#4B5563",
+            isActive: true,
+            createdAt: existingByName.createdAt,
+        });
+        const changed =
+            existingByName.name !== normalizedExisting.name ||
+            existingByName.avatarImage !== normalizedExisting.avatarImage ||
+            existingByName.userId !== normalizedExisting.userId ||
+            existingByName.familyId !== normalizedExisting.familyId ||
+            existingByName.source !== normalizedExisting.source ||
+            existingByName.isSelfProfile !== normalizedExisting.isSelfProfile ||
+            existingByName.isActive !== normalizedExisting.isActive;
+        beneficiariesById.set(existingByName.id, normalizedExisting);
+        return changed;
     }
 
     beneficiariesById.set(
@@ -1643,12 +1738,15 @@ function ensureDefaultBeneficiary(beneficiariesById: Map<string, Beneficiary>, u
         normalizeBeneficiary({
             id: DEFAULT_BENEFICIARY_ID,
             userId,
-            name: DEFAULT_BENEFICIARY_NAME,
+            familyId: null,
+            source: "personal",
+            isSelfProfile: true,
+            name: defaultName,
             type: "person",
             avatarColor: "#4B5563",
-            avatarImage: null,
+            avatarImage: defaultAvatarImage,
             isActive: true,
-            sortOrder: Math.max(0, ...Array.from(beneficiariesById.values()).map((item) => item.sortOrder)) + 1,
+            sortOrder: nextSortOrder,
             createdAt: now,
         }),
     );
@@ -1842,10 +1940,12 @@ function resolveGroupEntityLinks(
     return changed;
 }
 
-export function normalizeFinanceSnapshot(rawFinance: unknown, userId: string | null = null): NormalizeFinanceResult {
+export function normalizeFinanceSnapshot(rawFinance: unknown, userId: string | null = null, options: NormalizeFinanceOptions = {}): NormalizeFinanceResult {
     let changed = false;
     const now = getNowIso();
     const today = getTodayDate();
+    const defaultBeneficiaryName = options.defaultBeneficiaryName?.trim() || DEFAULT_BENEFICIARY_NAME;
+    const defaultBeneficiaryAvatarImage = asNullableString(options.defaultBeneficiaryAvatarImage, null);
 
     const financeRecord = isRecord(rawFinance) ? rawFinance : {};
     if (!isRecord(rawFinance)) {
@@ -2039,7 +2139,7 @@ export function normalizeFinanceSnapshot(rawFinance: unknown, userId: string | n
         categoriesById.set(normalizedCategory.id, normalizedCategory);
     });
 
-    if (ensureSystemCategories(categoriesById, now)) {
+    if (normalizeSeedCategoryFlags(categoriesById, now)) {
         changed = true;
     }
 
@@ -2061,6 +2161,9 @@ export function normalizeFinanceSnapshot(rawFinance: unknown, userId: string | n
         const normalizedBeneficiary = normalizeBeneficiary({
             id: rawBeneficiary.id,
             userId: asNullableString(rawBeneficiary.userId, userId),
+            familyId: asNullableString(rawBeneficiary.familyId, null),
+            source: rawBeneficiary.source === "family_shared" ? "family_shared" : "personal",
+            isSelfProfile: asBoolean(rawBeneficiary.isSelfProfile, false),
             name: asString(rawBeneficiary.name, DEFAULT_BENEFICIARY_NAME),
             type: asBeneficiaryType(rawBeneficiary.type),
             avatarColor: asNullableString(rawBeneficiary.avatarColor, null),
@@ -2085,7 +2188,22 @@ export function normalizeFinanceSnapshot(rawFinance: unknown, userId: string | n
         beneficiariesById.set(normalizedBeneficiary.id, normalizedBeneficiary);
     });
 
-    if (ensureDefaultBeneficiary(beneficiariesById, userId, now)) {
+    const sharedBeneficiaries = Array.isArray(options.sharedBeneficiaries) ? options.sharedBeneficiaries : [];
+    sharedBeneficiaries.forEach((sharedBeneficiary) => {
+        const normalizedSharedBeneficiary = normalizeBeneficiary({
+            ...sharedBeneficiary,
+            source: "family_shared",
+            isSelfProfile: sharedBeneficiary.isSelfProfile ?? true,
+            isActive: true,
+        });
+
+        const existingBeneficiary = beneficiariesById.get(normalizedSharedBeneficiary.id);
+        if (!existingBeneficiary || existingBeneficiary.source !== normalizedSharedBeneficiary.source) {
+            beneficiariesById.set(normalizedSharedBeneficiary.id, normalizedSharedBeneficiary);
+        }
+    });
+
+    if (ensureDefaultBeneficiary(beneficiariesById, userId, now, defaultBeneficiaryName, defaultBeneficiaryAvatarImage)) {
         changed = true;
     }
 
@@ -2124,6 +2242,43 @@ export function normalizeFinanceSnapshot(rawFinance: unknown, userId: string | n
         }
 
         tagsById.set(normalizedTag.id, normalizedTag);
+    });
+
+    const wishItemsRaw = asArray(financeRecord.wishItems);
+    if (!Array.isArray(financeRecord.wishItems)) {
+        changed = true;
+    }
+
+    const wishItemsById = new Map<string, WishItem>();
+    wishItemsRaw.forEach((rawWishItem) => {
+        if (!isRecord(rawWishItem) || typeof rawWishItem.id !== "string") {
+            changed = true;
+            return;
+        }
+
+        const normalizedWishItem = normalizeWishItem({
+            id: rawWishItem.id,
+            userId: asNullableString(rawWishItem.userId, userId),
+            value: asNumber(rawWishItem.value, 0),
+            categoryId: asString(rawWishItem.categoryId, ""),
+            priority: rawWishItem.priority,
+            description: asString(rawWishItem.description, "Desejo"),
+            link: asNullableString(rawWishItem.link, null),
+            isActive: asBoolean(rawWishItem.isActive, true),
+            createdAt: asDateTimeString(rawWishItem.createdAt, now),
+        });
+
+        if (!normalizedWishItem.categoryId || normalizedWishItem.value <= 0 || !normalizedWishItem.description) {
+            changed = true;
+            return;
+        }
+
+        if (wishItemsById.has(normalizedWishItem.id)) {
+            changed = true;
+            return;
+        }
+
+        wishItemsById.set(normalizedWishItem.id, normalizedWishItem);
     });
 
     const groupsRaw = asArray(financeRecord.transactionGroups);
@@ -2591,6 +2746,7 @@ export function normalizeFinanceSnapshot(rawFinance: unknown, userId: string | n
 
     const normalizedBeneficiaries = Array.from(beneficiariesById.values()).sort(compareBySortOrderNameAndId);
     const normalizedTags = Array.from(tagsById.values()).sort(compareBySortOrderNameAndId);
+    const normalizedWishItems = Array.from(wishItemsById.values()).sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id));
 
     return {
         snapshot: createFinanceSnapshot(
@@ -2604,6 +2760,7 @@ export function normalizeFinanceSnapshot(rawFinance: unknown, userId: string | n
             normalizedBeneficiaries,
             normalizedCategories,
             normalizedTags,
+            normalizedWishItems,
             cleanedTransactionTags.links,
             normalizePlanningState(financeRecord.planning),
         ),

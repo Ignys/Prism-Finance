@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { ArrowDown, ArrowUp, Circle, Check, Pencil, Repeat2, Trash2 } from "lucide-react";
 import { type Beneficiary, type Transaction, type Wallet, useFinanceBeneficiaries, useFinanceTransactionGroups } from "../../../context/FinanceContext";
 import { getCategoryIconComponent } from "../../../lib/categoryIcons";
+import { BeneficiaryAvatar } from "../../common/BeneficiaryAvatar";
 import { WalletAvatar } from "../../common/WalletAvatar";
 import { formatCurrencyBRL, formatTransactionDate, getTransactionTypeMeta, resolveTransactionWallet } from "../../transactions/transactionView";
 import {
@@ -177,8 +178,6 @@ function TransactionsTable({
                                 const categoryColor = transaction.category.color ?? "#9CA3AF";
                                 const categoryBackground = `${categoryColor}22`;
                                 const beneficiary = transaction.beneficiaryId ? beneficiariesById.get(transaction.beneficiaryId) : null;
-                                const beneficiaryAvatarImage = beneficiary?.avatarImage ?? null;
-                                const beneficiaryAvatarColor = beneficiary?.avatarColor ?? "#4B5563";
                                 const visibleTags = transaction.tags.slice(0, 2);
                                 const hiddenTagsCount = Math.max(transaction.tags.length - visibleTags.length, 0);
 
@@ -241,13 +240,7 @@ function TransactionsTable({
                                         </td>
                                         <td className="border-b border-white/[0.04] px-3 py-2.5">
                                             <div className="flex items-center text-white/70 gap-2">
-                                                <span className="inline-flex h-7 w-7 items-center overflow-hidden rounded-full border border-white/[0.12] bg-white/[0.03]">
-                                                    {beneficiaryAvatarImage ? (
-                                                        <img src={beneficiaryAvatarImage} alt={beneficiary?.name ?? "Beneficiario"} className="h-full w-full object-cover" />
-                                                    ) : (
-                                                        <span className="block h-full w-full" style={{ backgroundColor: beneficiary ? beneficiaryAvatarColor : "#374151" }} aria-hidden="true" />
-                                                    )}
-                                                </span>
+                                                <BeneficiaryAvatar beneficiary={{ name: beneficiary?.name ?? "BeneficiÃ¡rio", avatarImage: beneficiary?.avatarImage ?? null, avatarColor: beneficiary?.avatarColor ?? "#374151" }} />
                                                 <span>{beneficiary?.name ?? "Beneficiário"}</span>
                                             </div>
                                         </td>

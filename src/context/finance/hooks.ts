@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import type { FamilySummary, SharedWishlistSnapshot } from "../familyTypes";
 import {
     createFinanceSnapshot,
     type Beneficiary,
@@ -8,13 +9,14 @@ import {
     type FinanceSnapshot,
     type InvoiceStatus,
     type PaymentMethod,
-    type PlanningGoal,
     type PlanningRevenueOverride,
     type PlanningSimulatedExpense,
     type PlanningSimulatedIncome,
     type PlanningState,
     type ResolvedTransactionCategory,
     type Tag,
+    type WishItem,
+    type WishItemPriority,
     type Transaction,
     type TransactionEntity,
     type TransactionDraft,
@@ -28,6 +30,7 @@ import {
 import {
     FinanceActionsContext,
     FinanceBeneficiariesContext,
+    FinanceFamilyContext,
     FinanceCategoriesContext,
     FinanceCreditCardInvoicesContext,
     FinanceCreditCardsContext,
@@ -38,7 +41,9 @@ import {
     FinanceSessionContext,
     FinanceStoredTransactionsContext,
     FinanceSummaryContext,
+    FinanceSharedWishlistsContext,
     FinanceTagsContext,
+    FinanceWishItemsContext,
     FinanceTransactionsContext,
     FinanceTransactionGroupsContext,
     FinanceTransactionTagsContext,
@@ -48,6 +53,7 @@ import {
 import type { FinanceContextType } from "./contextTypes";
 
 export type {
+    FamilySummary,
     Beneficiary,
     Category,
     CreditCard,
@@ -55,13 +61,15 @@ export type {
     FinanceSnapshot,
     InvoiceStatus,
     PaymentMethod,
-    PlanningGoal,
     PlanningRevenueOverride,
     PlanningSimulatedExpense,
     PlanningSimulatedIncome,
     PlanningState,
     ResolvedTransactionCategory,
+    SharedWishlistSnapshot,
     Tag,
+    WishItem,
+    WishItemPriority,
     Transaction,
     TransactionEntity,
     TransactionDraft,
@@ -75,6 +83,14 @@ export type {
 
 export function useFinanceSession() {
     return useRequiredContext(FinanceSessionContext, "useFinanceSession");
+}
+
+export function useFinanceFamily() {
+    return useRequiredContext(FinanceFamilyContext, "useFinanceFamily");
+}
+
+export function useFinanceSharedWishlists() {
+    return useRequiredContext(FinanceSharedWishlistsContext, "useFinanceSharedWishlists");
 }
 
 export function useFinanceFavoriteWallet() {
@@ -107,6 +123,10 @@ export function useFinanceCategories() {
 
 export function useFinanceTags() {
     return useRequiredContext(FinanceTagsContext, "useFinanceTags");
+}
+
+export function useFinanceWishItems() {
+    return useRequiredContext(FinanceWishItemsContext, "useFinanceWishItems");
 }
 
 export function useFinanceTransactionGroups() {
@@ -142,7 +162,9 @@ export function useFinanceActions() {
 }
 
 export function useFinance(): FinanceContextType {
-    const { user, loading } = useFinanceSession();
+    const { user, profile, loading, profileVersion } = useFinanceSession();
+    const family = useFinanceFamily();
+    const sharedWishlists = useFinanceSharedWishlists();
     const favoriteWalletId = useFinanceFavoriteWallet();
     const favoriteCreditCardId = useFinanceFavoriteCreditCard();
     const wallets = useFinanceWallets();
@@ -151,6 +173,7 @@ export function useFinance(): FinanceContextType {
     const beneficiaries = useFinanceBeneficiaries();
     const categories = useFinanceCategories();
     const tags = useFinanceTags();
+    const wishItems = useFinanceWishItems();
     const transactionGroups = useFinanceTransactionGroups();
     const storedTransactions = useFinanceStoredTransactions();
     const transactionTags = useFinanceTransactionTags();
@@ -175,15 +198,20 @@ export function useFinance(): FinanceContextType {
             beneficiaries,
             categories,
             tags,
+            wishItems,
             transactionTags,
             planning,
         );
-    }, [beneficiaries, categories, creditCardInvoices, creditCards, favoriteCreditCardId, ledgerEntries, planning, storedTransactions, tags, transactionGroups, transactionTags, user, wallets]);
+    }, [beneficiaries, categories, creditCardInvoices, creditCards, favoriteCreditCardId, ledgerEntries, planning, storedTransactions, tags, transactionGroups, transactionTags, user, wallets, wishItems]);
 
     return useMemo(
         () => ({
             user,
+            profile,
             loading,
+            profileVersion,
+            family,
+            sharedWishlists,
             finance,
             favoriteWalletId,
             wallets,
@@ -193,6 +221,7 @@ export function useFinance(): FinanceContextType {
             beneficiaries,
             categories,
             tags,
+            wishItems,
             transactions,
             planning,
             despesas,
@@ -208,16 +237,21 @@ export function useFinance(): FinanceContextType {
             creditCardInvoices,
             creditCards,
             despesas,
+            family,
             favoriteCreditCardId,
             favoriteWalletId,
             finance,
             loading,
             planning,
+            profile,
+            profileVersion,
             receitas,
+            sharedWishlists,
             tags,
             transactions,
             user,
             wallets,
+            wishItems,
         ],
     );
 }

@@ -11,7 +11,9 @@ const HomePage = lazy(() => import("./components/pages/Home").then((module) => (
 const PlanningPage = lazy(() => import("./components/pages/Planning").then((module) => ({ default: module.PlanningPage })));
 const StatementPage = lazy(() => import("./components/pages/Statement").then((module) => ({ default: module.StatementPage })));
 const RegistryPage = lazy(() => import("./components/pages/Registry").then((module) => ({ default: module.RegistryPage })));
+const SettingsPage = lazy(() => import("./components/pages/Settings").then((module) => ({ default: module.SettingsPage })));
 const TransactionsPage = lazy(() => import("./components/pages/TransactionsPage").then((module) => ({ default: module.TransactionsPage })));
+const WishlistPage = lazy(() => import("./components/pages/Wishlist").then((module) => ({ default: module.WishlistPage })));
 
 function App() {
     return (
@@ -50,6 +52,8 @@ function MainApp() {
     if (currentPage === "transactions") page = <TransactionsPage />;
     if (currentPage === "planning") page = <PlanningPage />;
     if (currentPage === "statement") page = <StatementPage />;
+    if (currentPage === "wishlist") page = <WishlistPage />;
+    if (currentPage === "settings") page = <SettingsPage />;
     if (currentPage === "registry" || currentPage === "wallets" || currentPage === "creditCards" || currentPage === "beneficiaries" || currentPage === "categories" || currentPage === "tags") {
         page = <RegistryPage />;
     }

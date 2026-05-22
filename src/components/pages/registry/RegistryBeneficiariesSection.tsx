@@ -3,6 +3,7 @@ import { GripVertical, UserRound } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { type Beneficiary, useFinanceActions, useFinanceBeneficiaries } from "../../../context/FinanceContext";
 import { useModal } from "../../../context/ModalContext";
+import { BeneficiaryAvatar } from "../../common/BeneficiaryAvatar";
 import { AddBeneficiary } from "../../modal/AddBeneficiary";
 import { RegistrySectionActions } from "./RegistrySectionActions";
 
@@ -47,7 +48,7 @@ export function RegistryBeneficiariesSection() {
                     isShowingInactive={showInactive}
                     showLabel="Mostrar inativos"
                     hideLabel="Ocultar inativos"
-                    createLabel="Novo beneficiário"
+                    createLabel="Novo beneficiÃ¡rio"
                     onToggleInactive={() => setShowInactive((current) => !current)}
                     onCreate={() => openModal(<AddBeneficiary mode="create" />)}
                 />
@@ -60,7 +61,10 @@ export function RegistryBeneficiariesSection() {
                     <Reorder.Group axis="y" values={orderedBeneficiaries} onReorder={setOrderedBeneficiaries} className="space-y-2">
                         {orderedBeneficiaries.map((beneficiary) => (
                             <Reorder.Item key={beneficiary.id} value={beneficiary} onDragEnd={commitOrder} className="list-none">
-                                <BeneficiaryCard beneficiary={beneficiary} onEdit={() => openModal(<AddBeneficiary mode="edit" beneficiaryId={beneficiary.id} />)} />
+                                <BeneficiaryCard
+                                    beneficiary={beneficiary}
+                                    onEdit={beneficiary.source === "family_shared" ? undefined : () => openModal(<AddBeneficiary mode="edit" beneficiaryId={beneficiary.id} />)}
+                                />
                             </Reorder.Item>
                         ))}
                     </Reorder.Group>
@@ -70,7 +74,10 @@ export function RegistryBeneficiariesSection() {
     );
 }
 
-function BeneficiaryCard({ beneficiary, onEdit }: { beneficiary: Beneficiary; onEdit: () => void }) {
+function BeneficiaryCard({ beneficiary, onEdit }: { beneficiary: Beneficiary; onEdit?: () => void }) {
+    const originLabel = beneficiary.source === "family_shared" ? "Membro da família" : beneficiary.isSelfProfile ? "Perfil" : BENEFICIARY_TYPE_LABELS[beneficiary.type] ?? beneficiary.type;
+    const isMe = beneficiary.isSelfProfile && beneficiary.source === "personal";
+
     return (
         <div
             className={`relative flex overflow-clip rounded-lg border p-3 text-left transition-colors ${beneficiary.isActive ? "border-white/6 bg-white/[0.02] hover:border-white/25" : "border-white/8 bg-white/[0.01] opacity-70 hover:border-white/15"}`}
@@ -79,21 +86,14 @@ function BeneficiaryCard({ beneficiary, onEdit }: { beneficiary: Beneficiary; on
                 <GripVertical size={15} className="cursor-grab active:cursor-grabbing" />
             </div>
 
-            <button type="button" onClick={onEdit} className="flex min-w-0 flex-1 items-center justify-between gap-3 text-left">
+            <button type="button" onClick={onEdit} className="flex min-w-0 flex-1 items-center justify-between gap-3 text-left" disabled={!onEdit}>
                 <div className="flex min-w-0 items-center gap-3">
-                    <div className="z-[1] h-11 w-11 overflow-hidden rounded-full border border-white/10">
-                        {beneficiary.avatarImage ? (
-                            <img src={beneficiary.avatarImage} alt={beneficiary.name} className="h-full w-full object-cover" />
-                        ) : (
-                            <div className="h-full w-full" style={{ backgroundColor: beneficiary.avatarColor ?? "#4B5563" }} />
-                        )}
-                    </div>
+                    <BeneficiaryAvatar beneficiary={beneficiary} className="z-[1] h-11 w-11 rounded-full border border-white/10" textClassName="text-base font-semibold text-white" />
                     <div className="min-w-0">
                         <p className="truncate font-medium text-white">{beneficiary.name}</p>
-                        <p className="text-sm text-white/55">{BENEFICIARY_TYPE_LABELS[beneficiary.type] ?? beneficiary.type}</p>
+                        <p className="text-sm text-white/55">{isMe ? "Você" : originLabel}</p>
                     </div>
                 </div>
-                <span className={`text-xs uppercase tracking-[0.12em] ${beneficiary.isActive ? "text-emerald-300" : "text-neutral-500"}`}>{beneficiary.isActive ? "Ativo" : "Inativo"}</span>
             </button>
 
             <div className="pointer-events-none absolute -left-20 -top-20 h-30 w-30 rounded-full opacity-40 blur-xl" style={{ backgroundColor: beneficiary.avatarColor ?? "#4B5563" }} />

@@ -1,6 +1,6 @@
-import { MoveRight, TrendingDown, TrendingUp } from "lucide-react";
 import type { Beneficiary, Category, Tag, TransactionStatus, TransactionType, Wallet } from "../../context/FinanceContext";
 import { getCategoryIconComponent } from "../../lib/categoryIcons";
+import { BeneficiaryAvatar } from "../common/BeneficiaryAvatar";
 import { WalletAvatar } from "../common/WalletAvatar";
 import { FIELD_LABEL_CLASS } from "./transactionForm.constants";
 
@@ -28,6 +28,8 @@ export interface TagOptionLike {
 interface TransactionHeaderProps {
     type: TransactionType;
     isEditing: boolean;
+    isSeriesTransaction?: boolean;
+    isInvoicePaymentEdit?: boolean;
 }
 
 interface StatusFieldProps {
@@ -36,31 +38,49 @@ interface StatusFieldProps {
     disabled?: boolean;
 }
 
-export function TransactionHeader({ type, isEditing }: TransactionHeaderProps) {
-    if (type === "income") {
-        return (
-            <h1 className="flex items-center gap-2 text-2xl font-medium uppercase">
-                <TrendingUp size={32} className="rounded-2xl p-1" strokeWidth={3} />
-                {isEditing ? "Editar receita" : "Nova receita"}
-            </h1>
-        );
-    }
+export function TransactionHeader({ type, isEditing, isSeriesTransaction = false, isInvoicePaymentEdit = false }: TransactionHeaderProps) {
 
-    if (type === "spending") {
-        return (
-            <h1 className="flex items-center gap-2 text-2xl font-medium uppercase">
-                <TrendingDown size={32} className="rounded-2xl p-1" strokeWidth={3} />
-                {isEditing ? "Editar despesa" : "Nova despesa"}
-            </h1>
-        );
-    }
+    const contextLabel = (() => {
+        if (isInvoicePaymentEdit) {
+            return "Editando pagamento de fatura";
+        }
 
-    return (
-        <h1 className="flex items-center gap-2 text-2xl font-medium uppercase">
-            <MoveRight size={32} className="rounded-2xl p-1" strokeWidth={3} />
-            {isEditing ? "Editar transferencia" : "Nova transferencia"}
-        </h1>
-    );
+        if (isEditing) {
+            if (isSeriesTransaction) {
+                if (type === "income") {
+                    return "Editando receita da série";
+                }
+
+                if (type === "spending") {
+                    return "Editando despesa da série";
+                }
+
+                return "Editando transferência da série";
+            }
+
+            if (type === "income") {
+                return "Editando receita";
+            }
+
+            if (type === "spending") {
+                return "Editando despesa";
+            }
+
+            return "Editando transferência";
+        }
+
+        if (type === "income") {
+            return "Nova receita";
+        }
+
+        if (type === "spending") {
+            return "Nova despesa";
+        }
+
+        return "Nova transferência";
+    })();
+
+    return <h1 className="text-sm ml-1 uppercase opacity-50">{contextLabel}</h1>;
 }
 
 export function StatusField({ status, onChange, disabled = false }: StatusFieldProps) {
@@ -72,7 +92,9 @@ export function StatusField({ status, onChange, disabled = false }: StatusFieldP
                     type="button"
                     onClick={() => onChange("paid")}
                     disabled={disabled}
-                    className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${status === "paid" ? "bg-emerald-500/20 text-emerald-200" : "text-white/65 hover:bg-white/[0.06]"}`}
+                    className={`flex-1 rounded-lg px-3 py-3 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+                        status === "paid" ? "bg-emerald-500/20 text-emerald-200" : "text-white/65 hover:bg-white/[0.06]"
+                    }`}
                 >
                     Pago
                 </button>
@@ -80,7 +102,9 @@ export function StatusField({ status, onChange, disabled = false }: StatusFieldP
                     type="button"
                     onClick={() => onChange("pending")}
                     disabled={disabled}
-                    className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${status === "pending" ? "bg-amber-500/20 text-amber-200" : "text-white/65 hover:bg-white/[0.06]"}`}
+                    className={`flex-1 rounded-lg px-3 py-3 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+                        status === "pending" ? "bg-amber-500/20 text-amber-200" : "text-white/65 hover:bg-white/[0.06]"
+                    }`}
                 >
                     Pendente
                 </button>
@@ -118,13 +142,7 @@ export function WalletOptionContent({ option }: { option: WalletOptionLike }) {
 export function BeneficiaryOptionContent({ option }: { option: BeneficiaryOptionLike }) {
     return (
         <div className="flex items-center gap-2">
-            <span className="inline-flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border border-white/[0.12] bg-white/[0.03]">
-                {option.beneficiary.avatarImage ? (
-                    <img src={option.beneficiary.avatarImage} alt={option.beneficiary.name} className="h-full w-full object-cover" />
-                ) : (
-                    <span className="h-full w-full" style={{ backgroundColor: option.beneficiary.avatarColor ?? "#4B5563" }} />
-                )}
-            </span>
+            <BeneficiaryAvatar beneficiary={option.beneficiary} />
             <span className="truncate">{option.label}</span>
         </div>
     );

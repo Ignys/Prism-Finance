@@ -42,7 +42,6 @@ function renderRegistrySection(page: RegistryTabPage) {
 export function RegistryPage() {
     const { currentPage, goToPage } = usePage();
     const activeTab = currentPage === "registry" ? "wallets" : isRegistryTabPage(currentPage) ? currentPage : "wallets";
-    const activeTabMeta = REGISTRY_TABS.find((tab) => tab.page === activeTab) ?? REGISTRY_TABS[0];
 
     return (
         <AuthShell>

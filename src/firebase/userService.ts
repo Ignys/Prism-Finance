@@ -19,8 +19,10 @@ const FINANCE_KEYS = [
     "transactions",
     "ledgerEntries",
     "beneficiaries",
+    "beneficiaryOrder",
     "categories",
     "tags",
+    "wishItems",
     "transactionTags",
     "planning",
     "favoriteWalletId",
@@ -83,12 +85,20 @@ function buildFinancePayload(fields: FinanceFieldsUpdate): UserFieldUpdate {
         financePayload.beneficiaries = fields.beneficiaries;
     }
 
+    if (fields.beneficiaryOrder !== undefined) {
+        financePayload.beneficiaryOrder = fields.beneficiaryOrder;
+    }
+
     if (fields.categories !== undefined) {
         financePayload.categories = fields.categories;
     }
 
     if (fields.tags !== undefined) {
         financePayload.tags = fields.tags;
+    }
+
+    if (fields.wishItems !== undefined) {
+        financePayload.wishItems = fields.wishItems;
     }
 
     if (fields.transactionTags !== undefined) {
@@ -181,8 +191,10 @@ interface FinanceFieldsUpdate {
     transactions?: unknown[];
     ledgerEntries?: unknown[];
     beneficiaries?: unknown[];
+    beneficiaryOrder?: unknown[];
     categories?: unknown[];
     tags?: unknown[];
+    wishItems?: unknown[];
     transactionTags?: unknown[];
     planning?: unknown;
     favoriteWalletId?: string;

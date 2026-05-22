@@ -1,8 +1,9 @@
 import { Info, RotateCcw, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
-import { type Category, useFinanceActions, useFinanceCategories } from "../../context/FinanceContext";
+import { SYSTEM_EXPENSE_CARD_INVOICE_CATEGORY_ID, type Category, useFinanceActions, useFinanceCategories } from "../../context/FinanceContext";
 import { useModal } from "../../context/ModalContext";
+import { isInvoicePaymentCategoryId } from "../../context/finance/helpers";
 import { normalizeCategoryIconName } from "../../lib/categoryIcons";
 import { CategoryIconPicker } from "../common/CategoryIconPicker";
 import { ModalStructure } from "./ModalStructure";
@@ -94,7 +95,13 @@ export function AddCategory({ mode = "create", categoryId, initialCategory }: Ad
 
     const availableParents = useMemo(() => {
         const currentParentId = editingCategory?.parentId ?? parentId;
-        return categories.filter((item) => item.type === type && !blockedParentIds.has(item.id) && (item.isActive || item.id === currentParentId));
+        return categories.filter(
+            (item) =>
+                item.type === type &&
+                !blockedParentIds.has(item.id) &&
+                !isInvoicePaymentCategoryId(item.id) &&
+                (item.isActive || item.id === currentParentId),
+        );
     }, [blockedParentIds, categories, editingCategory?.parentId, parentId, type]);
 
     useEffect(() => {
@@ -109,7 +116,7 @@ export function AddCategory({ mode = "create", categoryId, initialCategory }: Ad
     const normalizedName = name.trim();
     const normalizedIcon = normalizeCategoryIconName(icon, type);
     const isEditMode = mode === "edit" && Boolean(editingCategory);
-    const lockTypeAndParent = isEditMode && Boolean(editingCategory?.isSystem);
+    const isInvoicePaymentCategory = editingCategory?.id === SYSTEM_EXPENSE_CARD_INVOICE_CATEGORY_ID;
 
     const runAction = async (action: () => Promise<boolean>) => {
         if (submitting) {
@@ -137,20 +144,18 @@ export function AddCategory({ mode = "create", categoryId, initialCategory }: Ad
             }
 
             const target = editingCategory;
-            const resolvedType = lockTypeAndParent && target ? target.type : type;
-            const selectedParent = !lockTypeAndParent && parentId ? categories.find((item) => item.id === parentId) : null;
-            const resolvedParentId = lockTypeAndParent && target ? target.parentId : (selectedParent?.id ?? null);
+            const selectedParent = !isInvoicePaymentCategory && parentId ? categories.find((item) => item.id === parentId) : null;
 
             await addCategory({
                 id: target?.id ?? uuidv4(),
                 userId: target?.userId ?? null,
-                parentId: resolvedParentId,
+                parentId: isInvoicePaymentCategory ? null : (selectedParent?.id ?? null),
                 name: normalizedName,
-                type: selectedParent?.type ?? resolvedType,
-                icon: normalizeCategoryIconName(normalizedIcon, resolvedType),
+                type: isInvoicePaymentCategory ? "expense" : (selectedParent?.type ?? type),
+                icon: normalizeCategoryIconName(normalizedIcon, isInvoicePaymentCategory ? "expense" : type),
                 color: color.trim() || null,
                 isActive: target?.isActive ?? true,
-                isSystem: target?.isSystem ?? false,
+                isSystem: false,
                 sortOrder: target?.sortOrder ?? 0,
                 createdAt: target?.createdAt ?? new Date().toISOString(),
             });
@@ -159,7 +164,7 @@ export function AddCategory({ mode = "create", categoryId, initialCategory }: Ad
 
     const handleToggleActive = () =>
         runAction(async () => {
-            if (!editingCategory || editingCategory.isSystem) {
+            if (!editingCategory) {
                 return false;
             }
 
@@ -189,9 +194,9 @@ export function AddCategory({ mode = "create", categoryId, initialCategory }: Ad
                 <section className="mt-2 grid grid-cols-1 gap-3">
                     {mode === "edit" && !editingCategory && <p className="rounded-md border border-amber-400/25 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">Categoria nao encontrada.</p>}
 
-                    {lockTypeAndParent && (
-                        <p className="flex gap-2 items-center rounded-md border border-blue-300/25 bg-blue-500/10 px-3 py-2 text-[12px] text-blue-200">
-                            <Info size={16} /> Algumas informações das categorias padrões são fixas.
+                    {isInvoicePaymentCategory && (
+                        <p className="flex items-center gap-2 rounded-md border border-blue-300/25 bg-blue-500/10 px-3 py-2 text-[12px] text-blue-200">
+                            <Info size={16} /> Essa categoria e reservada para pagamentos de fatura. Voce pode editar apenas nome, cor e icone.
                         </p>
                     )}
 
@@ -206,8 +211,8 @@ export function AddCategory({ mode = "create", categoryId, initialCategory }: Ad
                             <select
                                 value={type}
                                 onChange={(event) => setType(event.target.value as (typeof CATEGORY_TYPES)[number]["value"])}
-                                disabled={lockTypeAndParent}
-                                className={`${FIELD_INPUT_CLASS} disabled:cursor-not-allowed disabled:opacity-60 pb-3.5`}
+                                disabled={isInvoicePaymentCategory}
+                                className={`${FIELD_INPUT_CLASS} pb-3.5 disabled:cursor-not-allowed disabled:opacity-60`}
                             >
                                 {CATEGORY_TYPES.map((item) => (
                                     <option key={item.value} value={item.value}>
@@ -223,7 +228,7 @@ export function AddCategory({ mode = "create", categoryId, initialCategory }: Ad
                         <select
                             value={parentId}
                             onChange={(event) => setParentId(event.target.value)}
-                            disabled={lockTypeAndParent}
+                            disabled={isInvoicePaymentCategory}
                             className={`${FIELD_INPUT_CLASS} disabled:cursor-not-allowed disabled:opacity-60`}
                         >
                             <option value="">Sem categoria maior</option>
@@ -245,7 +250,7 @@ export function AddCategory({ mode = "create", categoryId, initialCategory }: Ad
 
                 <div className="mt-5 flex items-center justify-between gap-3">
                     <div className="flex items-center gap-2">
-                        {isEditMode && editingCategory && !editingCategory.isSystem && (
+                        {isEditMode && editingCategory && !isInvoicePaymentCategory && (
                             <button
                                 type="button"
                                 onClick={() => void handleToggleActive()}

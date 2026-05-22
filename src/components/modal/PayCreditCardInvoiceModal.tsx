@@ -128,10 +128,10 @@ export function PayCreditCardInvoiceModal({ invoice, creditCard }: PayCreditCard
             <div className="rounded-2xl border border-white/[0.09] bg-[#131313] p-4 text-white shadow-[0_26px_70px_-38px_rgba(0,0,0,0.95)]">
                 <h2 className="text-xl font-medium uppercase">Pagar fatura</h2>
                 <p className="mt-1 text-sm text-white/60">
-                    {creditCard.name} - Fatura de {invoice.cycleKey}
+                    {creditCard.name} - Fatura de {format(parseAppDate(invoice.closingDate) ?? new Date(), "MMMM", { locale: ptBR }).charAt(0).toUpperCase() + format(parseAppDate(invoice.closingDate) ?? new Date(), "MMMM", { locale: ptBR }).slice(1)}
                 </p>
 
-                <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
+                <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">    
                     <div className="rounded-xl border border-white/[0.1] bg-black/35 p-3 text-left">
                         <p className="text-[11px] uppercase tracking-[0.12em] text-white/45">Fechamento</p>
                         <p className="mt-1 text-sm font-semibold">{formatFriendlyDate(invoice.closingDate)}</p>

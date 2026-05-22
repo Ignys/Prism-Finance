@@ -3,35 +3,9 @@ import { createUserWithEmailAndPassword, GoogleAuthProvider, signInWithEmailAndP
 import { LoadingPage } from "./Loading";
 import { auth } from "../../firebase/firebaseClient";
 import { useFinanceSession } from "../../context/FinanceContext";
+import { resolveAuthErrorMessage } from "../../firebase/authErrorMessages";
 
 const googleProvider = new GoogleAuthProvider();
-
-function resolveAuthErrorMessage(error: unknown): string {
-    if (!error || typeof error !== "object" || !("code" in error)) {
-        return "Nao foi possivel concluir a autenticacao. Tente novamente.";
-    }
-
-    const code = (error as { code?: unknown }).code;
-    if (typeof code !== "string") {
-        return "Nao foi possivel concluir a autenticacao. Tente novamente.";
-    }
-
-    const errorByCode: Record<string, string> = {
-        "auth/invalid-credential": "E-mail ou senha incorretos.",
-        "auth/invalid-email": "Digite um e-mail valido.",
-        "auth/missing-password": "Digite sua senha.",
-        "auth/wrong-password": "E-mail ou senha incorretos.",
-        "auth/user-not-found": "Nenhuma conta encontrada para esse e-mail.",
-        "auth/too-many-requests": "Muitas tentativas. Aguarde alguns minutos e tente novamente.",
-        "auth/email-already-in-use": "Ja existe uma conta com esse e-mail.",
-        "auth/weak-password": "A senha precisa ter no minimo 6 caracteres.",
-        "auth/popup-closed-by-user": "O login com Google foi cancelado.",
-        "auth/popup-blocked": "Pop-up bloqueado pelo navegador. Permita pop-ups e tente novamente.",
-        "auth/account-exists-with-different-credential": "Ja existe conta com este e-mail em outro metodo de login.",
-    };
-
-    return errorByCode[code] ?? "Nao foi possivel concluir a autenticacao. Tente novamente.";
-}
 
 export function LoginPage() {
     const { loading } = useFinanceSession();
@@ -78,7 +52,7 @@ export function LoginPage() {
             }
         } catch (err) {
             console.error(err);
-            setError(resolveAuthErrorMessage(err));
+            setError(resolveAuthErrorMessage(err, "Nao foi possivel concluir a autenticacao. Tente novamente."));
         } finally {
             setAuthActionLoading(null);
         }
@@ -92,7 +66,7 @@ export function LoginPage() {
             await signInWithPopup(auth, googleProvider);
         } catch (err) {
             console.error(err);
-            setError(resolveAuthErrorMessage(err));
+            setError(resolveAuthErrorMessage(err, "Nao foi possivel concluir a autenticacao. Tente novamente."));
         } finally {
             setAuthActionLoading(null);
         }

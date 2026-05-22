@@ -10,6 +10,7 @@ export {
     normalizeTag,
     normalizeTransactionGroup,
     normalizeTransactionStatus,
+    normalizeWishItem,
     normalizeWallet,
     normalizeWalletId,
 } from "./financeCore";

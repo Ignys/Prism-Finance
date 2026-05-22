@@ -1,5 +1,6 @@
 export type {
     Beneficiary,
+    BeneficiarySource,
     BeneficiaryType,
     Category,
     CategoryType,
@@ -9,7 +10,6 @@ export type {
     InvoiceStatus,
     LedgerEntry,
     PaymentMethod,
-    PlanningGoal,
     PlanningRevenueOverride,
     PlanningSimulatedExpense,
     PlanningSimulatedIncome,
@@ -17,6 +17,8 @@ export type {
     ResolvedTransactionCategory,
     StoredTransaction,
     Tag,
+    WishItem,
+    WishItemPriority,
     Transaction,
     TransactionEntity,
     TransactionDraft,

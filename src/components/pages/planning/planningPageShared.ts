@@ -480,6 +480,8 @@ export function buildPlanningSimulation({
         return createInvalidSimulationResult(projection.projectedEndBalance, "Selecione um cartao ativo para simular.");
     }
 
+    const resolvedSelectedCard = selectedCard!;
+
     const splitAmounts = splitAmountAcrossInstallments(safeAmount, safeInstallments);
     const installments: PlanningSimulationInstallment[] = splitAmounts.map((amount, index) => {
         const occurrenceDate = addMonthsToDateValue(purchaseDate, index);
@@ -498,7 +500,7 @@ export function buildPlanningSimulation({
             };
         }
 
-        const cycle = resolveCreditCardInvoiceCycle(occurrenceDate, selectedCard.closingDay, selectedCard.dueDay);
+        const cycle = resolveCreditCardInvoiceCycle(occurrenceDate, resolvedSelectedCard.closingDay, resolvedSelectedCard.dueDay);
         return {
             id: `sim-card-${installmentNumber}`,
             installmentNumber,
@@ -506,7 +508,7 @@ export function buildPlanningSimulation({
             amount: roundToCents(amount),
             impactDate: cycle.dueDate,
             impactMonth: getMonthKeyFromDateValue(cycle.dueDate),
-            label: `${labelPrefix} (${selectedCard.name})`,
+            label: `${labelPrefix} (${resolvedSelectedCard.name})`,
         };
     });
 

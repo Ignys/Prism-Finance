@@ -12,6 +12,9 @@ interface ImportMetaEnv {
   VITE_MESSAGINGSENDERID: string;
   VITE_APPID: string;
   VITE_MEASUREMENTID: string;
+  VITE_CLOUDINARY_CLOUD_NAME: string;
+  VITE_CLOUDINARY_UPLOAD_PRESET: string;
+  VITE_CLOUDINARY_FOLDER?: string;
 }
 
 declare global {

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
     DEFAULT_WALLET_ID,
+    SYSTEM_EXPENSE_CARD_INVOICE_CATEGORY_ID,
     type TransactionMode,
     type TransactionSeriesScope,
     type Transaction,
@@ -10,11 +11,12 @@ import {
     useFinanceBeneficiaries,
     useFinanceCategories,
     useFinanceFavoriteWallet,
+    useFinanceSession,
     useFinanceTags,
     useFinanceTransactionGroups,
     useFinanceWallets,
 } from "../../context/FinanceContext";
-import { normalizeComparisonText } from "../../context/finance/helpers";
+import { findCurrentUserSelfBeneficiary, normalizeComparisonText } from "../../context/finance/helpers";
 import { getLocalDateFromOffset, getLocalTodayDate, parseDateOnlyToLocalDate } from "../../lib/localDate";
 import { extractCurrencyDigits, formatCurrencyFromDigits, parseCurrencyDigitsToNumber } from "../../lib/currencyMask";
 
@@ -158,6 +160,7 @@ export function useTransactionForm({ type, transaction, mode = "default", prefil
     const wallets = useFinanceWallets();
     const favoriteWalletId = useFinanceFavoriteWallet();
     const categories = useFinanceCategories();
+    const { user } = useFinanceSession();
     const beneficiaries = useFinanceBeneficiaries();
     const transactionGroups = useFinanceTransactionGroups();
     const allTags = useFinanceTags();
@@ -225,7 +228,13 @@ export function useTransactionForm({ type, transaction, mode = "default", prefil
     }, [categories, transaction?.category.id]);
 
     const availableCategories = useMemo(
-        () => categories.filter((item) => item.type === categoryType && (item.isActive || selectedCategoryIdsToKeep.has(item.id))),
+        () =>
+            categories.filter(
+                (item) =>
+                    item.type === categoryType &&
+                    item.id !== SYSTEM_EXPENSE_CARD_INVOICE_CATEGORY_ID &&
+                    (item.isActive || selectedCategoryIdsToKeep.has(item.id)),
+            ),
         [categories, categoryType, selectedCategoryIdsToKeep],
     );
 
@@ -321,10 +330,7 @@ export function useTransactionForm({ type, transaction, mode = "default", prefil
     }, [subCategoryId, subCategories]);
 
     useEffect(() => {
-        const defaultBeneficiary =
-            beneficiaries.find((item) => normalizeComparisonText(item.name) === "eu") ??
-            beneficiaries.find((item) => item.isActive) ??
-            beneficiaries[0];
+        const defaultBeneficiary = findCurrentUserSelfBeneficiary(beneficiaries, user?.uid) ?? beneficiaries.find((item) => item.isActive) ?? beneficiaries[0];
 
         if (!defaultBeneficiary) {
             setBeneficiaryId("");
@@ -334,7 +340,7 @@ export function useTransactionForm({ type, transaction, mode = "default", prefil
         if (!beneficiaries.some((item) => item.id === beneficiaryId)) {
             setBeneficiaryId(defaultBeneficiary.id);
         }
-    }, [beneficiaries, beneficiaryId]);
+    }, [beneficiaries, beneficiaryId, user?.uid]);
 
     const toggleTag = (tagId: string) => {
         setSelectedTagIds((prev) => (prev.includes(tagId) ? prev.filter((item) => item !== tagId) : [...prev, tagId]));
@@ -374,8 +380,8 @@ export function useTransactionForm({ type, transaction, mode = "default", prefil
             isTransfer || (isEditing && isSeriesTransaction && editScope === "single")
                 ? "single"
                 : transactionMode === "recurring"
-                  ? "recurring"
-                  : "single";
+                    ? "recurring"
+                    : "single";
 
         const finalStatus = statusOverride ?? status;
 
@@ -397,14 +403,14 @@ export function useTransactionForm({ type, transaction, mode = "default", prefil
             recurrenceRule:
                 resolvedTransactionMode === "recurring"
                     ? {
-                          frequency: "monthly",
-                          interval: 1,
-                          anchorDate: date || getLocalTodayDate(),
-                          amount: Math.abs(numericValue),
-                          tagIds: selectedTagIds,
-                          excludedDates: [],
-                          notes: trimmedDescription || null,
-                      }
+                        frequency: "monthly",
+                        interval: 1,
+                        anchorDate: date || getLocalTodayDate(),
+                        amount: Math.abs(numericValue),
+                        tagIds: selectedTagIds,
+                        excludedDates: [],
+                        notes: trimmedDescription || null,
+                    }
                     : null,
             recurrenceEndDate: null,
         };

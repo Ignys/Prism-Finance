@@ -152,7 +152,6 @@ function CategoryItem({ category, children, onEdit, onReorder }: CategoryItemPro
                     </div>
                     <div className="flex items-center gap-1.5">
                         {!category.isActive && <span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] text-white/55">Inativo</span>}
-                        {category.isSystem && <span className="text-[11px] font-medium tracking-wider text-neutral-500">PADRAO</span>}
                     </div>
                 </button>
             </div>

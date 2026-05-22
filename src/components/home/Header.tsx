@@ -1,23 +1,19 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { ArrowLeftRight, CalendarRange, ChevronDown, FolderKanban, Home, LogOut, ReceiptText, Settings } from "lucide-react";
+import { ArrowLeftRight, ChevronDown, FileText, FlaskConical, Gift, Home, LogOut, Settings, WalletCards } from "lucide-react";
 import { signOut } from "firebase/auth";
 import {
-    useFinanceCategories,
     useFinanceCreditCardInvoices,
-    useFinanceCreditCards,
-    useFinanceFavoriteCreditCard,
-    useFinanceFavoriteWallet,
     useFinanceSession,
     useFinanceSummary,
     useFinanceTransactions,
-    useFinanceWallets,
 } from "../../context/FinanceContext";
 import { auth } from "../../firebase/firebaseClient";
-import { buildCreditCardInvoiceId, getMonthKeyFromDateValue, resolveCreditCardInvoiceCycle } from "../../context/financeTypes";
+import { getMonthKeyFromDateValue } from "../../context/financeTypes";
 import { useModal } from "../../context/ModalContext";
 import { AppPage, usePage } from "../../context/PageContext";
-import { formatLocalDateInput, getLocalTodayDate } from "../../lib/localDate";
+import { getLocalTodayDate } from "../../lib/localDate";
+import { resolveUserDisplayName } from "../../lib/userProfile";
 
 const AddIncome = lazy(() => import("../modal/AddIncome").then((module) => ({ default: module.AddIncome })));
 const AddSpending = lazy(() => import("../modal/AddSpending").then((module) => ({ default: module.AddSpending })));
@@ -28,9 +24,10 @@ const iconSize = 20;
 const NAV_ITEMS: { label: string; page: AppPage; icon: React.ReactNode }[] = [
     { label: "Início", page: "home", icon: <Home size={iconSize} /> },
     { label: "Transações", page: "transactions", icon: <ArrowLeftRight size={iconSize} /> },
-    { label: "Fatura", page: "statement", icon: <ReceiptText size={iconSize} /> },
-    { label: "Planejamentos", page: "planning", icon: <CalendarRange size={iconSize} /> },
-    { label: "Cadastros", page: "registry", icon: <FolderKanban size={iconSize} /> },
+    { label: "Fatura", page: "statement", icon: <FileText size={iconSize} /> },
+    { label: "Planejamentos", page: "planning", icon: <FlaskConical size={iconSize} /> },
+    { label: "Lista de Desejos", page: "wishlist", icon: <Gift size={iconSize} /> },
+    { label: "Cadastros", page: "registry", icon: <WalletCards size={iconSize} /> },
 ];
 
 const METRIC_ITEMS: {
@@ -53,31 +50,16 @@ function renderLazyModal(modalType: "income" | "spending" | "card_spending") {
 }
 
 export function Header() {
-    const { user } = useFinanceSession();
+    const { user, profile } = useFinanceSession();
     const summary = useFinanceSummary();
-    const wallets = useFinanceWallets();
-    const creditCards = useFinanceCreditCards();
     const creditCardInvoices = useFinanceCreditCardInvoices();
-    const categories = useFinanceCategories();
     const transactions = useFinanceTransactions();
-    const favoriteWalletId = useFinanceFavoriteWallet();
-    const favoriteCreditCardId = useFinanceFavoriteCreditCard();
     const { goToPage, currentPage } = usePage();
     const { openModal } = useModal();
     const [hoveredNav, setHoveredNav] = useState<string | null>(null);
     const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
     const profileMenuRef = useRef<HTMLDivElement | null>(null);
 
-    const resolvedWalletId = wallets.some((wallet) => wallet.id === favoriteWalletId) ? favoriteWalletId : (wallets[0]?.id ?? "default");
-    const resolvedFavoriteCard = useMemo(() => creditCards.find((card) => card.id === favoriteCreditCardId) ?? creditCards[0] ?? null, [creditCards, favoriteCreditCardId]);
-    const openFavoriteInvoiceId = useMemo(() => {
-        if (!resolvedFavoriteCard) {
-            return null;
-        }
-
-        const openCycle = resolveCreditCardInvoiceCycle(getLocalTodayDate(), resolvedFavoriteCard.closingDay, resolvedFavoriteCard.dueDay);
-        return buildCreditCardInvoiceId(resolvedFavoriteCard.id, openCycle.cycleKey);
-    }, [resolvedFavoriteCard]);
     const pendingInvoicesAmount = useMemo(
         () =>
             Number(
@@ -131,21 +113,9 @@ export function Header() {
         [monthlySummary.despesas, monthlySummary.receitas, summary.balance],
     );
 
-    const userName = useMemo(() => {
-        const displayName = user?.displayName?.trim();
-        if (displayName) {
-            return displayName;
-        }
-
-        const emailPrefix = user?.email?.split("@")[0]?.trim();
-        if (emailPrefix) {
-            return emailPrefix;
-        }
-
-        return "Usuario";
-    }, [user?.displayName, user?.email]);
+    const userName = profile?.displayName ?? resolveUserDisplayName(user);
     const userInitial = userName.charAt(0).toUpperCase();
-    const userPhotoUrl = user?.photoURL?.trim() ? user.photoURL : null;
+    const userPhotoUrl = profile ? profile.photoURL : user?.photoURL?.trim() ? user.photoURL : null;
 
     useEffect(() => {
         if (!isProfileMenuOpen) {
@@ -175,7 +145,7 @@ export function Header() {
 
     function handleOpenSettings() {
         setIsProfileMenuOpen(false);
-        window.alert("Configuracoes em breve.");
+        goToPage("settings");
     }
 
     async function handleSwitchAccount() {
@@ -218,7 +188,7 @@ export function Header() {
                                 onClick={() => goToPage(page)}
                                 onMouseEnter={() => setHoveredNav(label)}
                                 className={[
-                                    "relative z-10 flex items-center gap-1.5 whitespace-nowrap rounded-lg px-3.5 py-[7px]",
+                                    "relative z-10 flex items-center gap-1.5 whitespace-nowrap rounded-lg px-3 pr-3.5 py-[7px]",
                                     "text-[12.5px] font-medium tracking-[0.02em] transition-colors duration-[180ms]",
                                     isLit ? "text-neutral-300" : "text-neutral-600",
                                     isActive && "bg-white/[0.15] text-white",
@@ -320,7 +290,7 @@ export function Header() {
                             <div
                                 role="menu"
                                 aria-label="Menu do usuario"
-                                className="absolute right-0 top-[calc(100%+8px)] z-30 min-w-[180px] overflow-hidden rounded-xl border border-white/[0.1] bg-neutral-950/95 p-1 shadow-[0_20px_45px_-20px_rgba(0,0,0,0.85)] backdrop-blur-lg"
+                                className="absolute right-0 top-[calc(100%+8px)] z-30 min-w-[180px] overflow-hidden rounded-xl border border-white/[0.1] bg-neutral-950 p-1 shadow-[0_20px_45px_-20px_rgba(0,0,0,0.85)]"
                             >
                                 <button
                                     type="button"

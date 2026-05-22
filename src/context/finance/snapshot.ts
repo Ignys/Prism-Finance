@@ -3,7 +3,6 @@ export {
     buildCreditCardInvoiceId,
     calculateFinanceSummary,
     createFinanceSnapshot,
-    findCreditCardInvoiceAssignmentIssues,
     getCreditCardInvoiceMonthKey,
     getMonthKeyFromDateValue,
     normalizeFinanceSnapshot,

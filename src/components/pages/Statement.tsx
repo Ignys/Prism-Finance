@@ -1,22 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import {
-    type CreditCard,
-    type CreditCardInvoice,
-    type Transaction,
-    useFinanceFavoriteCreditCard,
-    useFinanceCreditCardInvoices,
-    useFinanceCreditCards,
-    useFinanceActions,
-    useFinanceSession,
-    useFinanceTransactions,
-} from "../../context/FinanceContext";
+import { type CreditCard, type CreditCardInvoice, useFinanceFavoriteCreditCard, useFinanceCreditCardInvoices, useFinanceCreditCards, useFinanceActions, useFinanceSession, useFinanceTransactions } from "../../context/FinanceContext";
 import {
     buildCreditCardInvoiceId,
     getMonthKeyFromDateValue,
-    parseCreditCardInvoiceId,
-    resolveCreditCardInvoiceCycle,
     resolveCreditCardInvoiceCycleFromCycleKey,
-    resolveExpectedCreditCardInvoiceId,
 } from "../../context/financeTypes";
 import { useModal } from "../../context/ModalContext";
 import { usePage } from "../../context/PageContext";
@@ -25,36 +12,16 @@ import { AddCardSpending } from "../modal/AddCardSpending";
 import { ConfirmActionModal } from "../modal/ConfirmActionModal";
 import { EditTransaction } from "../modal/EditTransaction";
 import { PayCreditCardInvoiceModal } from "../modal/PayCreditCardInvoiceModal";
-import { ReviewInvoiceAssignmentsModal, type InvoiceAssignmentReviewIssue } from "../modal/ReviewInvoiceAssignmentsModal";
 import { StatementContentPanel } from "./statement/StatementContentPanel";
 import { StatementFiltersPanel } from "./statement/StatementFiltersPanel";
 import {
     buildStatementSummary,
     compareInvoicesByDueDate,
-    formatMonthLabel,
     INITIAL_STATEMENT_FILTER_STATE,
     resolveDefaultStatementMonth,
     type StatementFilterState,
 } from "./statement/statementPageShared";
 import { StatementSummaryCards } from "./statement/StatementSummaryCards";
-
-function formatInvoiceReviewLabel(invoiceId: string | null, invoiceById: Map<string, CreditCardInvoice>): string {
-    if (!invoiceId) {
-        return "Sem fatura";
-    }
-
-    const invoice = invoiceById.get(invoiceId);
-    if (invoice) {
-        return formatMonthLabel(getMonthKeyFromDateValue(invoice.dueDate));
-    }
-
-    const parsedInvoice = parseCreditCardInvoiceId(invoiceId);
-    if (parsedInvoice) {
-        return formatMonthLabel(parsedInvoice.cycleKey);
-    }
-
-    return "Fatura invalida";
-}
 
 export function StatementPage() {
     const transactions = useFinanceTransactions();
@@ -181,48 +148,6 @@ export function StatementPage() {
             .sort((a, b) => b.date.localeCompare(a.date));
     }, [monthInvoiceIds, selectedCardId, transactions]);
 
-    const invoiceRepairIssues = useMemo<InvoiceAssignmentReviewIssue[]>(() => {
-        return transactions
-            .filter((transaction): transaction is Transaction & { creditCardId: string } => {
-                if (transaction.paymentMethod !== "credit_card" || transaction.type !== "spending" || transaction.status === "cancelled" || !transaction.creditCardId) {
-                    return false;
-                }
-
-                return selectedCardId === "all" || transaction.creditCardId === selectedCardId;
-            })
-            .flatMap((transaction) => {
-                const creditCard = cardById.get(transaction.creditCardId);
-                if (!creditCard) {
-                    return [];
-                }
-
-                const expectedInvoiceId = resolveExpectedCreditCardInvoiceId({
-                    creditCardId: creditCard.id,
-                    transactionDate: transaction.date,
-                    closingDay: creditCard.closingDay,
-                    dueDay: creditCard.dueDay,
-                });
-                if (!expectedInvoiceId || transaction.invoiceId === expectedInvoiceId) {
-                    return [];
-                }
-
-                const expectedCycle = resolveCreditCardInvoiceCycle(transaction.date, creditCard.closingDay, creditCard.dueDay);
-                const description = transaction.description.trim() || transaction.category.label || "Compra sem descricao";
-
-                return [
-                    {
-                        transactionId: transaction.id,
-                        date: transaction.date,
-                        description,
-                        cardName: creditCard.name,
-                        amount: transaction.value,
-                        currentInvoiceLabel: formatInvoiceReviewLabel(transaction.invoiceId, invoiceById),
-                        expectedInvoiceLabel: formatMonthLabel(getMonthKeyFromDateValue(expectedCycle.dueDate)),
-                    },
-                ];
-            });
-    }, [cardById, invoiceById, selectedCardId, transactions]);
-
     const summary = useMemo(
         () =>
             buildStatementSummary({
@@ -257,14 +182,6 @@ export function StatementPage() {
                 onConfirm={() => deleteTransaction(transaction)}
             />,
         );
-    };
-
-    const handleReviewInvoiceAssignments = () => {
-        if (invoiceRepairIssues.length < 1) {
-            return;
-        }
-
-        openModal(<ReviewInvoiceAssignmentsModal issues={invoiceRepairIssues} />);
     };
 
     const handleInvoiceStateAdjustment = (targetInvoices: CreditCardInvoice[], action: "close" | "reopen") => {
@@ -354,10 +271,8 @@ export function StatementPage() {
                             onPayInvoice={handlePayInvoice}
                             onInvoiceStateAdjustment={handleInvoiceStateAdjustment}
                             onCreateCardSpending={handleCreateCardSpendingFromStatement}
-                            onReviewInvoiceAssignments={handleReviewInvoiceAssignments}
                             onEdit={handleEditTransaction}
                             onDelete={handleDeleteTransaction}
-                            invoiceRepairIssuesCount={invoiceRepairIssues.length}
                         />
                     </div>
 

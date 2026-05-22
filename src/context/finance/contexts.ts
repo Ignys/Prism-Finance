@@ -1,4 +1,5 @@
 import { Context, createContext, useContext } from "react";
+import type { FamilySummary, SharedWishlistSnapshot } from "../familyTypes";
 import type {
     Beneficiary,
     Category,
@@ -11,11 +12,14 @@ import type {
     Transaction,
     TransactionGroup,
     TransactionTag,
+    WishItem,
     Wallet,
 } from "../financeTypes";
 import type { FinanceActionsValue, FinanceSessionValue, FinanceSummaryValue } from "./contextTypes";
 
 export const FinanceSessionContext = createContext<FinanceSessionValue | undefined>(undefined);
+export const FinanceFamilyContext = createContext<FamilySummary | null | undefined>(undefined);
+export const FinanceSharedWishlistsContext = createContext<SharedWishlistSnapshot[] | undefined>(undefined);
 export const FinanceFavoriteWalletContext = createContext<string | undefined>(undefined);
 export const FinanceFavoriteCreditCardContext = createContext<string | null | undefined>(undefined);
 export const FinanceWalletsContext = createContext<Wallet[] | undefined>(undefined);
@@ -24,6 +28,7 @@ export const FinanceCreditCardInvoicesContext = createContext<CreditCardInvoice[
 export const FinanceBeneficiariesContext = createContext<Beneficiary[] | undefined>(undefined);
 export const FinanceCategoriesContext = createContext<Category[] | undefined>(undefined);
 export const FinanceTagsContext = createContext<Tag[] | undefined>(undefined);
+export const FinanceWishItemsContext = createContext<WishItem[] | undefined>(undefined);
 export const FinanceTransactionGroupsContext = createContext<TransactionGroup[] | undefined>(undefined);
 export const FinanceStoredTransactionsContext = createContext<StoredTransaction[] | undefined>(undefined);
 export const FinanceTransactionTagsContext = createContext<TransactionTag[] | undefined>(undefined);

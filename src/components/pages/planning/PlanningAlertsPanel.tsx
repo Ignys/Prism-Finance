@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { AlertTriangle, CircleCheck, ShieldAlert } from "lucide-react";
 import type { PlanningAlert, PlanningSummary } from "./planningPageShared";
 import { formatCurrency, formatDateLabel } from "./planningPageShared";
@@ -6,7 +7,7 @@ interface PlanningAlertsPanelProps {
     summary: PlanningSummary;
 }
 
-const ALERT_STYLE_BY_TONE: Record<PlanningAlert["tone"], { cardClassName: string; icon: JSX.Element }> = {
+const ALERT_STYLE_BY_TONE: Record<PlanningAlert["tone"], { cardClassName: string; icon: ReactNode }> = {
     neutral: {
         cardClassName: "border-white/[0.12] bg-white/[0.02] text-white/85",
         icon: <ShieldAlert size={14} />,

@@ -3,6 +3,7 @@ import { useMemo } from "react";
 import {
     FinanceActionsContext,
     FinanceBeneficiariesContext,
+    FinanceFamilyContext,
     FinanceCategoriesContext,
     FinanceCreditCardInvoicesContext,
     FinanceCreditCardsContext,
@@ -13,7 +14,9 @@ import {
     FinanceSessionContext,
     FinanceStoredTransactionsContext,
     FinanceSummaryContext,
+    FinanceSharedWishlistsContext,
     FinanceTagsContext,
+    FinanceWishItemsContext,
     FinanceTransactionsContext,
     FinanceTransactionGroupsContext,
     FinanceTransactionTagsContext,
@@ -28,9 +31,12 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
     const sessionValue = useMemo<FinanceSessionValue>(
         () => ({
             user: store.user,
+            profile: store.profile,
             loading: store.loading,
+            family: store.family,
+            profileVersion: store.profileVersion,
         }),
-        [store.loading, store.user],
+        [store.family, store.loading, store.profile, store.profileVersion, store.user],
     );
 
     const summaryValue = useMemo<FinanceSummaryValue>(
@@ -54,7 +60,6 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
             markTransactionAsPaid: store.markTransactionAsPaid,
             deleteTransaction: store.deleteTransaction,
             deleteTransactionWithScope: store.deleteTransactionWithScope,
-            repairCreditCardInvoiceAssignments: store.repairCreditCardInvoiceAssignments,
             updateInvoicePaymentTransaction: store.updateInvoicePaymentTransaction,
             updatePlanningState: store.updatePlanningState,
             clearTransactions: store.clearTransactions,
@@ -62,6 +67,7 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
             addBeneficiary: store.addBeneficiary,
             addCategory: store.addCategory,
             addTag: store.addTag,
+            addWishItem: store.addWishItem,
             reorderBeneficiaries: store.reorderBeneficiaries,
             reorderCategories: store.reorderCategories,
             reorderTags: store.reorderTags,
@@ -74,18 +80,23 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
             deleteCreditCard: store.deleteCreditCard,
             payCreditCardInvoice: store.payCreditCardInvoice,
             setCreditCardInvoicesPaidState: store.setCreditCardInvoicesPaidState,
+            removeWishItem: store.removeWishItem,
+            createFamily: store.createFamily,
+            generateFamilyInvite: store.generateFamilyInvite,
+            joinFamilyByCode: store.joinFamilyByCode,
+            removeFamilyMember: store.removeFamilyMember,
         }),
         [
             store.addBeneficiary,
             store.addCategory,
             store.addTag,
+            store.addWishItem,
             store.addTransaction,
             store.updateTransaction,
             store.addWallet,
             store.clearTransactions,
             store.deleteTransaction,
             store.deleteTransactionWithScope,
-            store.repairCreditCardInvoiceAssignments,
             store.updateInvoicePaymentTransaction,
             store.updatePlanningState,
             store.markTransactionAsPaid,
@@ -105,43 +116,54 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
             store.deleteCreditCard,
             store.payCreditCardInvoice,
             store.setCreditCardInvoicesPaidState,
+            store.removeWishItem,
+            store.createFamily,
+            store.generateFamilyInvite,
+            store.joinFamilyByCode,
+            store.removeFamilyMember,
             store.updateFinance,
         ],
     );
 
     return (
         <FinanceSessionContext.Provider value={sessionValue}>
-            <FinanceFavoriteWalletContext.Provider value={store.favoriteWalletId}>
-                <FinanceFavoriteCreditCardContext.Provider value={store.favoriteCreditCardId}>
-                    <FinanceWalletsContext.Provider value={store.wallets}>
-                        <FinanceCreditCardsContext.Provider value={store.creditCards}>
-                            <FinanceCreditCardInvoicesContext.Provider value={store.creditCardInvoices}>
-                                <FinanceBeneficiariesContext.Provider value={store.beneficiaries}>
-                                    <FinanceCategoriesContext.Provider value={store.categories}>
-                                        <FinanceTagsContext.Provider value={store.tags}>
-                                            <FinanceTransactionGroupsContext.Provider value={store.transactionGroups}>
-                                                <FinanceStoredTransactionsContext.Provider value={store.storedTransactions}>
-                                                    <FinanceTransactionTagsContext.Provider value={store.transactionTags}>
-                                                        <FinanceLedgerEntriesContext.Provider value={store.ledgerEntries}>
-                                                            <FinanceTransactionsContext.Provider value={store.transactions}>
-                                                                <FinancePlanningContext.Provider value={store.planning}>
-                                                                    <FinanceSummaryContext.Provider value={summaryValue}>
-                                                                        <FinanceActionsContext.Provider value={actionsValue}>{children}</FinanceActionsContext.Provider>
-                                                                    </FinanceSummaryContext.Provider>
-                                                                </FinancePlanningContext.Provider>
-                                                            </FinanceTransactionsContext.Provider>
-                                                        </FinanceLedgerEntriesContext.Provider>
-                                                    </FinanceTransactionTagsContext.Provider>
-                                                </FinanceStoredTransactionsContext.Provider>
-                                            </FinanceTransactionGroupsContext.Provider>
-                                        </FinanceTagsContext.Provider>
-                                    </FinanceCategoriesContext.Provider>
-                                </FinanceBeneficiariesContext.Provider>
-                            </FinanceCreditCardInvoicesContext.Provider>
-                        </FinanceCreditCardsContext.Provider>
-                    </FinanceWalletsContext.Provider>
-                </FinanceFavoriteCreditCardContext.Provider>
-            </FinanceFavoriteWalletContext.Provider>
+            <FinanceFamilyContext.Provider value={store.family}>
+                <FinanceSharedWishlistsContext.Provider value={store.sharedWishlists}>
+                    <FinanceFavoriteWalletContext.Provider value={store.favoriteWalletId}>
+                        <FinanceFavoriteCreditCardContext.Provider value={store.favoriteCreditCardId}>
+                            <FinanceWalletsContext.Provider value={store.wallets}>
+                                <FinanceCreditCardsContext.Provider value={store.creditCards}>
+                                    <FinanceCreditCardInvoicesContext.Provider value={store.creditCardInvoices}>
+                                        <FinanceBeneficiariesContext.Provider value={store.beneficiaries}>
+                                            <FinanceCategoriesContext.Provider value={store.categories}>
+                                                <FinanceTagsContext.Provider value={store.tags}>
+                                                    <FinanceWishItemsContext.Provider value={store.wishItems}>
+                                                        <FinanceTransactionGroupsContext.Provider value={store.transactionGroups}>
+                                                            <FinanceStoredTransactionsContext.Provider value={store.storedTransactions}>
+                                                                <FinanceTransactionTagsContext.Provider value={store.transactionTags}>
+                                                                    <FinanceLedgerEntriesContext.Provider value={store.ledgerEntries}>
+                                                                        <FinanceTransactionsContext.Provider value={store.transactions}>
+                                                                            <FinancePlanningContext.Provider value={store.planning}>
+                                                                                <FinanceSummaryContext.Provider value={summaryValue}>
+                                                                                    <FinanceActionsContext.Provider value={actionsValue}>{children}</FinanceActionsContext.Provider>
+                                                                                </FinanceSummaryContext.Provider>
+                                                                            </FinancePlanningContext.Provider>
+                                                                        </FinanceTransactionsContext.Provider>
+                                                                    </FinanceLedgerEntriesContext.Provider>
+                                                                </FinanceTransactionTagsContext.Provider>
+                                                            </FinanceStoredTransactionsContext.Provider>
+                                                        </FinanceTransactionGroupsContext.Provider>
+                                                    </FinanceWishItemsContext.Provider>
+                                                </FinanceTagsContext.Provider>
+                                            </FinanceCategoriesContext.Provider>
+                                        </FinanceBeneficiariesContext.Provider>
+                                    </FinanceCreditCardInvoicesContext.Provider>
+                                </FinanceCreditCardsContext.Provider>
+                            </FinanceWalletsContext.Provider>
+                        </FinanceFavoriteCreditCardContext.Provider>
+                    </FinanceFavoriteWalletContext.Provider>
+                </FinanceSharedWishlistsContext.Provider>
+            </FinanceFamilyContext.Provider>
         </FinanceSessionContext.Provider>
     );
 }

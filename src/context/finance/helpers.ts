@@ -1,9 +1,23 @@
 import type { Beneficiary, Category, TransactionDraft, TransactionGroup, Wallet } from "../financeTypes";
-import { DEFAULT_WALLET_ID } from "../financeTypes";
+import { DEFAULT_BENEFICIARY_ID, DEFAULT_WALLET_ID, SYSTEM_EXPENSE_CARD_INVOICE_CATEGORY_ID } from "../financeTypes";
 import { getLocalTodayDate } from "../../lib/localDate";
 
 export function roundToCents(value: number): number {
     return Math.round(value * 100) / 100;
+}
+
+export function splitAmountAcrossInstallments(amount: number, installmentCount: number): number[] {
+    const safeCount = Math.max(2, Math.floor(installmentCount));
+    const cents = Math.round(Math.abs(amount) * 100);
+    const base = Math.floor(cents / safeCount);
+    const remainder = cents - base * safeCount;
+
+    const parts: number[] = [];
+    for (let index = 0; index < safeCount; index += 1) {
+        const partCents = base + (index < remainder ? 1 : 0);
+        parts.push(roundToCents(partCents / 100));
+    }
+    return parts;
 }
 
 export function createId(prefix: string): string {
@@ -54,4 +68,22 @@ export function findCategoryByName(categories: Category[], type: Category["type"
 export function findBeneficiaryByName(beneficiaries: Beneficiary[], name: string): Beneficiary | null {
     const normalizedName = normalizeComparisonText(name);
     return beneficiaries.find((item) => normalizeComparisonText(item.name) === normalizedName) ?? null;
+}
+
+export function findCurrentUserSelfBeneficiary(beneficiaries: Beneficiary[], userId: string | null | undefined): Beneficiary | null {
+    const normalizedUserId = userId?.trim() ?? "";
+    if (normalizedUserId) {
+        const matchedByMetadata =
+            beneficiaries.find((item) => item.source === "personal" && item.isSelfProfile && item.userId === normalizedUserId) ??
+            beneficiaries.find((item) => item.isSelfProfile && item.userId === normalizedUserId);
+        if (matchedByMetadata) {
+            return matchedByMetadata;
+        }
+    }
+
+    return beneficiaries.find((item) => item.id === DEFAULT_BENEFICIARY_ID) ?? findBeneficiaryByName(beneficiaries, "eu");
+}
+
+export function isInvoicePaymentCategoryId(categoryId: string | null | undefined): boolean {
+    return categoryId === SYSTEM_EXPENSE_CARD_INVOICE_CATEGORY_ID;
 }

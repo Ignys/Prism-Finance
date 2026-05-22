@@ -5,6 +5,7 @@ export type AppPage =
     | "spending"
     | "income"
     | "planning"
+    | "settings"
     | "wallets"
     | "creditCards"
     | "beneficiaries"
@@ -12,7 +13,8 @@ export type AppPage =
     | "tags"
     | "statement"
     | "transactions"
-    | "registry";
+    | "registry"
+    | "wishlist";
 export type TransactionsIntentTab = "income" | "spending" | "transfer";
 export type PageNavigationIntent =
     | {

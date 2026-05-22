@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { formatLocalDateInput, getLocalDateFromOffset, parseDateOnlyToLocalDate } from "../../lib/localDate";
-import { FIELD_INPUT_CLASS } from "./transactionForm.constants";
-import { FIELD_LABEL_CLASS } from "./CardSpendingForm";
+import { FIELD_INPUT_CLASS, FIELD_LABEL_CLASS } from "./transactionForm.constants";
 
 const DATE_MONTH_LABEL_FORMATTER = new Intl.DateTimeFormat("pt-BR", {
     month: "long",
