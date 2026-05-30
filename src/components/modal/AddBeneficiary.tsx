@@ -5,6 +5,7 @@ import { type Beneficiary, useFinanceActions, useFinanceBeneficiaries } from "..
 import { useModal } from "../../context/ModalContext";
 import { BeneficiaryAvatar } from "../common/BeneficiaryAvatar";
 import { SingleSelectCombobox, type ComboboxOptionBase } from "../transactions/SingleSelectCombobox";
+import { ConfirmActionModal } from "./ConfirmActionModal";
 import { ModalStructure } from "./ModalStructure";
 import { FIELD_LABEL_CLASS } from "../transactions/transactionForm.constants";
 
@@ -131,8 +132,8 @@ function normalizeAvatarImage(value: string): string | null {
 
 export function AddBeneficiary({ mode = "create", beneficiaryId, initialBeneficiary }: AddBeneficiaryProps) {
     const beneficiaries = useFinanceBeneficiaries();
-    const { addBeneficiary, setBeneficiaryActive } = useFinanceActions();
-    const { closeModal } = useModal();
+    const { addBeneficiary, permanentlyDeleteBeneficiary, setBeneficiaryActive } = useFinanceActions();
+    const { closeModal, openModal } = useModal();
     const [submitting, setSubmitting] = useState(false);
 
     const editingBeneficiary = useMemo(() => {
@@ -193,9 +194,9 @@ export function AddBeneficiary({ mode = "create", beneficiaryId, initialBenefici
     const isActionReadOnly = isFamilySharedBeneficiary;
     const isColorReadOnly = isFamilySharedBeneficiary;
     const readOnlyMessage = isFamilySharedBeneficiary
-        ? "Este beneficiario vem da familia e acompanha o perfil compartilhado daquele membro."
+        ? "Este beneficiário vem da família e acompanha o perfil compartilhado daquele membro."
         : isSelfProfileBeneficiary
-          ? "Este beneficiario acompanha automaticamente o nome e a foto do seu perfil. Voce ainda pode ajustar a cor usada no avatar."
+          ? "Este beneficiário acompanha automaticamente o nome e a foto do seu perfil. Você ainda pode ajustar a cor usada no avatar."
           : "";
 
     const runAction = async (action: () => Promise<boolean>) => {
@@ -288,6 +289,25 @@ export function AddBeneficiary({ mode = "create", beneficiaryId, initialBenefici
             await setBeneficiaryActive(editingBeneficiary.id, !editingBeneficiary.isActive);
             return true;
         });
+
+    const openPermanentDeleteModal = () => {
+        if (!editingBeneficiary || editingBeneficiary.isActive || isReadOnlyBeneficiary) {
+            return;
+        }
+
+        openModal(
+            <ConfirmActionModal
+                title="Excluir beneficiário em definitivo?"
+                description={`O beneficiário "${editingBeneficiary.name}" será removido permanentemente.`}
+                consequences={[
+                    "O beneficiário será removido do cadastro em definitivo.",
+                    "As transações relacionadas passarao automaticamente para o beneficiário do usuário.",
+                ]}
+                confirmLabel="Excluir em definitivo"
+                onConfirm={() => permanentlyDeleteBeneficiary(editingBeneficiary.id)}
+            />,
+        );
+    };
 
     return (
         <ModalStructure height="auto" width="620px">
@@ -429,19 +449,33 @@ export function AddBeneficiary({ mode = "create", beneficiaryId, initialBenefici
                 <div className="mt-5 flex items-center justify-between gap-3">
                     <div className="flex items-center gap-2">
                         {isEditMode && editingBeneficiary && !isReadOnlyBeneficiary && (
-                            <button
-                                type="button"
-                                onClick={() => void handleToggleActive()}
-                                disabled={submitting}
-                                className={`inline-flex min-w-28 items-center justify-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
-                                    editingBeneficiary.isActive
-                                        ? "border-red-400/25 bg-red-500/10 text-red-200 hover:border-red-400/45 hover:text-red-100"
-                                        : "border-emerald-400/35 bg-emerald-500/15 text-emerald-100 hover:border-emerald-400/55 hover:bg-emerald-500/20"
-                                }`}
-                            >
-                                {editingBeneficiary.isActive ? <Trash2 size={15} /> : <RotateCcw size={15} />}
-                                {editingBeneficiary.isActive ? "Remover" : "Reativar"}
-                            </button>
+                            <>
+                                <button
+                                    type="button"
+                                    onClick={() => void handleToggleActive()}
+                                    disabled={submitting}
+                                    className={`inline-flex min-w-28 items-center justify-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+                                        editingBeneficiary.isActive
+                                            ? "border-amber-400/25 bg-amber-500/10 text-amber-100 hover:border-amber-400/45 hover:text-amber-50"
+                                            : "border-emerald-400/35 bg-emerald-500/15 text-emerald-100 hover:border-emerald-400/55 hover:bg-emerald-500/20"
+                                    }`}
+                                >
+                                    {editingBeneficiary.isActive ? <Trash2 size={15} /> : <RotateCcw size={15} />}
+                                    {editingBeneficiary.isActive ? "Arquivar" : "Reativar"}
+                                </button>
+
+                                {!editingBeneficiary.isActive ? (
+                                    <button
+                                        type="button"
+                                        onClick={openPermanentDeleteModal}
+                                        disabled={submitting}
+                                        className="inline-flex min-w-40 items-center justify-center gap-2 rounded-xl border border-red-400/25 bg-red-500/10 px-3 py-2 text-sm font-medium text-red-200 transition-colors hover:border-red-400/45 hover:text-red-100 disabled:cursor-not-allowed disabled:opacity-60"
+                                    >
+                                        <Trash2 size={15} />
+                                        Excluir em definitivo
+                                    </button>
+                                ) : null}
+                            </>
                         )}
                     </div>
 

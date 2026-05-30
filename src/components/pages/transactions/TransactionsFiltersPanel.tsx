@@ -90,7 +90,7 @@ export function TransactionsFiltersPanel({
                     <div className="text-left">
                         <h1 className="text-2xl font-semibold text-white">Transações</h1>
                     </div>
-                    <StatementMonthSelector selectedMonth={selectedMonth} onMonthChange={onMonthChange} ariaLabel="Selecionar mes e ano das transacoes" />
+                    <StatementMonthSelector selectedMonth={selectedMonth} onMonthChange={onMonthChange} ariaLabel="Selecionar mês e ano das transações" />
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                     {tabs.map((tab) => {
@@ -137,7 +137,7 @@ export function TransactionsFiltersPanel({
                                 type="text"
                                 value={searchQuery}
                                 onChange={(event) => onSearchQueryChange(event.target.value)}
-                                placeholder="Buscar por descrição, beneficiário, categoria, carteira ou tag"
+                                placeholder="Buscar"
                                 className="w-full rounded-xl border border-white/[0.08] bg-black/25 py-2 pl-9 pr-3 text-sm text-white outline-none transition-colors placeholder:text-white/30 focus:border-white/[0.24] focus:bg-black/40"
                             />
                         </div>
@@ -272,7 +272,7 @@ export function TransactionsFiltersPanel({
                                             </button>
                                         );
                                     })}
-                                    {tagOptions.length < 1 && <p className="text-sm text-white/45">Nenhuma tag vinculada as transacoes.</p>}
+                                    {tagOptions.length < 1 && <p className="text-sm text-white/45">Nenhuma tag vinculada as transações.</p>}
                                 </div>
                             </div>
                         </motion.div>

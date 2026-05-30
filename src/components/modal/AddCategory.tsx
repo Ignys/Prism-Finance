@@ -6,6 +6,7 @@ import { useModal } from "../../context/ModalContext";
 import { isInvoicePaymentCategoryId } from "../../context/finance/helpers";
 import { normalizeCategoryIconName } from "../../lib/categoryIcons";
 import { CategoryIconPicker } from "../common/CategoryIconPicker";
+import { ConfirmActionModal } from "./ConfirmActionModal";
 import { ModalStructure } from "./ModalStructure";
 
 const FIELD_LABEL_CLASS = "text-[11px] uppercase tracking-[0.12em] text-white/50";
@@ -44,8 +45,8 @@ function collectDescendantIds(categories: Category[], rootId: string): Set<strin
 
 export function AddCategory({ mode = "create", categoryId, initialCategory }: AddCategoryProps) {
     const categories = useFinanceCategories();
-    const { addCategory, setCategoryActive } = useFinanceActions();
-    const { closeModal } = useModal();
+    const { addCategory, permanentlyDeleteCategory, setCategoryActive } = useFinanceActions();
+    const { closeModal, openModal } = useModal();
     const [submitting, setSubmitting] = useState(false);
 
     const editingCategory = useMemo(() => {
@@ -172,6 +173,25 @@ export function AddCategory({ mode = "create", categoryId, initialCategory }: Ad
             return true;
         });
 
+    const openPermanentDeleteModal = () => {
+        if (!editingCategory || editingCategory.isActive || isInvoicePaymentCategory) {
+            return;
+        }
+
+        openModal(
+            <ConfirmActionModal
+                title="Excluir categoria em definitivo?"
+                description={`A categoria "${editingCategory.name}" sera removida permanentemente.`}
+                consequences={[
+                    "A categoria e todas as subcategorias dela serao removidas em definitivo.",
+                    "Transacoes relacionadas passarao automaticamente para Sem categoria.",
+                ]}
+                confirmLabel="Excluir em definitivo"
+                onConfirm={() => permanentlyDeleteCategory(editingCategory.id)}
+            />,
+        );
+    };
+
     return (
         <ModalStructure height="auto" width="620px">
             <div className="rounded-2xl border border-white/[0.09] bg-[#131313] p-4 text-white shadow-[0_26px_70px_-38px_rgba(0,0,0,0.95)]">
@@ -251,19 +271,33 @@ export function AddCategory({ mode = "create", categoryId, initialCategory }: Ad
                 <div className="mt-5 flex items-center justify-between gap-3">
                     <div className="flex items-center gap-2">
                         {isEditMode && editingCategory && !isInvoicePaymentCategory && (
-                            <button
-                                type="button"
-                                onClick={() => void handleToggleActive()}
-                                disabled={submitting}
-                                className={`inline-flex min-w-28 items-center justify-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
-                                    editingCategory.isActive
-                                        ? "border-red-400/25 bg-red-500/10 text-red-200 hover:border-red-400/45 hover:text-red-100"
-                                        : "border-emerald-400/35 bg-emerald-500/15 text-emerald-100 hover:border-emerald-400/55 hover:bg-emerald-500/20"
-                                }`}
-                            >
-                                {editingCategory.isActive ? <Trash2 size={15} /> : <RotateCcw size={15} />}
-                                {editingCategory.isActive ? "Remover" : "Reativar"}
-                            </button>
+                            <>
+                                <button
+                                    type="button"
+                                    onClick={() => void handleToggleActive()}
+                                    disabled={submitting}
+                                    className={`inline-flex min-w-28 items-center justify-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+                                        editingCategory.isActive
+                                            ? "border-amber-400/25 bg-amber-500/10 text-amber-100 hover:border-amber-400/45 hover:text-amber-50"
+                                            : "border-emerald-400/35 bg-emerald-500/15 text-emerald-100 hover:border-emerald-400/55 hover:bg-emerald-500/20"
+                                    }`}
+                                >
+                                    {editingCategory.isActive ? <Trash2 size={15} /> : <RotateCcw size={15} />}
+                                    {editingCategory.isActive ? "Arquivar" : "Reativar"}
+                                </button>
+
+                                {!editingCategory.isActive ? (
+                                    <button
+                                        type="button"
+                                        onClick={openPermanentDeleteModal}
+                                        disabled={submitting}
+                                        className="inline-flex min-w-40 items-center justify-center gap-2 rounded-xl border border-red-400/25 bg-red-500/10 px-3 py-2 text-sm font-medium text-red-200 transition-colors hover:border-red-400/45 hover:text-red-100 disabled:cursor-not-allowed disabled:opacity-60"
+                                    >
+                                        <Trash2 size={15} />
+                                        Excluir em definitivo
+                                    </button>
+                                ) : null}
+                            </>
                         )}
                     </div>
 

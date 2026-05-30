@@ -16,6 +16,8 @@ import {
     type SortMode,
     type TransactionsTabKey,
 } from "./transactionsPageShared";
+import { format } from "date-fns";
+import { ptBR } from "date-fns/locale";
 
 interface TransactionsListPanelProps {
     activeTab: TransactionsTabKey;
@@ -23,6 +25,7 @@ interface TransactionsListPanelProps {
     spendingTransactions: Transaction[];
     transferTransactions: Transaction[];
     wallets: Wallet[];
+    selectedMonth?: string;
     sortMode: SortMode;
     onSortModeChange: (sortMode: SortMode) => void;
     onEdit: (transaction: Transaction) => void;
@@ -38,6 +41,7 @@ interface TabConfig {
 }
 
 interface TransactionsTableProps {
+    selectedMonth?: string;
     tabs: TabConfig[];
     activeTab: TransactionsTabKey;
     wallets: Wallet[];
@@ -140,6 +144,7 @@ function TransactionsTable({
     onEdit,
     onConfirmPayment,
     onDelete,
+    selectedMonth,
 }: TransactionsTableProps) {
     const activeTabConfig = tabs.find((tab) => tab.key === activeTab) ?? tabs[0];
     const transactions = activeTabConfig?.transactions ?? [];
@@ -147,7 +152,7 @@ function TransactionsTable({
     return (
         <section className="rounded-2xl border border-white/[0.08] bg-[#111111] p-3 shadow-[0_24px_60px_-32px_rgba(0,0,0,0.9)]">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-                <h2 className="text-sm font-medium text-white/85">{activeTabConfig.label}</h2>
+                <h2 className="text-sm uppercase text-white/60">{activeTabConfig.label} de {format(new Date(selectedMonth || new Date()), "MMMM 'de' yyyy", { locale: ptBR })}</h2>
                 <span className="rounded-full border border-white/[0.12] bg-white/[0.03] px-2.5 py-1 text-xs text-white/60">{transactions.length} itens</span>
             </div>
 
@@ -262,8 +267,8 @@ function TransactionsTable({
                                                     type="button"
                                                     onClick={() => onEdit(transaction)}
                                                     className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-white/[0.12] bg-white/[0.03] text-white/70 transition-colors hover:border-white/[0.22] hover:text-white"
-                                                    aria-label="Editar transacao"
-                                                    title="Editar transacao"
+                                                    aria-label="Editar transação"
+                                                    title="Editar transação"
                                                 >
                                                     <Pencil size={14} />
                                                 </button>
@@ -271,8 +276,8 @@ function TransactionsTable({
                                                     type="button"
                                                     onClick={() => onDelete(transaction)}
                                                     className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-red-400/25 bg-red-500/10 text-red-200 transition-colors hover:border-red-400/45 hover:text-red-100"
-                                                    aria-label="Excluir transacao"
-                                                    title="Excluir transacao"
+                                                    aria-label="Excluir transação"
+                                                    title="Excluir transação"
                                                 >
                                                     <Trash2 size={14} />
                                                 </button>
@@ -300,6 +305,7 @@ export function TransactionsListPanel({
     onEdit,
     onConfirmPayment,
     onDelete,
+    selectedMonth,
 }: TransactionsListPanelProps) {
     const beneficiaries = useFinanceBeneficiaries();
     const transactionGroups = useFinanceTransactionGroups();
@@ -326,19 +332,19 @@ export function TransactionsListPanel({
                 key: "income",
                 label: "Receitas",
                 transactions: incomeTransactions,
-                emptyMessage: "Nenhuma receita neste mes para os filtros selecionados.",
+                emptyMessage: "Nenhuma receita neste mês para os filtros selecionados.",
             },
             {
                 key: "spending",
                 label: "Despesas",
                 transactions: spendingTransactions,
-                emptyMessage: "Nenhuma despesa neste mes para os filtros selecionados.",
+                emptyMessage: "Nenhuma despesa neste mês para os filtros selecionados.",
             },
             {
                 key: "transfer",
                 label: "Transferências",
                 transactions: transferTransactions,
-                emptyMessage: "Nenhuma transferencia neste mes para os filtros selecionados.",
+                emptyMessage: "Nenhuma transferência neste mês para os filtros selecionados.",
             },
         ],
         [incomeTransactions, spendingTransactions, transferTransactions],
@@ -349,6 +355,7 @@ export function TransactionsListPanel({
             <TransactionsTable
                 tabs={tabs}
                 activeTab={activeTab}
+                selectedMonth={selectedMonth}
                 wallets={wallets}
                 beneficiariesById={beneficiariesById}
                 transactionGroupsById={transactionGroupsById}

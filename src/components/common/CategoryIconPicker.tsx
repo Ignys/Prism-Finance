@@ -47,7 +47,7 @@ export function CategoryIconPicker({ value, categoryType, onChange }: CategoryIc
                     type="text"
                     value={query}
                     onChange={(event) => setQuery(event.target.value)}
-                    placeholder="Buscar icone"
+                    placeholder="Buscar"
                     className="w-full rounded-lg border border-neutral-600 bg-neutral-700 py-2 pl-8 pr-3 text-sm text-white outline-none transition-colors focus:border-white/35"
                 />
             </label>

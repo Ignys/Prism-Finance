@@ -77,7 +77,7 @@ export function StatementFiltersPanel({ selectedMonth, selectedCardId, selectedC
                         onClick={() => goToPage("creditCards")}
                         className="rounded-xl border border-white/[0.08] bg-white/[0.02] px-3 py-2 text-left text-sm text-white/55 transition-colors hover:border-white/[0.16] hover:bg-white/[0.05] hover:text-white"
                     >
-                        Crie um cartão agora!
+                        Crie um cartÃ£o agora!
                     </button>
                 )}
             </div>

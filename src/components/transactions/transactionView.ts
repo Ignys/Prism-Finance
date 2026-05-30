@@ -12,6 +12,7 @@ export const REMOVED_WALLET: Wallet = {
     currency: "BRL",
     color: "#6B7280",
     isActive: false,
+    includeInMainTotals: true,
     createdAt: new Date().toISOString(),
 };
 

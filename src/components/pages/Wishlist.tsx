@@ -27,6 +27,24 @@ function resolveWishLink(link: string | null): string | null {
     return `https://${link}`;
 }
 
+function WishlistItemImage({ src, alt }: { src: string | null; alt: string }) {
+    const [hasError, setHasError] = useState(false);
+
+    useEffect(() => {
+        setHasError(false);
+    }, [src]);
+
+    if (!src || hasError) {
+        return null;
+    }
+
+    return (
+        <div className="mb-4 overflow-hidden rounded-2xl h-full w-30 border-white/[0.08] bg-black/20">
+            <img src={src} alt={alt} loading="lazy" onError={() => setHasError(true)} className="w-full h-full object-cover" />
+        </div>
+    );
+}
+
 function buildEmptyWishlist(ownerUid: string, ownerName: string, isCurrentUser: boolean): SharedWishlistSnapshot {
     return {
         owner: {
@@ -87,6 +105,7 @@ export function WishlistPage() {
                 value: item.value,
                 priority: item.priority,
                 link: item.link,
+                imageUrl: item.imageUrl,
                 createdAt: item.createdAt,
                 isActive: item.isActive,
                 categoryLabel: categoryNameById.get(item.categoryId) ?? "Categoria removida",
@@ -173,7 +192,7 @@ export function WishlistPage() {
 
     return (
         <AuthShell mainClassName="text-white">
-            <div className="mx-auto flex min-h-[calc(100vh-8rem)] w-full max-w-6xl flex-col gap-4 px-4 pb-6 pt-2 lg:px-6">
+            <div className="mx-auto flex min-h-[calc(100vh-8rem)] w-[90em] flex-col gap-4 px-4 pb-6 pt-2 lg:px-6">
                 <header className="flex flex-wrap items-end justify-between gap-3 text-left">
                     <div>
                         <h1 className="text-2xl font-semibold text-white">Lista de desejos</h1>
@@ -204,33 +223,33 @@ export function WishlistPage() {
                 {hasFamilyTabs ? (
                     <div className="flex flex-wrap gap-2">
                         {wishlistTabs
-                        .sort((a, b) => Number(b.owner.isCurrentUser) - Number(a.owner.isCurrentUser))
-                        .map((snapshot) => {
-                            const isActive = snapshot.owner.uid === activeWishlist.owner.uid;
+                            .sort((a, b) => Number(b.owner.isCurrentUser) - Number(a.owner.isCurrentUser))
+                            .map((snapshot) => {
+                                const isActive = snapshot.owner.uid === activeWishlist.owner.uid;
 
-                            return (
-                                <button
-                                    key={snapshot.owner.uid}
-                                    type="button"
-                                    onClick={() => setActiveOwnerUid(snapshot.owner.uid)}
-                                    className={`rounded-2xl border px-4 py-2 text-sm transition-colors ${
-                                        isActive ? "border-emerald-300/30 bg-emerald-500/14 text-emerald-50" : "border-white/[0.08] bg-white/[0.03] text-white/65 hover:text-white"
-                                    }`}
-                                >
-                                    {snapshot.owner.isCurrentUser ? "Sua lista de desejos" : snapshot.owner.name}
-                                </button>
-                            );
-                        })}
+                                return (
+                                    <button
+                                        key={snapshot.owner.uid}
+                                        type="button"
+                                        onClick={() => setActiveOwnerUid(snapshot.owner.uid)}
+                                        className={`rounded-2xl border px-4 py-2 text-sm transition-colors ${
+                                            isActive ? "border-emerald-300/30 bg-emerald-500/14 text-emerald-50" : "border-white/[0.08] bg-white/[0.03] text-white/65 hover:text-white"
+                                        }`}
+                                    >
+                                        {snapshot.owner.isCurrentUser ? "Sua lista de desejos" : snapshot.owner.name}
+                                    </button>
+                                );
+                            })}
                     </div>
                 ) : null}
 
-                <section className="rounded-2xl border border-white/[0.08] bg-[#101010] p-4">
+                <section className="">
                     <div className="mb-4">
                         <input
                             type="text"
                             value={searchTerm}
                             onChange={(event) => setSearchTerm(event.target.value)}
-                            placeholder="Buscar por descricao, categoria ou link"
+                            placeholder="Pesquisar"
                             className="w-full rounded-2xl border border-white/[0.1] bg-white/[0.04] px-4 py-3 text-sm text-white outline-none transition-colors placeholder:text-white/35 focus:border-white/[0.22]"
                         />
                     </div>
@@ -253,7 +272,7 @@ export function WishlistPage() {
                             </div>
                         </div>
                     ) : (
-                        <div className="flex flex-wrap gap-4">
+                        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
                             {visibleItems.map((wishItem) => {
                                 const resolvedLink = resolveWishLink(wishItem.link);
                                 const CategoryIcon = getCategoryIconComponent(wishItem.categoryIcon, "expense");
@@ -276,58 +295,63 @@ export function WishlistPage() {
                                                   }
                                                 : undefined
                                         }
-                                        className={`flex h-full w-80 flex-col rounded-2xl border border-white/[0.08] bg-white/[0.03] p-4 text-left ${
+                                        className={`flex gap-4 justify-between rounded-2xl bg-white/[0.03] p-4 text-left h-35 ${
                                             isOwnWishlist ? "cursor-pointer transition-colors hover:border-neutral-300/20 hover:bg-white/[0.05]" : ""
                                         }`}
                                     >
-                                        <div className="mb-1 flex items-start justify-between gap-3">
-                                            <h2 className="text-xl font-base text-white">{wishItem.description}</h2>
-                                        </div>
-
-                                        <div className="flex items-center justify-between">
-                                            <p className="text-lg font-light text-white/70">{currencyFormatter.format(wishItem.value)}</p>
-
-                                            <div
-                                                className="inline-flex items-center gap-0.5 rounded-lg border px-2 py-1.5 text-xs font-medium"
-                                                style={{
-                                                    color: priorityMeta.color,
-                                                    borderColor: `${priorityMeta.color}40`,
-                                                    backgroundColor: `${priorityMeta.color}14`,
-                                                }}
-                                            >
-                                                {Array.from({ length: wishItem.priority }, (_, index) => (
-                                                    <Flag key={`${wishItem.id}-priority-flag-${index}`} size={14} />
-                                                ))}
+                                        <WishlistItemImage src={wishItem.imageUrl} alt={wishItem.description} />
+                                        <div className="grow flex flex-col justify-between">
+                                            <div>
+                                                <div className="mb-1 flex items-start gap-3">
+                                                <h2 className="text-xl font-base text-white">{wishItem.description}</h2>
                                             </div>
-                                        </div>
 
-                                        <div className="mt-2 flex items-center justify-between gap-3 border-t border-white/[0.07] pt-3">
-                                            <span className="inline-flex items-center gap-2 rounded-full border-white/[0.1] text-xs font-medium text-white/75 transition-colors">
-                                                <span
-                                                    className="inline-flex h-7 w-7 items-center justify-center rounded-lg border"
+                                            <div className="flex items-center justify-between">
+                                                <p className="text-lg font-light text-white/70">{currencyFormatter.format(wishItem.value)}</p>
+
+                                                <div
+                                                    className="inline-flex items-center gap-0.5 rounded-lg border px-2 py-1.5 text-xs font-medium"
                                                     style={{
-                                                        color: categoryAccentColor,
-                                                        borderColor: `${categoryAccentColor}35`,
-                                                        backgroundColor: `${categoryAccentColor}18`,
+                                                        color: priorityMeta.color,
+                                                        borderColor: `${priorityMeta.color}40`,
+                                                        backgroundColor: `${priorityMeta.color}14`,
                                                     }}
                                                 >
-                                                    <CategoryIcon size={14} />
-                                                </span>
-                                                {wishItem.categoryLabel}
-                                            </span>
+                                                    {Array.from({ length: wishItem.priority }, (_, index) => (
+                                                        <Flag key={`${wishItem.id}-priority-flag-${index}`} size={14} />
+                                                    ))}
+                                                </div>
+                                            </div>
 
-                                            {resolvedLink ? (
-                                                <a
-                                                    href={resolvedLink}
-                                                    target="_blank"
-                                                    rel="noreferrer"
-                                                    onClick={(event) => event.stopPropagation()}
-                                                    className="inline-flex items-center gap-2 rounded-full border border-white/[0.1] bg-white/[0.04] px-3 py-1.5 text-xs font-medium text-white/75 transition-colors hover:border-white/[0.18] hover:text-white"
-                                                >
-                                                    <ExternalLink size={13} />
-                                                    Abrir link
-                                                </a>
-                                            ) : null}
+                                            </div>
+                                            <div className="mt-2 flex items-center justify-between gap-3 border-t border-white/[0.07] pt-3">
+                                                <span className="inline-flex items-center gap-2 rounded-full border-white/[0.1] text-xs font-medium text-white/75 transition-colors">
+                                                    <span
+                                                        className="inline-flex h-7 w-7 items-center justify-center rounded-lg border"
+                                                        style={{
+                                                            color: categoryAccentColor,
+                                                            borderColor: `${categoryAccentColor}35`,
+                                                            backgroundColor: `${categoryAccentColor}18`,
+                                                        }}
+                                                    >
+                                                        <CategoryIcon size={14} />
+                                                    </span>
+                                                    {wishItem.categoryLabel}
+                                                </span>
+
+                                                {resolvedLink ? (
+                                                    <a
+                                                        href={resolvedLink}
+                                                        target="_blank"
+                                                        rel="noreferrer"
+                                                        onClick={(event) => event.stopPropagation()}
+                                                        className="inline-flex items-center gap-2 rounded-full border border-white/[0.1] bg-white/[0.04] px-3 py-1.5 text-xs font-medium text-white/75 transition-colors hover:border-white/[0.18] hover:text-white"
+                                                    >
+                                                        <ExternalLink size={13} />
+                                                        Abrir link
+                                                    </a>
+                                                ) : null}
+                                            </div>
                                         </div>
                                     </article>
                                 );

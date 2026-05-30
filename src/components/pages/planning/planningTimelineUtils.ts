@@ -1,0 +1,399 @@
+import { addMonths, format, isValid, parse, startOfMonth } from "date-fns";
+import { ptBR } from "date-fns/locale";
+import type {
+    CreditCard,
+    CreditCardInvoice,
+    LedgerEntry,
+    PlanningSimulatedExpense,
+    PlanningSimulatedIncome,
+    PlanningState,
+    Transaction,
+    Wallet,
+    WishItem,
+} from "../../../context/FinanceContext";
+import { getMonthKeyFromDateValue } from "../../../context/financeTypes";
+import { parseAppDate } from "../../../lib/localDate";
+import { DEFAULT_TIMELINE_MONTHS, TIMELINE_MONTH_OPTIONS, type BalanceTone, type MonthReality, type SimulatedIncomeItem, type TimelineProjection, type WishlistProjectionItem } from "./planningTimelineTypes";
+
+const MONTH_KEY_FORMAT = "yyyy-MM";
+
+const currencyFormatter = new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+    minimumFractionDigits: 2,
+});
+
+export function roundToCents(value: number): number {
+    return Math.round(value * 100) / 100;
+}
+
+function capitalizeLabel(value: string): string {
+    return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+function parseMonthKey(monthKey: string): Date | null {
+    const parsedDate = parse(monthKey.trim(), MONTH_KEY_FORMAT, new Date());
+    if (!isValid(parsedDate)) {
+        return null;
+    }
+
+    return startOfMonth(parsedDate);
+}
+
+export function getCurrentMonthKey(referenceDate = new Date()): string {
+    return format(startOfMonth(referenceDate), MONTH_KEY_FORMAT);
+}
+
+function shiftMonth(monthKey: string, offset: number): string {
+    const parsedMonth = parseMonthKey(monthKey);
+    if (!parsedMonth) {
+        return getCurrentMonthKey();
+    }
+
+    return format(addMonths(parsedMonth, offset), MONTH_KEY_FORMAT);
+}
+
+function formatMonthLabel(monthKey: string, pattern = "MMMM 'de' yyyy"): string {
+    const parsedMonth = parseMonthKey(monthKey);
+    return parsedMonth ? capitalizeLabel(format(parsedMonth, pattern, { locale: ptBR }).replace(".", "")) : monthKey;
+}
+
+export function formatCurrency(value: number): string {
+    return currencyFormatter.format(roundToCents(value));
+}
+
+export function parseCurrencyInput(input: string): number {
+    const compact = input.trim().replace(/[^\d,.-]/g, "");
+    if (!compact) {
+        return 0;
+    }
+
+    const normalized = compact.includes(",") ? compact.replace(/\./g, "").replace(",", ".") : compact;
+    const parsed = Number(normalized);
+    if (!Number.isFinite(parsed)) {
+        return 0;
+    }
+
+    return roundToCents(Math.max(0, Math.abs(parsed)));
+}
+
+function isIncludedStatus(status: Transaction["status"]): boolean {
+    return status === "paid" || status === "pending";
+}
+
+function getMonthStartTime(monthKey: string): number {
+    return parseMonthKey(monthKey)?.getTime() ?? Date.now();
+}
+
+function getOpeningBalance(monthKey: string, wallets: Wallet[], ledgerEntries: LedgerEntry[]): number {
+    const activeWallets = wallets.filter((wallet) => wallet.isActive);
+    const activeWalletIds = new Set(activeWallets.map((wallet) => wallet.id));
+    const monthStartTime = getMonthStartTime(monthKey);
+    const initialBalance = activeWallets.reduce((sum, wallet) => sum + wallet.initialBalance, 0);
+    const ledgerBeforeMonth = ledgerEntries.reduce((sum, entry) => {
+        if (!activeWalletIds.has(entry.walletId)) {
+            return sum;
+        }
+
+        const entryDate = parseAppDate(entry.createdAt);
+        if (!entryDate || entryDate.getTime() >= monthStartTime) {
+            return sum;
+        }
+
+        return sum + entry.amount;
+    }, 0);
+
+    return roundToCents(initialBalance + ledgerBeforeMonth);
+}
+
+function sumAmounts<T extends { amount: number }>(items: T[]): number {
+    return roundToCents(items.reduce((sum, item) => sum + item.amount, 0));
+}
+
+export function getAmountClassName(tone: "income" | "expense" | "simulation", amount: number): string {
+    if (tone === "income") {
+        return amount < 0 ? "text-red-200" : "text-emerald-200";
+    }
+
+    if (tone === "expense") {
+        return "text-red-200";
+    }
+
+    return "text-orange-200";
+}
+
+export function getProjectionNetClassName(amount: number): string {
+    if (amount > 0) {
+        return "text-emerald-200";
+    }
+
+    if (amount < 0) {
+        return "text-orange-200";
+    }
+
+    return "text-white/60";
+}
+
+export function getNextTimelineMonthCount(currentCount: number): number {
+    const currentIndex = TIMELINE_MONTH_OPTIONS.findIndex((option) => option === currentCount);
+    if (currentIndex === -1) {
+        return DEFAULT_TIMELINE_MONTHS;
+    }
+
+    return TIMELINE_MONTH_OPTIONS[(currentIndex + 1) % TIMELINE_MONTH_OPTIONS.length];
+}
+
+function pushPlanningItemByMonth<T extends { monthKey: string }>(map: Map<string, T[]>, item: T) {
+    const items = map.get(item.monthKey) ?? [];
+    items.push(item);
+    map.set(item.monthKey, items);
+}
+
+function getMonthReality(params: {
+    monthKey: string;
+    wallets: Wallet[];
+    creditCards: CreditCard[];
+    creditCardInvoices: CreditCardInvoice[];
+    transactions: Transaction[];
+    disabledInheritedExpenseIds: Set<string>;
+    disabledIncomeIds: Set<string>;
+}): MonthReality {
+    const { monthKey, wallets, creditCards, creditCardInvoices, transactions, disabledInheritedExpenseIds, disabledIncomeIds } = params;
+    const activeWalletIds = new Set(wallets.filter((wallet) => wallet.isActive).map((wallet) => wallet.id));
+    const activeCardIds = new Set(creditCards.filter((card) => card.isActive).map((card) => card.id));
+    const cardNameById = new Map(creditCards.map((card) => [card.id, card.name]));
+
+    let income = 0;
+    let walletSpendings = 0;
+    const incomeItems: MonthReality["incomeItems"] = [];
+    const inheritedItems: MonthReality["inheritedItems"] = [];
+
+    for (const transaction of transactions) {
+        if (!isIncludedStatus(transaction.status) || getMonthKeyFromDateValue(transaction.date) !== monthKey) {
+            continue;
+        }
+
+        if (transaction.type === "income") {
+            if (activeWalletIds.has(transaction.inWallet)) {
+                income += transaction.value;
+                incomeItems.push({
+                    id: `income-transaction:${transaction.id}`,
+                    label: transaction.description.trim() || transaction.category.label,
+                    amount: roundToCents(transaction.value),
+                    iconName: transaction.category.icon,
+                    isDisabled: disabledIncomeIds.has(`income-transaction:${transaction.id}`),
+                });
+            }
+            continue;
+        }
+
+        if (transaction.type === "spending" && transaction.paymentMethod !== "credit_card" && activeWalletIds.has(transaction.inWallet)) {
+            walletSpendings += transaction.value;
+            inheritedItems.push({
+                id: `transaction:${transaction.id}`,
+                source: "transaction",
+                label: transaction.description.trim() || transaction.category.label,
+                amount: roundToCents(transaction.value),
+                iconName: transaction.category.icon,
+                isDisabled: disabledInheritedExpenseIds.has(`transaction:${transaction.id}`),
+            });
+        }
+    }
+
+    let invoiceSpendings = 0;
+    for (const invoice of creditCardInvoices) {
+        if (!activeCardIds.has(invoice.creditCardId) || getMonthKeyFromDateValue(invoice.dueDate) !== monthKey) {
+            continue;
+        }
+
+        const openAmount = roundToCents(Math.max(0, invoice.totalAmount - invoice.paidAmount));
+        if (openAmount <= 0) {
+            continue;
+        }
+
+        invoiceSpendings += openAmount;
+        inheritedItems.push({
+            id: `invoice:${invoice.id}`,
+            source: "invoice",
+            label: `Fatura ${cardNameById.get(invoice.creditCardId) ?? "cartao"}`,
+            amount: openAmount,
+            iconName: null,
+            isDisabled: disabledInheritedExpenseIds.has(`invoice:${invoice.id}`),
+        });
+    }
+
+    incomeItems.sort((a, b) => a.label.localeCompare(b.label, "pt-BR", { sensitivity: "base" }));
+    inheritedItems.sort((a, b) => {
+        if (a.source !== b.source) {
+            return a.source === "invoice" ? 1 : -1;
+        }
+        return a.label.localeCompare(b.label, "pt-BR", { sensitivity: "base" });
+    });
+
+    const inheritedExpenses = roundToCents(walletSpendings + invoiceSpendings);
+    const disabledIncome = roundToCents(incomeItems.filter((item) => item.isDisabled).reduce((sum, item) => sum + item.amount, 0));
+    const disabledInheritedExpenses = roundToCents(inheritedItems.filter((item) => item.isDisabled).reduce((sum, item) => sum + item.amount, 0));
+
+    return {
+        originalIncome: roundToCents(income),
+        activeIncome: roundToCents(income - disabledIncome),
+        originalIncomeCount: incomeItems.length,
+        activeIncomeCount: incomeItems.filter((item) => !item.isDisabled).length,
+        incomeItems,
+        walletSpendings: roundToCents(walletSpendings),
+        invoiceSpendings: roundToCents(invoiceSpendings),
+        inheritedExpenses,
+        activeInheritedExpenses: roundToCents(inheritedExpenses - disabledInheritedExpenses),
+        disabledInheritedExpenses,
+        inheritedItems,
+    };
+}
+
+export function getBalanceTone(value: number, income: number): BalanceTone {
+    if (value < 0) {
+        return "negative";
+    }
+
+    if (value <= Math.max(300, income * 0.1)) {
+        return "tight";
+    }
+
+    return "positive";
+}
+
+export function buildTimelineProjection(params: {
+    wallets: Wallet[];
+    creditCards: CreditCard[];
+    creditCardInvoices: CreditCardInvoice[];
+    transactions: Transaction[];
+    ledgerEntries: LedgerEntry[];
+    wishItems: WishItem[];
+    planning: PlanningState;
+    monthsToShow: number;
+}): TimelineProjection {
+    const currentMonth = getCurrentMonthKey();
+    const safeMonthsToShow = TIMELINE_MONTH_OPTIONS.includes(params.monthsToShow as (typeof TIMELINE_MONTH_OPTIONS)[number]) ? params.monthsToShow : DEFAULT_TIMELINE_MONTHS;
+    const monthKeys = Array.from({ length: safeMonthsToShow }, (_, index) => shiftMonth(currentMonth, index));
+    const openingBalance = getOpeningBalance(currentMonth, params.wallets, params.ledgerEntries);
+    const disabledInheritedExpenseIds = new Set(params.planning.disabledInheritedExpenseIds ?? []);
+    const disabledIncomeIds = new Set(params.planning.disabledIncomeIds ?? []);
+    const revenueOverridesByMonth = new Map(params.planning.revenueOverrides.map((override) => [override.monthKey, override]));
+    const simulatedExpensesByMonth = new Map<string, PlanningSimulatedExpense[]>();
+    const simulatedIncomesByMonth = new Map<string, PlanningSimulatedIncome[]>();
+    const activeWishItemsById = new Map(params.wishItems.filter((item) => item.isActive).map((item) => [item.id, item]));
+    const wishlistSelectionsByMonth = new Map<string, WishlistProjectionItem[]>();
+
+    params.planning.simulatedExpenses.forEach((expense) => {
+        pushPlanningItemByMonth(simulatedExpensesByMonth, expense);
+    });
+
+    params.planning.simulatedIncomes.forEach((income) => {
+        pushPlanningItemByMonth(simulatedIncomesByMonth, income);
+    });
+
+    params.planning.wishlistSelections.forEach((selection) => {
+        const wishItem = activeWishItemsById.get(selection.wishItemId);
+        if (!wishItem) {
+            return;
+        }
+
+        pushPlanningItemByMonth(wishlistSelectionsByMonth, {
+            id: selection.id,
+            wishItemId: selection.wishItemId,
+            monthKey: selection.monthKey,
+            label: wishItem.description.trim() || "Desejo",
+            amount: roundToCents(wishItem.value),
+            createdAt: selection.createdAt,
+        });
+    });
+
+    let originalAccumulated = openingBalance;
+    let currentAccumulated = openingBalance;
+
+    return {
+        openingBalance,
+        months: monthKeys.map((monthKey, index) => {
+            const openingMonthBalance = currentAccumulated;
+            const reality = getMonthReality({
+                monthKey,
+                wallets: params.wallets,
+                creditCards: params.creditCards,
+                creditCardInvoices: params.creditCardInvoices,
+                transactions: params.transactions,
+                disabledInheritedExpenseIds,
+                disabledIncomeIds,
+            });
+            const simulatedExpenseItems = simulatedExpensesByMonth.get(monthKey) ?? [];
+            const wishlistExpenseItems = wishlistSelectionsByMonth.get(monthKey) ?? [];
+            const simulatedIncomeItems: SimulatedIncomeItem[] = (simulatedIncomesByMonth.get(monthKey) ?? []).map((income) => ({
+                id: income.id,
+                label: income.description.trim() || "Receita simulada",
+                amount: income.amount,
+                iconName: null,
+                source: "simulated_income",
+            }));
+            const legacyRevenueOverride = revenueOverridesByMonth.get(monthKey);
+
+            if (legacyRevenueOverride) {
+                const legacyDelta = roundToCents(legacyRevenueOverride.amount - reality.originalIncome);
+                if (Math.abs(legacyDelta) > 0.009) {
+                    simulatedIncomeItems.push({
+                        id: `legacy-override:${monthKey}`,
+                        label: "Ajuste legado de receita",
+                        amount: legacyDelta,
+                        iconName: null,
+                        source: "legacy_override",
+                        overrideMonthKey: monthKey,
+                    });
+                }
+            }
+
+            const simulatedIncome = roundToCents(sumAmounts(simulatedIncomeItems));
+            const simulatedExpenses = roundToCents(sumAmounts(simulatedExpenseItems) + sumAmounts(wishlistExpenseItems));
+            const currentIncome = roundToCents(reality.activeIncome + simulatedIncome);
+            const originalMonthBalance = roundToCents(reality.originalIncome - reality.inheritedExpenses);
+            const currentMonthBalance = roundToCents(currentIncome - reality.activeInheritedExpenses - simulatedExpenses);
+
+            originalAccumulated = roundToCents(originalAccumulated + originalMonthBalance);
+            currentAccumulated = roundToCents(currentAccumulated + currentMonthBalance);
+
+            return {
+                ...reality,
+                monthKey,
+                monthLabel: formatMonthLabel(monthKey),
+                shortMonthLabel: formatMonthLabel(monthKey, "MMMM"),
+                year: formatMonthLabel(monthKey, "yyyy"),
+                isCurrentMonth: index === 0,
+                openingMonthBalance,
+                simulatedIncome,
+                simulatedIncomeItems,
+                currentIncome,
+                simulatedExpenses,
+                simulatedExpenseItems,
+                wishlistExpenseItems,
+                originalMonthBalance,
+                currentMonthBalance,
+                originalAccumulated,
+                currentAccumulated,
+            };
+        }),
+    };
+}
+
+export function mergePlanningUpdate(planning: PlanningState, update: Partial<PlanningState>): PlanningState {
+    return {
+        simulatedExpenses: update.simulatedExpenses ?? planning.simulatedExpenses,
+        simulatedIncomes: update.simulatedIncomes ?? planning.simulatedIncomes,
+        wishlistSelections: update.wishlistSelections ?? planning.wishlistSelections,
+        revenueOverrides: update.revenueOverrides ?? planning.revenueOverrides,
+        disabledInheritedExpenseIds: update.disabledInheritedExpenseIds ?? planning.disabledInheritedExpenseIds ?? [],
+        disabledIncomeIds: update.disabledIncomeIds ?? planning.disabledIncomeIds ?? [],
+        timelineSelectedWalletIds: update.timelineSelectedWalletIds ?? planning.timelineSelectedWalletIds ?? [],
+        timelineCompareMode: update.timelineCompareMode ?? planning.timelineCompareMode ?? true,
+        timelineHorizontalMode: update.timelineHorizontalMode ?? planning.timelineHorizontalMode ?? false,
+        timelineMonthCount: update.timelineMonthCount ?? planning.timelineMonthCount ?? DEFAULT_TIMELINE_MONTHS,
+        reportsSelectedWalletIds: update.reportsSelectedWalletIds ?? planning.reportsSelectedWalletIds ?? [],
+        reportsSelectedCreditCardIds: update.reportsSelectedCreditCardIds ?? planning.reportsSelectedCreditCardIds ?? [],
+        reportsRange: update.reportsRange ?? planning.reportsRange ?? 9,
+    };
+}

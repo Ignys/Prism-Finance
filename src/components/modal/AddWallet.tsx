@@ -1,11 +1,12 @@
 import { ChangeEvent, useEffect, useMemo, useState } from "react";
-import { AlertTriangle, RotateCcw, Trash2 } from "lucide-react";
+import { RotateCcw, Trash2 } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
 import { DEFAULT_WALLET_ID, type Wallet, useFinanceActions, useFinanceWallets } from "../../context/FinanceContext";
 import { useModal } from "../../context/ModalContext";
 import { extractCurrencyDigits, formatCurrencyFromDigits, parseCurrencyDigitsToNumber } from "../../lib/currencyMask";
 import { DEFAULT_WALLET_COLOR, DEFAULT_WALLET_ICON, isDefaultWalletIcon, normalizeWalletColor, normalizeWalletIcon } from "../../lib/walletVisual";
 import { WalletAvatar } from "../common/WalletAvatar";
+import { ConfirmActionModal } from "./ConfirmActionModal";
 
 const MAX_IMAGE_SIZE_BYTES = 350 * 1024;
 const MAX_IMAGE_DIMENSION = 320;
@@ -101,8 +102,8 @@ const SECONDARY_BUTTON_CLASS =
 
 export function AddWallet({ mode = "create", walletId, initialWallet }: AddWalletProps) {
     const wallets = useFinanceWallets();
-    const { addWallet, deleteWallet, setWalletActive } = useFinanceActions();
-    const { closeModal } = useModal();
+    const { addWallet, deleteWallet, permanentlyDeleteWallet, setWalletActive } = useFinanceActions();
+    const { closeModal, openModal } = useModal();
 
     const editingWallet = useMemo(() => {
         if (mode !== "edit") {
@@ -122,11 +123,11 @@ export function AddWallet({ mode = "create", walletId, initialWallet }: AddWalle
     const [walletColor, setWalletColor] = useState(DEFAULT_WALLET_COLOR);
     const [customIcon, setCustomIcon] = useState<string | null>(null);
     const [iconUrlInput, setIconUrlInput] = useState("");
+    const [includeInMainTotals, setIncludeInMainTotals] = useState(true);
     const [uploadError, setUploadError] = useState("");
     const [submitError, setSubmitError] = useState("");
     const [isProcessingUpload, setIsProcessingUpload] = useState(false);
     const [submitting, setSubmitting] = useState(false);
-    const [confirmingDelete, setConfirmingDelete] = useState(false);
 
     useEffect(() => {
         if (mode === "edit") {
@@ -142,9 +143,9 @@ export function AddWallet({ mode = "create", walletId, initialWallet }: AddWalle
             setWalletColor(normalizeWalletColor(editingWallet.color));
             setCustomIcon(usingDefaultIcon ? null : normalizedIcon);
             setIconUrlInput(!usingDefaultIcon && /^https?:\/\//i.test(normalizedIcon) ? normalizedIcon : "");
+            setIncludeInMainTotals(editingWallet.includeInMainTotals);
             setUploadError("");
             setSubmitError("");
-            setConfirmingDelete(false);
             return;
         }
 
@@ -153,9 +154,9 @@ export function AddWallet({ mode = "create", walletId, initialWallet }: AddWalle
         setWalletColor(DEFAULT_WALLET_COLOR);
         setCustomIcon(null);
         setIconUrlInput("");
+        setIncludeInMainTotals(true);
         setUploadError("");
         setSubmitError("");
-        setConfirmingDelete(false);
     }, [editingWallet, mode]);
 
     const isEditMode = mode === "edit" && Boolean(editingWallet);
@@ -275,6 +276,7 @@ export function AddWallet({ mode = "create", walletId, initialWallet }: AddWalle
                 currency: targetWallet?.currency ?? "BRL",
                 color: resolvedColor,
                 isActive: targetWallet?.isActive ?? true,
+                includeInMainTotals,
                 createdAt: targetWallet?.createdAt ?? new Date().toISOString(),
             });
 
@@ -300,6 +302,26 @@ export function AddWallet({ mode = "create", walletId, initialWallet }: AddWalle
             await setWalletActive(editingWallet.id, true);
             return true;
         });
+
+    const openPermanentDeleteModal = () => {
+        if (!editingWallet || editingWallet.isActive || isDefaultWallet) {
+            return;
+        }
+
+        openModal(
+            <ConfirmActionModal
+                title="Excluir carteira em definitivo?"
+                description={`A carteira "${editingWallet.name}" sera removida permanentemente.`}
+                consequences={[
+                    "Transacoes e transferencias ligadas a esta carteira serao removidas em definitivo.",
+                    "Pagamentos feitos por esta carteira tambem serao removidos.",
+                    "Cartoes vinculados serao mantidos, mas faturas remanescentes podem ser recalculadas.",
+                ]}
+                confirmLabel="Excluir em definitivo"
+                onConfirm={() => permanentlyDeleteWallet(editingWallet.id)}
+            />,
+        );
+    };
 
     return (
         <div className="rounded-2xl border border-white/[0.09] bg-[#131313] p-5 text-white shadow-[0_26px_70px_-38px_rgba(0,0,0,0.95)]">
@@ -341,6 +363,30 @@ export function AddWallet({ mode = "create", walletId, initialWallet }: AddWalle
                             placeholder="R$ 0,00"
                         />
                     </label>
+                </div>
+
+                <div className="rounded-xl border border-white/[0.1] bg-black/35 p-3">
+                    <div className="flex items-start justify-between gap-3">
+                        <div>
+                            <p className="text-sm font-medium text-white">Contabilizar nos numeros principais</p>
+                            <p className="mt-1 text-xs text-white/50">Quando desligado, esta carteira nao entra no Saldo, Receitas e Despesas globais do app.</p>
+                        </div>
+                        <button
+                            type="button"
+                            role="switch"
+                            aria-checked={includeInMainTotals}
+                            onClick={() => setIncludeInMainTotals((current) => !current)}
+                            className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full border transition-colors ${
+                                includeInMainTotals ? "border-emerald-400/45 bg-emerald-500/20" : "border-white/[0.14] bg-white/[0.06]"
+                            }`}
+                        >
+                            <span
+                                className={`inline-block h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${
+                                    includeInMainTotals ? "translate-x-6" : "translate-x-1"
+                                }`}
+                            />
+                        </button>
+                    </div>
                 </div>
 
                 <div className="rounded-xl border border-white/[0.1] bg-black/35 p-3">
@@ -413,19 +459,33 @@ export function AddWallet({ mode = "create", walletId, initialWallet }: AddWalle
                 <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2">
                         {isEditMode && editingWallet && !isDefaultWallet && (
-                            <button
-                                type="button"
-                                onClick={() => (editingWallet.isActive ? setConfirmingDelete((current) => !current) : void handleReactivate())}
-                                disabled={submitting}
-                                className={`inline-flex min-w-28 items-center justify-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
-                                    editingWallet.isActive
-                                        ? "border-red-400/25 bg-red-500/10 text-red-200 hover:border-red-400/45 hover:text-red-100"
-                                        : "border-emerald-400/35 bg-emerald-500/15 text-emerald-100 hover:border-emerald-400/55 hover:bg-emerald-500/20"
-                                }`}
-                            >
-                                {editingWallet.isActive ? <Trash2 size={15} /> : <RotateCcw size={15} />}
-                                {editingWallet.isActive ? "Excluir" : "Reativar"}
-                            </button>
+                            <>
+                                <button
+                                    type="button"
+                                    onClick={() => (editingWallet.isActive ? void handleDelete() : void handleReactivate())}
+                                    disabled={submitting}
+                                    className={`inline-flex min-w-28 items-center justify-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+                                        editingWallet.isActive
+                                            ? "border-amber-400/25 bg-amber-500/10 text-amber-100 hover:border-amber-400/45 hover:text-amber-50"
+                                            : "border-emerald-400/35 bg-emerald-500/15 text-emerald-100 hover:border-emerald-400/55 hover:bg-emerald-500/20"
+                                    }`}
+                                >
+                                    {editingWallet.isActive ? <Trash2 size={15} /> : <RotateCcw size={15} />}
+                                    {editingWallet.isActive ? "Arquivar" : "Reativar"}
+                                </button>
+
+                                {!editingWallet.isActive ? (
+                                    <button
+                                        type="button"
+                                        onClick={openPermanentDeleteModal}
+                                        disabled={submitting}
+                                        className="inline-flex min-w-40 items-center justify-center gap-2 rounded-xl border border-red-400/25 bg-red-500/10 px-3 py-2 text-sm font-medium text-red-200 transition-colors hover:border-red-400/45 hover:text-red-100 disabled:cursor-not-allowed disabled:opacity-60"
+                                    >
+                                        <Trash2 size={15} />
+                                        Excluir em definitivo
+                                    </button>
+                                ) : null}
+                            </>
                         )}
                     </div>
 
@@ -448,47 +508,6 @@ export function AddWallet({ mode = "create", walletId, initialWallet }: AddWalle
                     </div>
                 </div>
             </form>
-
-            {confirmingDelete && editingWallet && (
-                <div
-                    className="fixed inset-0 z-[120] flex items-center justify-center bg-black/70 px-4"
-                    onClick={() => setConfirmingDelete(false)}
-                >
-                    <div
-                        className="w-full max-w-md rounded-2xl border border-red-400/25 bg-[#171717] p-5 text-white shadow-[0_24px_60px_-32px_rgba(0,0,0,0.9)]"
-                        onClick={(event) => event.stopPropagation()}
-                    >
-                        <div className="flex items-start gap-2">
-                            <AlertTriangle size={18} className="mt-0.5 shrink-0 text-red-200" />
-                            <div>
-                                <h3 className="text-lg font-semibold">Excluir carteira?</h3>
-                                <p className="mt-1 text-sm text-white/70">
-                                    Se existir historico de transacoes, a carteira sera arquivada e nao podera ser usada em novas transacoes.
-                                </p>
-                            </div>
-                        </div>
-
-                        <div className="mt-5 flex justify-end gap-2">
-                            <button
-                                type="button"
-                                onClick={() => setConfirmingDelete(false)}
-                                disabled={submitting}
-                                className="inline-flex min-w-24 items-center justify-center rounded-xl border border-white/[0.14] bg-white/[0.03] px-4 py-2 text-sm font-medium text-white/75 transition-colors hover:border-white/[0.24] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
-                            >
-                                Cancelar
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => void handleDelete()}
-                                disabled={submitting}
-                                className="inline-flex min-w-28 items-center justify-center rounded-xl border border-red-400/35 bg-red-500/15 px-4 py-2 text-sm font-semibold text-red-100 transition-colors hover:border-red-400/55 hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-60"
-                            >
-                                Confirmar exclusao
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
         </div>
     );
 }

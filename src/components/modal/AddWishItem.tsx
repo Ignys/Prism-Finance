@@ -50,6 +50,7 @@ export function AddWishItem({ mode = "create", wishItemId, initialWishItem }: Ad
     const [priority, setPriority] = useState<WishItemPriority>(2);
     const [description, setDescription] = useState("");
     const [link, setLink] = useState("");
+    const [imageUrl, setImageUrl] = useState("");
     const [submitting, setSubmitting] = useState(false);
 
     const editingWishItem = useMemo(() => {
@@ -125,6 +126,7 @@ export function AddWishItem({ mode = "create", wishItemId, initialWishItem }: Ad
     const amountValue = parseCurrencyDigitsToNumber(amountDigits);
     const normalizedDescription = description.trim();
     const normalizedLink = normalizeUrl(link);
+    const normalizedImageUrl = normalizeUrl(imageUrl);
     const canSubmit = amountValue > 0 && normalizedDescription.length > 0 && categoryOptions.some((option) => option.categoryId === categoryId);
     const isEditMode = mode === "edit" && Boolean(editingWishItem);
 
@@ -135,6 +137,7 @@ export function AddWishItem({ mode = "create", wishItemId, initialWishItem }: Ad
             setPriority(editingWishItem.priority);
             setDescription(editingWishItem.description);
             setLink(editingWishItem.link ?? "");
+            setImageUrl(editingWishItem.imageUrl ?? "");
             return;
         }
 
@@ -143,6 +146,7 @@ export function AddWishItem({ mode = "create", wishItemId, initialWishItem }: Ad
         setPriority(2);
         setDescription("");
         setLink("");
+        setImageUrl("");
     }, [editingWishItem]);
 
     const handleCategorySelect = (optionId: string) => {
@@ -188,6 +192,7 @@ export function AddWishItem({ mode = "create", wishItemId, initialWishItem }: Ad
                 priority,
                 description: normalizedDescription,
                 link: normalizedLink,
+                imageUrl: normalizedImageUrl,
                 isActive: targetWishItem?.isActive ?? true,
                 createdAt: targetWishItem?.createdAt ?? new Date().toISOString(),
             });
@@ -296,6 +301,11 @@ export function AddWishItem({ mode = "create", wishItemId, initialWishItem }: Ad
                     <label className="flex flex-col gap-1.5">
                         <span className={FIELD_LABEL_CLASS}>Link</span>
                         <input type="text" value={link} onChange={(event) => setLink(event.target.value)} className={FIELD_INPUT_CLASS} placeholder="https://..." />
+                    </label>
+
+                    <label className="flex flex-col gap-1.5">
+                        <span className={FIELD_LABEL_CLASS}>Link da imagem</span>
+                        <input type="text" value={imageUrl} onChange={(event) => setImageUrl(event.target.value)} className={FIELD_INPUT_CLASS} placeholder="https://imagem-do-produto..." />
                     </label>
                 </section>
 

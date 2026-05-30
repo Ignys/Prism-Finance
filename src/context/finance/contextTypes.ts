@@ -64,6 +64,7 @@ export interface FinanceActionsValue {
     setFavoriteWallet: (walletId: string) => Promise<void>;
     setWalletActive: (walletId: string, isActive: boolean) => Promise<void>;
     deleteWallet: (walletId: string) => Promise<void>;
+    permanentlyDeleteWallet: (walletId: string) => Promise<void>;
     updateFinance: (newFinance: FinanceSnapshot) => Promise<void>;
     addTransaction: (newTransaction: TransactionDraft) => Promise<void>;
     updateTransaction: (draft: UpdateTransactionDraft) => Promise<void>;
@@ -82,12 +83,16 @@ export interface FinanceActionsValue {
     reorderCategories: (categoryIds: string[]) => Promise<void>;
     reorderTags: (tagIds: string[]) => Promise<void>;
     setBeneficiaryActive: (beneficiaryId: string, isActive: boolean) => Promise<void>;
+    permanentlyDeleteBeneficiary: (beneficiaryId: string) => Promise<void>;
     setCategoryActive: (categoryId: string, isActive: boolean) => Promise<void>;
+    permanentlyDeleteCategory: (categoryId: string) => Promise<void>;
     setTagActive: (tagId: string, isActive: boolean) => Promise<void>;
+    permanentlyDeleteTag: (tagId: string) => Promise<void>;
     addCreditCard: (newCreditCard: CreditCard) => Promise<void>;
     setFavoriteCreditCard: (creditCardId: string) => Promise<void>;
     setCreditCardActive: (creditCardId: string, isActive: boolean) => Promise<void>;
     deleteCreditCard: (creditCardId: string) => Promise<void>;
+    permanentlyDeleteCreditCard: (creditCardId: string) => Promise<void>;
     payCreditCardInvoice: (draft: PayCreditCardInvoiceDraft) => Promise<void>;
     setCreditCardInvoicesPaidState: (draft: SetCreditCardInvoicesPaidStateDraft) => Promise<void>;
     removeWishItem: (wishItemId: string) => Promise<void>;

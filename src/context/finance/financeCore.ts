@@ -140,6 +140,7 @@ export interface Wallet {
     currency: string;
     color: string;
     isActive: boolean;
+    includeInMainTotals: boolean;
     createdAt: string;
 }
 
@@ -190,6 +191,7 @@ export interface WishItem {
     priority: WishItemPriority;
     description: string;
     link: string | null;
+    imageUrl: string | null;
     isActive: boolean;
     createdAt: string;
 }
@@ -215,6 +217,13 @@ export interface PlanningSimulatedIncome {
     createdAt: string;
 }
 
+export interface PlanningWishlistSelection {
+    id: string;
+    wishItemId: string;
+    monthKey: string;
+    createdAt: string;
+}
+
 export interface PlanningRevenueOverride {
     monthKey: string;
     amount: number;
@@ -224,9 +233,17 @@ export interface PlanningRevenueOverride {
 export interface PlanningState {
     simulatedExpenses: PlanningSimulatedExpense[];
     simulatedIncomes: PlanningSimulatedIncome[];
+    wishlistSelections: PlanningWishlistSelection[];
     revenueOverrides: PlanningRevenueOverride[];
     disabledInheritedExpenseIds: string[];
     disabledIncomeIds: string[];
+    timelineSelectedWalletIds: string[];
+    timelineCompareMode: boolean;
+    timelineHorizontalMode: boolean;
+    timelineMonthCount: 3 | 6 | 9 | 12;
+    reportsSelectedWalletIds: string[];
+    reportsSelectedCreditCardIds: string[];
+    reportsRange: 6 | 9;
 }
 
 export interface FinanceSnapshot {
@@ -311,6 +328,10 @@ interface PlanningSimulatedIncomeInput extends Partial<PlanningSimulatedIncome> 
     id?: string;
 }
 
+interface PlanningWishlistSelectionInput extends Partial<PlanningWishlistSelection> {
+    id?: string;
+}
+
 type PlanningRevenueOverrideInput = Partial<PlanningRevenueOverride>;
 
 interface BeneficiaryInput extends Partial<Beneficiary> {
@@ -350,15 +371,24 @@ export const DEFAULT_WALLET: Wallet = {
     currency: "BRL",
     color: DEFAULT_WALLET_COLOR,
     isActive: true,
+    includeInMainTotals: true,
     createdAt: new Date().toISOString(),
 };
 
 export const DEFAULT_PLANNING_STATE: PlanningState = {
     simulatedExpenses: [],
     simulatedIncomes: [],
+    wishlistSelections: [],
     revenueOverrides: [],
     disabledInheritedExpenseIds: [],
     disabledIncomeIds: [],
+    timelineSelectedWalletIds: [],
+    timelineCompareMode: true,
+    timelineHorizontalMode: false,
+    timelineMonthCount: 9,
+    reportsSelectedWalletIds: [],
+    reportsSelectedCreditCardIds: [],
+    reportsRange: 9,
 };
 
 interface SystemCategorySeed {
@@ -901,6 +931,7 @@ export function normalizeWallet(wallet: WalletInput): Wallet {
         currency: asString(wallet.currency, "BRL").toUpperCase(),
         color: asString(wallet.color, DEFAULT_WALLET_COLOR),
         isActive: asBoolean(wallet.isActive, true),
+        includeInMainTotals: asBoolean(wallet.includeInMainTotals, true),
         createdAt: asDateTimeString(wallet.createdAt, getNowIso()),
     };
 }
@@ -1010,6 +1041,7 @@ export function normalizeWishItem(wishItem: WishItemInput): WishItem {
         priority: normalizeWishItemPriority(wishItem.priority),
         description: asString(wishItem.description, "Desejo").trim() || "Desejo",
         link: asNullableString(wishItem.link, null)?.trim() || null,
+        imageUrl: asNullableString(wishItem.imageUrl, null)?.trim() || null,
         isActive: asBoolean(wishItem.isActive, true),
         createdAt: asDateTimeString(wishItem.createdAt, getNowIso()),
     };
@@ -1120,6 +1152,17 @@ function normalizePlanningRevenueOverride(input: PlanningRevenueOverrideInput): 
     };
 }
 
+function normalizePlanningWishlistSelection(input: PlanningWishlistSelectionInput, index: number): PlanningWishlistSelection {
+    const now = getNowIso();
+
+    return {
+        id: asString(input.id, `planning-wishlist-${index}-${Date.now()}`),
+        wishItemId: asString(input.wishItemId, "").trim(),
+        monthKey: normalizePlanningMonthKey(input.monthKey),
+        createdAt: asDateTimeString(input.createdAt, now),
+    };
+}
+
 export function normalizePlanningState(rawPlanning: unknown): PlanningState {
     if (!isRecord(rawPlanning)) {
         return DEFAULT_PLANNING_STATE;
@@ -1163,6 +1206,42 @@ export function normalizePlanningState(rawPlanning: unknown): PlanningState {
         incomesById.set(income.id, income);
     });
 
+    const wishlistSelectionsByWishItemId = new Map<string, PlanningWishlistSelection>();
+    asArray(rawPlanning.wishlistSelections).forEach((rawSelection, index) => {
+        if (!isRecord(rawSelection)) {
+            return;
+        }
+
+        const selection = normalizePlanningWishlistSelection(rawSelection, index);
+        if (!selection.wishItemId) {
+            return;
+        }
+
+        const existingSelection = wishlistSelectionsByWishItemId.get(selection.wishItemId);
+        if (!existingSelection) {
+            wishlistSelectionsByWishItemId.set(selection.wishItemId, selection);
+            return;
+        }
+
+        const shouldReplaceExisting =
+            selection.createdAt > existingSelection.createdAt ||
+            (selection.createdAt === existingSelection.createdAt &&
+                (selection.monthKey > existingSelection.monthKey ||
+                    (selection.monthKey === existingSelection.monthKey && selection.id > existingSelection.id)));
+
+        if (shouldReplaceExisting) {
+            wishlistSelectionsByWishItemId.set(selection.wishItemId, selection);
+        }
+    });
+
+    const rawTimelineMonthCount = asNumber(rawPlanning.timelineMonthCount, DEFAULT_PLANNING_STATE.timelineMonthCount);
+    const normalizedTimelineMonthCount =
+        rawTimelineMonthCount === 3 || rawTimelineMonthCount === 6 || rawTimelineMonthCount === 9 || rawTimelineMonthCount === 12
+            ? rawTimelineMonthCount
+            : DEFAULT_PLANNING_STATE.timelineMonthCount;
+    const rawReportsRange = asNumber(rawPlanning.reportsRange, DEFAULT_PLANNING_STATE.reportsRange);
+    const normalizedReportsRange = rawReportsRange === 6 || rawReportsRange === 9 ? rawReportsRange : DEFAULT_PLANNING_STATE.reportsRange;
+
     return {
         simulatedExpenses: Array.from(expensesById.values()).sort((a, b) => {
             if (a.monthKey === b.monthKey) {
@@ -1172,6 +1251,15 @@ export function normalizePlanningState(rawPlanning: unknown): PlanningState {
         }),
         simulatedIncomes: Array.from(incomesById.values()).sort((a, b) => {
             if (a.monthKey === b.monthKey) {
+                return a.createdAt.localeCompare(b.createdAt);
+            }
+            return a.monthKey.localeCompare(b.monthKey);
+        }),
+        wishlistSelections: Array.from(wishlistSelectionsByWishItemId.values()).sort((a, b) => {
+            if (a.monthKey === b.monthKey) {
+                if (a.createdAt === b.createdAt) {
+                    return a.id.localeCompare(b.id);
+                }
                 return a.createdAt.localeCompare(b.createdAt);
             }
             return a.monthKey.localeCompare(b.monthKey);
@@ -1191,6 +1279,31 @@ export function normalizePlanningState(rawPlanning: unknown): PlanningState {
                 ),
             ),
         ).sort((a, b) => a.localeCompare(b)),
+        timelineSelectedWalletIds: Array.from(
+            new Set(
+                asArray(rawPlanning.timelineSelectedWalletIds).filter(
+                    (value): value is string => typeof value === "string" && value.trim().length > 0,
+                ),
+            ),
+        ).sort((a, b) => a.localeCompare(b)),
+        timelineCompareMode: asBoolean(rawPlanning.timelineCompareMode, DEFAULT_PLANNING_STATE.timelineCompareMode),
+        timelineHorizontalMode: asBoolean(rawPlanning.timelineHorizontalMode, DEFAULT_PLANNING_STATE.timelineHorizontalMode),
+        timelineMonthCount: normalizedTimelineMonthCount,
+        reportsSelectedWalletIds: Array.from(
+            new Set(
+                asArray(rawPlanning.reportsSelectedWalletIds).filter(
+                    (value): value is string => typeof value === "string" && value.trim().length > 0,
+                ),
+            ),
+        ).sort((a, b) => a.localeCompare(b)),
+        reportsSelectedCreditCardIds: Array.from(
+            new Set(
+                asArray(rawPlanning.reportsSelectedCreditCardIds).filter(
+                    (value): value is string => typeof value === "string" && value.trim().length > 0,
+                ),
+            ),
+        ).sort((a, b) => a.localeCompare(b)),
+        reportsRange: normalizedReportsRange,
     };
 }
 
@@ -1361,7 +1474,16 @@ function canReuseTransactionLedgerEntries(existingEntries: LedgerEntry[], expect
     });
 }
 
-export function calculateFinanceSummary(transactionGroups: TransactionGroup[], transactions: StoredTransaction[]): Pick<FinanceSnapshot, "despesas" | "receitas"> {
+function shouldIncludeWalletInMainTotals(walletById: Map<string, Wallet>, walletId: string | null | undefined): boolean {
+    if (!walletId) {
+        return true;
+    }
+
+    return walletById.get(walletId)?.includeInMainTotals ?? true;
+}
+
+export function calculateFinanceSummary(wallets: Wallet[], transactionGroups: TransactionGroup[], transactions: StoredTransaction[]): Pick<FinanceSnapshot, "despesas" | "receitas"> {
+    const walletById = new Map(wallets.map((wallet) => [wallet.id, wallet]));
     const groupById = new Map(transactionGroups?.map((group) => [group.id, group]));
 
     const totals = transactions.reduce(
@@ -1376,6 +1498,10 @@ export function calculateFinanceSummary(transactionGroups: TransactionGroup[], t
                     return acc;
                 }
                 acc.despesas += Math.abs(transaction.amount);
+                return acc;
+            }
+
+            if (!shouldIncludeWalletInMainTotals(walletById, group.sourceWalletId)) {
                 return acc;
             }
 
@@ -1400,7 +1526,7 @@ export function calculateFinanceSummary(transactionGroups: TransactionGroup[], t
 }
 
 export function calculateTotalBalance(wallets: Wallet[]): number {
-    return roundToCents(wallets.reduce((sum, wallet) => sum + wallet.balance, 0));
+    return roundToCents(wallets.reduce((sum, wallet) => sum + (wallet.includeInMainTotals ? wallet.balance : 0), 0));
 }
 
 export function toTransactionList(
@@ -1510,7 +1636,7 @@ export function createFinanceSnapshot(
     planning: PlanningState = DEFAULT_PLANNING_STATE,
 ): FinanceSnapshot {
     const withLedgerApplied = applyLedgerToWallets(wallets, ledgerEntries);
-    const summary = calculateFinanceSummary(transactionGroups, transactions);
+    const summary = calculateFinanceSummary(wallets, transactionGroups, transactions);
 
     return {
         despesas: summary.despesas,
@@ -1974,8 +2100,13 @@ export function normalizeFinanceSnapshot(rawFinance: unknown, userId: string | n
             currency: asString(rawWallet.currency, "BRL"),
             color: asString(rawWallet.color, DEFAULT_WALLET_COLOR),
             isActive: asBoolean(rawWallet.isActive, true),
+            includeInMainTotals: asBoolean(rawWallet.includeInMainTotals, true),
             createdAt: asDateTimeString(rawWallet.createdAt, now),
         });
+
+        if (!Object.prototype.hasOwnProperty.call(rawWallet, "includeInMainTotals")) {
+            changed = true;
+        }
 
         if (walletsById.has(normalizedWallet.id)) {
             changed = true;
@@ -2264,6 +2395,7 @@ export function normalizeFinanceSnapshot(rawFinance: unknown, userId: string | n
             priority: rawWishItem.priority,
             description: asString(rawWishItem.description, "Desejo"),
             link: asNullableString(rawWishItem.link, null),
+            imageUrl: asNullableString(rawWishItem.imageUrl, null),
             isActive: asBoolean(rawWishItem.isActive, true),
             createdAt: asDateTimeString(rawWishItem.createdAt, now),
         });

@@ -22,6 +22,7 @@ interface SingleSelectComboboxProps<T extends ComboboxOptionBase> {
     disabled?: boolean;
     disableSearch?: boolean;
     compactTrigger?: boolean;
+    triggerClassName?: string;
 }
 
 const DEFAULT_LABEL_CLASS = "text-[11px] uppercase tracking-[0.12em] text-white/50";
@@ -40,6 +41,7 @@ export function SingleSelectCombobox<T extends ComboboxOptionBase>({
     disabled = false,
     disableSearch = false,
     compactTrigger = false,
+    triggerClassName,
 }: SingleSelectComboboxProps<T>) {
     const [isOpen, setIsOpen] = useState(false);
     const [query, setQuery] = useState("");
@@ -105,6 +107,12 @@ export function SingleSelectCombobox<T extends ComboboxOptionBase>({
         setQuery("");
     };
 
+    const resolvedTriggerClassName =
+        triggerClassName ??
+        `flex w-full items-center justify-between rounded-xl border border-white/[0.1] bg-black/35 px-3 ${
+            compactTrigger ? "py-1.5 text-xs" : "py-2.5 text-sm"
+        } text-left text-white transition-colors`;
+
     return (
         <div ref={wrapperRef} className="relative flex flex-col gap-1.5">
             {labelContent ? labelContent : <span className={labelClassName}>{label}</span>}
@@ -117,9 +125,7 @@ export function SingleSelectCombobox<T extends ComboboxOptionBase>({
                     setIsOpen((current) => !current);
                 }}
                 disabled={disabled}
-                className={`flex w-full items-center justify-between rounded-xl border border-white/[0.1] bg-black/35 px-3 ${compactTrigger ? "py-1.5 text-xs" : "py-2.5 text-sm"} text-left text-white transition-colors ${
-                    disabled ? "cursor-not-allowed opacity-60" : "hover:border-white/[0.2]"
-                }`}
+                className={`${resolvedTriggerClassName} ${disabled ? "cursor-not-allowed opacity-60" : "hover:border-white/[0.2]"}`}
             >
                 <div className="min-w-0 flex-1">
                     {selectedOption ? renderSelectedContent ? renderSelectedContent(selectedOption) : renderOptionContent(selectedOption) : <span className="text-white/40">{placeholder}</span>}
@@ -142,7 +148,7 @@ export function SingleSelectCombobox<T extends ComboboxOptionBase>({
                         </div>
                     )}
 
-                    <div className="max-h-56 space-y-1 overflow-y-auto">
+                    <div className="elegant-scrollbar pr-1 max-h-56 space-y-1 overflow-y-auto">
                         {filteredOptions.map((option) => {
                             const selected = option.id === value;
                             return (

@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { CreditCard, FolderKanban, Tag, UserRound, Wallet } from "lucide-react";
+import { CreditCard, FolderKanban, Grid, LayoutGrid, Tag, UserRound, Wallet } from "lucide-react";
 import { type AppPage, usePage } from "../../context/PageContext";
 import { AuthShell } from "../layout/AuthShell";
 import { RegistryBeneficiariesSection } from "./registry/RegistryBeneficiariesSection";
@@ -13,7 +13,7 @@ type RegistryTabPage = "wallets" | "creditCards" | "categories" | "beneficiaries
 const REGISTRY_TABS: { page: RegistryTabPage; label: string; description: string; icon: ReactNode }[] = [
     { page: "wallets", label: "Carteiras", description: "Contas, saldos iniciais e favoritas", icon: <Wallet size={16} /> },
     { page: "creditCards", label: "Cartões de crédito", description: "Limites, vencimentos e cartões favoritos", icon: <CreditCard size={16} /> },
-    { page: "categories", label: "Categorias", description: "Classificação de receitas e despesas", icon: <FolderKanban size={16} /> },
+    { page: "categories", label: "Categorias", description: "Classificação de receitas e despesas", icon: <LayoutGrid size={16} /> },
     { page: "beneficiaries", label: "Beneficiários", description: "Pessoas, pets e centros de custo", icon: <UserRound size={16} /> },
     { page: "tags", label: "Tags", description: "Marcadores livres para organização", icon: <Tag size={16} /> },
 ];

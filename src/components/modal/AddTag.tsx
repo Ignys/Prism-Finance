@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
 import { type Tag as FinanceTag, useFinanceActions, useFinanceTags } from "../../context/FinanceContext";
 import { useModal } from "../../context/ModalContext";
+import { ConfirmActionModal } from "./ConfirmActionModal";
 import { ModalStructure } from "./ModalStructure";
 
 const FIELD_LABEL_CLASS = "text-[11px] uppercase tracking-[0.12em] text-white/50";
@@ -15,9 +16,9 @@ interface AddTagProps {
 }
 
 export function AddTag({ mode = "create", tagId, initialTag }: AddTagProps) {
-    const { addTag, setTagActive } = useFinanceActions();
+    const { addTag, permanentlyDeleteTag, setTagActive } = useFinanceActions();
     const tags = useFinanceTags();
-    const { closeModal } = useModal();
+    const { closeModal, openModal } = useModal();
     const [submitting, setSubmitting] = useState(false);
 
     const editingTag = useMemo(() => {
@@ -96,6 +97,25 @@ export function AddTag({ mode = "create", tagId, initialTag }: AddTagProps) {
             return true;
         });
 
+    const openPermanentDeleteModal = () => {
+        if (!editingTag || editingTag.isActive) {
+            return;
+        }
+
+        openModal(
+            <ConfirmActionModal
+                title="Excluir tag em definitivo?"
+                description={`A tag "${editingTag.name}" sera removida permanentemente.`}
+                consequences={[
+                    "A tag sera retirada das transacoes relacionadas.",
+                    "A tag tambem sera removida das recorrencias futuras em que estiver salva.",
+                ]}
+                confirmLabel="Excluir em definitivo"
+                onConfirm={() => permanentlyDeleteTag(editingTag.id)}
+            />,
+        );
+    };
+
     return (
         <ModalStructure height="auto" width="520px">
             <div className="rounded-2xl border border-white/[0.09] bg-[#131313] p-4 text-white shadow-[0_26px_70px_-38px_rgba(0,0,0,0.95)]">
@@ -153,19 +173,33 @@ export function AddTag({ mode = "create", tagId, initialTag }: AddTagProps) {
                 <div className="mt-5 flex items-center justify-between gap-3">
                     <div className="flex items-center gap-2">
                         {isEditMode && editingTag && (
-                            <button
-                                type="button"
-                                onClick={() => void handleToggleActive()}
-                                disabled={submitting}
-                                className={`inline-flex min-w-28 items-center justify-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
-                                    editingTag.isActive
-                                        ? "border-red-400/25 bg-red-500/10 text-red-200 hover:border-red-400/45 hover:text-red-100"
-                                        : "border-emerald-400/35 bg-emerald-500/15 text-emerald-100 hover:border-emerald-400/55 hover:bg-emerald-500/20"
-                                }`}
-                            >
-                                {editingTag.isActive ? <Trash2 size={15} /> : <RotateCcw size={15} />}
-                                {editingTag.isActive ? "Remover" : "Reativar"}
-                            </button>
+                            <>
+                                <button
+                                    type="button"
+                                    onClick={() => void handleToggleActive()}
+                                    disabled={submitting}
+                                    className={`inline-flex min-w-28 items-center justify-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+                                        editingTag.isActive
+                                            ? "border-amber-400/25 bg-amber-500/10 text-amber-100 hover:border-amber-400/45 hover:text-amber-50"
+                                            : "border-emerald-400/35 bg-emerald-500/15 text-emerald-100 hover:border-emerald-400/55 hover:bg-emerald-500/20"
+                                    }`}
+                                >
+                                    {editingTag.isActive ? <Trash2 size={15} /> : <RotateCcw size={15} />}
+                                    {editingTag.isActive ? "Arquivar" : "Reativar"}
+                                </button>
+
+                                {!editingTag.isActive ? (
+                                    <button
+                                        type="button"
+                                        onClick={openPermanentDeleteModal}
+                                        disabled={submitting}
+                                        className="inline-flex min-w-40 items-center justify-center gap-2 rounded-xl border border-red-400/25 bg-red-500/10 px-3 py-2 text-sm font-medium text-red-200 transition-colors hover:border-red-400/45 hover:text-red-100 disabled:cursor-not-allowed disabled:opacity-60"
+                                    >
+                                        <Trash2 size={15} />
+                                        Excluir em definitivo
+                                    </button>
+                                ) : null}
+                            </>
                         )}
                     </div>
 

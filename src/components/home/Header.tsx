@@ -1,12 +1,13 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { ArrowLeftRight, ChevronDown, FileText, FlaskConical, Gift, Home, LogOut, Settings, WalletCards } from "lucide-react";
+import { ArrowLeftRight, ChartNoAxesCombined, ChevronDown, FileText, Gift, Home, LogOut, Plus, Settings, WalletCards } from "lucide-react";
 import { signOut } from "firebase/auth";
 import {
     useFinanceCreditCardInvoices,
     useFinanceSession,
     useFinanceSummary,
     useFinanceTransactions,
+    useFinanceWallets,
 } from "../../context/FinanceContext";
 import { auth } from "../../firebase/firebaseClient";
 import { getMonthKeyFromDateValue } from "../../context/financeTypes";
@@ -25,7 +26,7 @@ const NAV_ITEMS: { label: string; page: AppPage; icon: React.ReactNode }[] = [
     { label: "Início", page: "home", icon: <Home size={iconSize} /> },
     { label: "Transações", page: "transactions", icon: <ArrowLeftRight size={iconSize} /> },
     { label: "Fatura", page: "statement", icon: <FileText size={iconSize} /> },
-    { label: "Planejamentos", page: "planning", icon: <FlaskConical size={iconSize} /> },
+    { label: "Análises", page: "planning", icon: <ChartNoAxesCombined size={iconSize} /> },
     { label: "Lista de Desejos", page: "wishlist", icon: <Gift size={iconSize} /> },
     { label: "Cadastros", page: "registry", icon: <WalletCards size={iconSize} /> },
 ];
@@ -54,6 +55,7 @@ export function Header() {
     const summary = useFinanceSummary();
     const creditCardInvoices = useFinanceCreditCardInvoices();
     const transactions = useFinanceTransactions();
+    const wallets = useFinanceWallets();
     const { goToPage, currentPage } = usePage();
     const { openModal } = useModal();
     const [hoveredNav, setHoveredNav] = useState<string | null>(null);
@@ -72,6 +74,7 @@ export function Header() {
             ),
         [creditCardInvoices],
     );
+    const walletInclusionById = useMemo(() => new Map(wallets.map((wallet) => [wallet.id, wallet.includeInMainTotals])), [wallets]);
     const monthlySummary = useMemo(() => {
         const currentMonthKey = getMonthKeyFromDateValue(getLocalTodayDate());
 
@@ -82,6 +85,10 @@ export function Header() {
                 }
 
                 if (getMonthKeyFromDateValue(transaction.date) !== currentMonthKey) {
+                    return acc;
+                }
+
+                if ((walletInclusionById.get(transaction.inWallet) ?? true) === false) {
                     return acc;
                 }
 
@@ -103,7 +110,7 @@ export function Header() {
             receitas: Number(totals.receitas.toFixed(2)),
             despesas: Number(totals.despesas.toFixed(2)),
         };
-    }, [transactions]);
+    }, [transactions, walletInclusionById]);
     const metricAmounts = useMemo(
         () => ({
             balance: summary.balance,
@@ -166,9 +173,9 @@ export function Header() {
     const indicatorTarget = hoveredNav ?? NAV_ITEMS.find((item) => item.page === normalizedPage)?.label ?? null;
 
     return (
-        <header className="pointer-events-none sticky top-5 z-20 mb-10 px-6">
+        <header className="pointer-events-none sticky top-5 z-20 mb-10 px-6 md:block flex items-center justify-center">
             <div
-                className="pointer-events-auto flex items-center justify-between gap-2 rounded-[18px] border border-white/[0.08] px-3.5 py-2.5"
+                className="pointer-events-auto flex flex-col-reverse md:flex-row items-center justify-between gap-2 rounded-[18px] border border-white/[0.08] px-3.5 py-2.5"
                 style={{
                     background: "rgba(10,10,10,0.92)",
                     backdropFilter: "blur(20px) saturate(180%)",
@@ -206,7 +213,7 @@ export function Header() {
                     })}
                 </nav>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-0.5">
                     {METRIC_ITEMS.map(({ label, amountKey, modalType, isBalance }, index) => {
                         const amount: number = metricAmounts[amountKey];
                         const amountColor = isBalance ? (amount >= 0 ? "text-emerald-300" : "text-red-400") : "text-white/85";
@@ -233,7 +240,9 @@ export function Header() {
                                                 "opacity-0 backdrop-blur-sm transition-opacity duration-[180ms] group-hover:opacity-100",
                                             ].join(" ")}
                                         >
-                                            Adicionar
+                                            <span className="p-1 rounded-full bg-white/[0.12]">
+                                                <Plus size={14} />
+                                            </span>
                                         </button>
                                     </div>
                                 ) : (
@@ -283,8 +292,7 @@ export function Header() {
                             <span className="inline-flex h-8 w-8 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-neutral-700 text-xs font-semibold text-white">
                                 {userPhotoUrl ? <img src={userPhotoUrl} alt={`Foto de ${userName}`} className="h-full w-full object-cover" /> : userInitial}
                             </span>
-                            <span className="max-w-[120px] truncate text-sm font-medium text-white/90">{userName}</span>
-                            <ChevronDown size={16} className={`text-white/60 transition-transform ${isProfileMenuOpen ? "rotate-180" : ""}`} />
+                            <ChevronDown size={16} className={`text-white/60 transition-transform md:inline-flex hidden ${isProfileMenuOpen ? "rotate-180" : ""}`} />
                         </button>
                         {isProfileMenuOpen && (
                             <div

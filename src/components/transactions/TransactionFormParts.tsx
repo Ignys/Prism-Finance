@@ -92,7 +92,7 @@ export function StatusField({ status, onChange, disabled = false }: StatusFieldP
                     type="button"
                     onClick={() => onChange("paid")}
                     disabled={disabled}
-                    className={`flex-1 rounded-lg px-3 py-3 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+                    className={`flex-1 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
                         status === "paid" ? "bg-emerald-500/20 text-emerald-200" : "text-white/65 hover:bg-white/[0.06]"
                     }`}
                 >
@@ -102,7 +102,7 @@ export function StatusField({ status, onChange, disabled = false }: StatusFieldP
                     type="button"
                     onClick={() => onChange("pending")}
                     disabled={disabled}
-                    className={`flex-1 rounded-lg px-3 py-3 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+                    className={`flex-1 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
                         status === "pending" ? "bg-amber-500/20 text-amber-200" : "text-white/65 hover:bg-white/[0.06]"
                     }`}
                 >

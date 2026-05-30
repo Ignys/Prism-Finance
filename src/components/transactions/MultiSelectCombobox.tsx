@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Check, ChevronsUpDown, Search } from "lucide-react";
+import { ChevronsUpDown, Dot, Search } from "lucide-react";
 import { normalizeComparisonText } from "../../context/finance/helpers";
 import type { ComboboxOptionBase } from "./SingleSelectCombobox";
 
@@ -11,10 +11,14 @@ interface MultiSelectComboboxProps<T extends ComboboxOptionBase> {
     options: T[];
     onChange: (values: string[]) => void;
     renderOptionContent: (option: T) => ReactNode;
+    allowEmptySelection?: boolean;
     labelClassName?: string;
+    triggerClassName?: string;
+    renderSelectedSummary?: (selectedOptions: T[]) => ReactNode;
 }
 
 const DEFAULT_LABEL_CLASS = "text-[11px] uppercase tracking-[0.12em] text-white/50";
+const DEFAULT_TRIGGER_CLASS = "flex w-full items-center justify-between rounded-xl border border-white/[0.1] bg-black/35 px-3 py-1.5 text-left text-xs text-white transition-colors hover:border-white/[0.2]";
 
 export function MultiSelectCombobox<T extends ComboboxOptionBase>({
     label,
@@ -24,7 +28,10 @@ export function MultiSelectCombobox<T extends ComboboxOptionBase>({
     options,
     onChange,
     renderOptionContent,
+    allowEmptySelection = true,
     labelClassName = DEFAULT_LABEL_CLASS,
+    triggerClassName = DEFAULT_TRIGGER_CLASS,
+    renderSelectedSummary,
 }: MultiSelectComboboxProps<T>) {
     const [isOpen, setIsOpen] = useState(false);
     const [query, setQuery] = useState("");
@@ -79,6 +86,9 @@ export function MultiSelectCombobox<T extends ComboboxOptionBase>({
     const toggleOption = (optionId: string) => {
         const selectedSet = new Set(normalizedValues);
         if (selectedSet.has(optionId)) {
+            if (!allowEmptySelection && normalizedValues.length === 1) {
+                return;
+            }
             selectedSet.delete(optionId);
         } else {
             selectedSet.add(optionId);
@@ -93,10 +103,14 @@ export function MultiSelectCombobox<T extends ComboboxOptionBase>({
             return placeholder;
         }
 
+        if (renderSelectedSummary) {
+            return renderSelectedSummary(selectedOptions);
+        }
+
         const visible = selectedOptions.slice(0, 2).map((option) => option.label).join(", ");
         const hiddenCount = Math.max(selectedOptions.length - 2, 0);
         return hiddenCount > 0 ? `${visible} +${hiddenCount}` : visible;
-    }, [placeholder, selectedOptions]);
+    }, [placeholder, renderSelectedSummary, selectedOptions]);
 
     return (
         <div ref={wrapperRef} className="relative flex flex-col gap-1.5">
@@ -104,7 +118,7 @@ export function MultiSelectCombobox<T extends ComboboxOptionBase>({
             <button
                 type="button"
                 onClick={() => setIsOpen((current) => !current)}
-                className="flex w-full items-center justify-between rounded-xl border border-white/[0.1] bg-black/35 px-3 py-1.5 text-left text-xs text-white transition-colors hover:border-white/[0.2]"
+                className={triggerClassName}
             >
                 <span className={` min-w-0 flex-1 truncate ${selectedOptions.length < 1 ? "text-white/40" : ""}`}>{selectedSummary}</span>
                 <ChevronsUpDown size={15} className="ml-2 shrink-0 text-white/55" />
@@ -123,7 +137,7 @@ export function MultiSelectCombobox<T extends ComboboxOptionBase>({
                         />
                     </div>
 
-                    <div className="max-h-56 space-y-1 overflow-y-auto">
+                    <div className="elegant-scrollbar pr-1 max-h-56 space-y-1 overflow-y-auto">
                         {filteredOptions.map((option) => {
                             const selected = normalizedValues.includes(option.id);
                             return (
@@ -136,7 +150,7 @@ export function MultiSelectCombobox<T extends ComboboxOptionBase>({
                                     }`}
                                 >
                                     <div className="min-w-0 flex-1">{renderOptionContent(option)}</div>
-                                    <span className="ml-2 shrink-0 text-emerald-300">{selected ? <Check size={14} /> : null}</span>
+                                    <span className="w-5 text-white">{selected ? <Dot size={30} /> : null}</span>
                                 </button>
                             );
                         })}

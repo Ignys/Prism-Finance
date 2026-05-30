@@ -5,6 +5,7 @@ import { ModalStructure } from "./ModalStructure";
 interface ConfirmActionModalProps {
     title: string;
     description: string;
+    consequences?: string[];
     confirmLabel: string;
     cancelLabel?: string;
     tone?: "danger" | "success";
@@ -19,6 +20,7 @@ const CONFIRM_TONE_CLASS: Record<NonNullable<ConfirmActionModalProps["tone"]>, s
 export function ConfirmActionModal({
     title,
     description,
+    consequences,
     confirmLabel,
     cancelLabel = "Cancelar",
     tone = "danger",
@@ -49,6 +51,16 @@ export function ConfirmActionModal({
                 <div className="space-y-2">
                     <h2 className="text-lg font-semibold text-white">{title}</h2>
                     <p className="text-sm leading-6 text-white/65">{description}</p>
+                    {consequences && consequences.length > 0 ? (
+                        <ul className="space-y-2 pt-1 text-sm leading-6 text-white/72">
+                            {consequences.map((item) => (
+                                <li key={item} className="flex gap-2">
+                                    <span className="pt-2 text-white/35">•</span>
+                                    <span>{item}</span>
+                                </li>
+                            ))}
+                        </ul>
+                    ) : null}
                 </div>
 
                 <div className="mt-5 flex justify-end gap-2">

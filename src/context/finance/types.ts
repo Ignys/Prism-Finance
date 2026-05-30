@@ -13,6 +13,7 @@ export type {
     PlanningRevenueOverride,
     PlanningSimulatedExpense,
     PlanningSimulatedIncome,
+    PlanningWishlistSelection,
     PlanningState,
     ResolvedTransactionCategory,
     StoredTransaction,

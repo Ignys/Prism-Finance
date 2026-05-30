@@ -109,10 +109,7 @@ export function TransactionsPage() {
         return next;
     }, [wallets]);
 
-    const nonCreditCardTransactions = useMemo(
-        () => transactions.filter((transaction) => !(transaction.type === "spending" && transaction.paymentMethod === "credit_card")),
-        [transactions],
-    );
+    const nonCreditCardTransactions = useMemo(() => transactions.filter((transaction) => !(transaction.type === "spending" && transaction.paymentMethod === "credit_card")), [transactions]);
 
     const categoryOptions = useMemo<SelectOption[]>(() => {
         const categoryMap = new Map<string, string>();
@@ -145,9 +142,7 @@ export function TransactionsPage() {
     }, [nonCreditCardTransactions]);
 
     const beneficiaryOptions = useMemo(() => {
-        const beneficiaries = Array.from(
-            new Set(nonCreditCardTransactions.map((transaction) => transaction.beneficiary.trim()).filter((beneficiary) => beneficiary.length > 0)),
-        );
+        const beneficiaries = Array.from(new Set(nonCreditCardTransactions.map((transaction) => transaction.beneficiary.trim()).filter((beneficiary) => beneficiary.length > 0)));
         beneficiaries.sort((a, b) => a.localeCompare(b, "pt-BR"));
         return beneficiaries;
     }, [nonCreditCardTransactions]);
@@ -203,20 +198,7 @@ export function TransactionsPage() {
             const walletName = walletNameById.get(transaction.inWallet) ?? "Carteira removida";
             return normalizeComparisonText(getTransactionSearchSource(transaction, walletName)).includes(normalizedSearch);
         });
-    }, [
-        dateFrom,
-        dateTo,
-        maxAmount,
-        minAmount,
-        searchQuery,
-        selectedBeneficiary,
-        selectedCategoryKey,
-        selectedStatus,
-        selectedTagIds,
-        selectedWalletId,
-        nonCreditCardTransactions,
-        walletNameById,
-    ]);
+    }, [dateFrom, dateTo, maxAmount, minAmount, searchQuery, selectedBeneficiary, selectedCategoryKey, selectedStatus, selectedTagIds, selectedWalletId, nonCreditCardTransactions, walletNameById]);
 
     const monthlyTransactions = useMemo(() => {
         const filtered = advancedFilteredTransactions.filter((transaction) => getTransactionMonthKey(transaction.date) === selectedMonth);
@@ -281,12 +263,8 @@ export function TransactionsPage() {
 
         openModal(
             <ConfirmActionModal
-                title="Excluir transacao?"
-                description={
-                    isInvoicePayment
-                        ? `Essa acao remove \"${transactionLabel}\" e reverte o pagamento vinculado na fatura.`
-                        : `Essa acao remove \"${transactionLabel}\" em definitivo.`
-                }
+                title="Excluir transação?"
+                description={isInvoicePayment ? `Essa ação remove \"${transactionLabel}\" e reverte o pagamento vinculado na fatura.` : `Essa ação remove \"${transactionLabel}\" em definitivo.`}
                 confirmLabel="Excluir"
                 tone="danger"
                 onConfirm={() => deleteTransaction(transaction)}
@@ -300,7 +278,7 @@ export function TransactionsPage() {
         openModal(
             <ConfirmActionModal
                 title="Confirmar pagamento?"
-                description={`Essa acao marca "${transactionLabel}" como paga e atualiza os saldos.`}
+                description={`Essa ação marca "${transactionLabel}" como paga e atualiza os saldos.`}
                 confirmLabel="Marcar como pago"
                 tone="success"
                 onConfirm={() => markTransactionAsPaid(transaction)}
@@ -374,6 +352,7 @@ export function TransactionsPage() {
                             onEdit={handleEditTransaction}
                             onConfirmPayment={handleConfirmPayment}
                             onDelete={handleDeleteTransaction}
+                            selectedMonth={selectedMonth}
                         />
                     </div>
                     <div className="w-full 2xl:w-[230px]">

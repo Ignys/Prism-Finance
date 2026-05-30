@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowRight, CircleX, Copy, Eye, Info, Layers3, ReceiptText, Repeat, SlidersHorizontal, Trash2, X } from "lucide-react";
+import { ArrowRight, Copy, Eye, Info, Layers3, ReceiptText, Repeat, SlidersHorizontal, SquareSlash, Trash2, X } from "lucide-react";
 import type { Beneficiary, Category, CreditCard, CreditCardInvoice, Transaction, TransactionMode, TransactionSeriesScope, TransactionStatus } from "../../context/FinanceContext";
 import {
     SYSTEM_EXPENSE_CARD_INVOICE_CATEGORY_ID,
@@ -27,6 +27,7 @@ import { MultiSelectCombobox } from "./MultiSelectCombobox";
 import { SingleSelectCombobox, type ComboboxOptionBase } from "./SingleSelectCombobox";
 import { FIELD_LABEL_CLASS } from "./transactionForm.constants";
 import { formatCurrencyBRL } from "./transactionView";
+import { FooterButton } from "./TransactionForm";
 
 const FIELD_INPUT_CLASS = "rounded-xl border border-white/[0.1] bg-black/35 p-2.5 text-white outline-none transition-colors placeholder:text-white/35 focus:border-white/[0.24]";
 
@@ -1020,13 +1021,14 @@ export function CardSpendingForm({ transaction = null, prefill, onAdvancedOpenCh
         await addTransaction(draft);
         return true;
     };
+    
 
-    const cancelTransaction = async () => {
+    const ignore = async () => {
         if (!transaction) {
             return false;
         }
 
-        const draft = buildDraft("cancelled");
+        const draft = buildDraft("skipped");
         if (!draft) {
             return false;
         }
@@ -1318,30 +1320,15 @@ export function CardSpendingForm({ transaction = null, prefill, onAdvancedOpenCh
                         <div className="flex gap-1">
                             {isEditing && (
                                 <>
-                                    <button
-                                        type="button"
-                                        onClick={() => void runAction(remove)}
-                                        disabled={submitting}
-                                        className="inline-flex px-2 gap-1.5 text-xs uppercase items-center justify-center rounded-lg border border-red-400/25 bg-red-500/10 text-red-200 transition-colors hover:border-red-400/45 hover:text-red-100 disabled:cursor-not-allowed disabled:opacity-60"
-                                    >
+                                    <FooterButton onClick={() => void runAction(remove)}>
                                         <Trash2 size={15} /> Excluir
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => void runAction(cancelTransaction)}
-                                        disabled={submitting}
-                                        className="inline-flex p-2 gap-1.5 text-xs uppercase items-center justify-center rounded-lg border border-white/[0.12] bg-white/[0.03] text-white/70 transition-colors hover:border-white/[0.24] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
-                                    >
-                                        <CircleX size={15} /> Anular
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => void runAction(duplicate)}
-                                        disabled={submitting}
-                                        className="inline-flex p-2 gap-1.5 text-xs uppercase items-center justify-center rounded-lg border border-white/[0.12] bg-white/[0.03] text-white/70 transition-colors hover:border-white/[0.24] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
-                                    >
+                                    </FooterButton>
+                                    <FooterButton onClick={() => void runAction(duplicate)}>
                                         <Copy size={15} /> Duplicar
-                                    </button>
+                                    </FooterButton>
+                                    <FooterButton onClick={() => void runAction(ignore)}>
+                                        <SquareSlash size={15} /> Ignorar
+                                    </FooterButton>
                                 </>
                             )}
                         </div>

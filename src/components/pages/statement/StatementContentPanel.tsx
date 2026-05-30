@@ -100,7 +100,7 @@ const TRANSACTION_STATUS_BADGE_CLASS: Record<StatementTransactionVisualStatus, s
 
 const TRANSACTION_STATUS_LABELS: Record<StatementTransactionVisualStatus, string> = {
     ...STATEMENT_STATUS_LABELS,
-    skipped: "Pulada",
+    skipped: "IGNORADA",
 };
 
 const HEADER_STATUS_BADGE_CLASS: Record<ConsolidatedHeaderStatus, string> = {
@@ -445,7 +445,7 @@ export function StatementContentPanel({
                         type="text"
                         value={searchQuery}
                         onChange={(event) => setSearchQuery(event.target.value)}
-                        placeholder="Buscar por descricao, beneficiario, categoria, cartao ou tag"
+                        placeholder="Buscar"
                         className="w-full rounded-xl border border-white/[0.08] bg-black/25 py-2 pl-9 pr-3 text-sm text-white outline-none transition-colors placeholder:text-white/30 focus:border-white/[0.24] focus:bg-black/40"
                     />
                 </div>
@@ -463,15 +463,15 @@ export function StatementContentPanel({
             </div>
 
             <section className="rounded-2xl border border-white/[0.08] bg-[#111111] p-3 shadow-[0_24px_60px_-32px_rgba(0,0,0,0.9)]">
-                <div className="mb-3 flex items-center justify-between gap-3">
-                    <p className="text-sm uppercase tracking-[0.15em] text-white/45">Compras no cartao</p>
+                <div className="mb-3 px-1 flex items-center justify-between gap-3">
+                    <p className="text-sm uppercase text-white/60">FATURA DE {invoiceMonthLabel}</p>
                     <span className="rounded-full border border-white/[0.12] bg-white/[0.03] px-2.5 py-1 text-xs text-white/60">{sortedTransactionSnapshots.length} itens</span>
                 </div>
 
                 {sortedTransactionSnapshots.length < 1 ? (
                     <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] px-3 py-6 text-center text-sm text-white/55">
                         <p>Nenhuma compra encontrada para {invoiceMonthLabel}.</p>
-                        {!canCreateCardSpending && <p className="mt-3 text-xs text-white/40">Cadastre um cartao para lancar gastos em fatura.</p>}
+                        {!canCreateCardSpending && <p className="mt-3 text-xs text-white/40">Cadastre um cartão para lançar gastos em fatura.</p>}
                     </div>
                 ) : (
                     <table className="w-full border-separate border-spacing-0 text-sm text-white/85">
@@ -479,12 +479,12 @@ export function StatementContentPanel({
                             <tr>
                                 <SortableHeader label="Status" field="status" sortMode={sortMode} onSortModeChange={setSortMode} />
                                 <SortableHeader label="Data" field="date" sortMode={sortMode} onSortModeChange={setSortMode} />
-                                <SortableHeader label="Descricao" field="description" sortMode={sortMode} onSortModeChange={setSortMode} />
+                                <SortableHeader label="Descrição" field="description" sortMode={sortMode} onSortModeChange={setSortMode} />
                                 <SortableHeader label="Categoria" field="category" sortMode={sortMode} onSortModeChange={setSortMode} />
                                 <th className="border-b border-white/[0.08] px-3 py-2 text-left text-[11px] uppercase tracking-[0.08em] text-white/45">Tags</th>
-                                <SortableHeader label="Beneficiario" field="beneficiary" sortMode={sortMode} onSortModeChange={setSortMode} />
+                                <SortableHeader label="Beneficiário" field="beneficiary" sortMode={sortMode} onSortModeChange={setSortMode} />
                                 <SortableHeader label="Valor" field="value" sortMode={sortMode} align="right" onSortModeChange={setSortMode} />
-                                <th className="border-b border-white/[0.08] px-3 py-2 text-right text-[11px] uppercase tracking-[0.08em] text-white/45">Acoes</th>
+                                <th className="border-b border-white/[0.08] px-3 py-2 text-right text-[11px] uppercase tracking-[0.08em] text-white/45">Ações</th>
                             </tr>
                         </thead>
                         <tbody>

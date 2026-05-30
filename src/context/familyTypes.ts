@@ -45,6 +45,7 @@ export interface SharedWishlistItem {
     value: number;
     priority: 1 | 2 | 3;
     link: string | null;
+    imageUrl: string | null;
     createdAt: string;
     isActive: boolean;
     categoryLabel: string;

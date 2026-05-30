@@ -225,6 +225,8 @@ export function TransactionForm({ type, transaction, mode = "default", prefill, 
         return () => window.clearTimeout(timeoutId);
     }, [advancedOpen]);
 
+    const showAdvancedPanel = advancedOpen || shouldRenderAdvanced;
+
     const runAction = async (action: () => Promise<boolean>) => {
         if (submitting) {
             return;
@@ -249,7 +251,12 @@ export function TransactionForm({ type, transaction, mode = "default", prefill, 
         <div className="flex flex-col justify-between rounded-xl border border-white/[0.09] bg-[#131313] p-4 text-white shadow-[0_26px_70px_-38px_rgba(0,0,0,0.95)]">
             <div>
                 <header className="flex items-center justify-between gap-3">
-                    <TransactionHeader type={form.resolvedType} isEditing={form.isEditing} isSeriesTransaction={form.isSeriesTransaction} isInvoicePaymentEdit={form.isInvoicePaymentEdit} />
+                    <TransactionHeader
+                        type={form.resolvedType}
+                        isEditing={form.isEditing}
+                        isSeriesTransaction={form.isSeriesTransaction}
+                        isInvoicePaymentEdit={form.isInvoicePaymentEdit}
+                    />
                     <button
                         type="button"
                         onClick={closeModal}
@@ -341,11 +348,16 @@ export function TransactionForm({ type, transaction, mode = "default", prefill, 
                         </label>
                     </section>
 
-                    {advancedOpen && (
+                    {showAdvancedPanel && (
                         <>
-                            <div className={`w-px rounded-full bg-white/5`} />
+                            <div className={`w-px shrink-0 rounded-full bg-white/5 transition-opacity duration-200 ${advancedOpen ? "opacity-100" : "opacity-0"}`} />
 
-                            <aside className={`flex flex-col gap-3 w-[280px] `}>
+                            <aside
+                                className={`flex shrink-0 flex-col gap-3 overflow-hidden transition-all duration-200 ease-out ${
+                                    advancedOpen ? "w-[280px] translate-x-0 opacity-100" : "pointer-events-none w-0 -translate-x-1 opacity-0"
+                                }`}
+                                aria-hidden={!advancedOpen}
+                            >
                                 {form.isEditing && form.isSeriesTransaction && !form.isInvoicePaymentEdit && (
                                     <SingleSelectCombobox
                                         disableSearch
@@ -420,21 +432,42 @@ export function TransactionForm({ type, transaction, mode = "default", prefill, 
                     </button>
                 </div>
 
-                <div className="flex items-end justify-between gap-1">
+                <div className="flex flex-wrap items-center justify-between gap-3">
                     <div className="flex flex-wrap gap-1">
                         {form.isEditing && !form.isInvoicePaymentEdit && (
                             <>
-
-                                <FooterButton onClick={() => void runAction(form.remove)}>
+                                <button
+                                    type="button"
+                                    onClick={() => void runAction(form.remove)}
+                                    disabled={submitting}
+                                    className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-red-400/25 bg-red-500/10 px-2 py-2 text-xs uppercase text-red-200 transition-colors hover:border-red-400/45 hover:text-red-100 disabled:cursor-not-allowed disabled:opacity-60"
+                                >
                                     <Trash2 size={15} /> Excluir
-                                </FooterButton>
-                                <FooterButton onClick={() => void runAction(form.duplicate)}>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => void runAction(form.cancelTransaction)}
+                                    disabled={submitting}
+                                    className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-white/[0.12] bg-white/[0.03] p-2 text-xs uppercase text-white/70 transition-colors hover:border-white/[0.24] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                                >
+                                    <CircleX size={15} /> Anular
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => void runAction(form.duplicate)}
+                                    disabled={submitting}
+                                    className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-white/[0.12] bg-white/[0.03] p-2 text-xs uppercase text-white/70 transition-colors hover:border-white/[0.24] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                                >
                                     <Copy size={15} /> Duplicar
-                                </FooterButton>
-                                <FooterButton onClick={() => void runAction(form.ignore)}>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => void runAction(form.ignore)}
+                                    disabled={submitting}
+                                    className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-white/[0.12] bg-white/[0.03] p-2 text-xs uppercase text-white/70 transition-colors hover:border-white/[0.24] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                                >
                                     <SquareSlash size={15} /> Ignorar
-                                </FooterButton>
-                            
+                                </button>
                             </>
                         )}
                     </div>
@@ -444,7 +477,7 @@ export function TransactionForm({ type, transaction, mode = "default", prefill, 
                             type="button"
                             onClick={closeModal}
                             disabled={submitting}
-                            className="inline-flex items-center justify-center rounded-xl border border-white/[0.12] bg-white/[0.03] px-3 py-2 text-sm font-medium text-white/70 transition-colors hover:border-white/[0.2] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                            className="inline-flex min-w-24 items-center justify-center rounded-xl border border-white/[0.12] bg-white/[0.03] px-4 py-2 text-sm font-medium text-white/70 transition-colors hover:border-white/[0.2] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
                         >
                             Cancelar
                         </button>
@@ -452,7 +485,7 @@ export function TransactionForm({ type, transaction, mode = "default", prefill, 
                             type="button"
                             onClick={() => void runAction(form.submit)}
                             disabled={submitting}
-                            className="inline-flex items-center justify-center rounded-xl border border-emerald-400/35 bg-emerald-500/15 px-3 py-2 text-sm font-semibold text-emerald-100 transition-colors hover:border-emerald-400/55 hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+                            className="inline-flex min-w-28 items-center justify-center rounded-xl border border-emerald-400/35 bg-emerald-500/15 px-4 py-2 text-sm font-semibold text-emerald-100 transition-colors hover:border-emerald-400/55 hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-60"
                         >
                             {submitting ? "Carregando..." : "Concluir"}
                         </button>
@@ -462,16 +495,3 @@ export function TransactionForm({ type, transaction, mode = "default", prefill, 
         </div>
     );
 }
-
-
-export function FooterButton({ onClick, disabled, children }: { onClick: () => void; disabled?: boolean; children: React.ReactNode }) {
-    return (
-        <button
-            type="button"
-            onClick={onClick}
-            disabled={disabled}
-            className="inline-flex items-center justify-center gap-1 rounded-lg border border-white/[0.12] bg-white/[0.03] px-1.5 py-2 text-xs uppercase text-white/70 transition-colors hover:border-white/[0.4] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
-        >
-            {children}
-        </button>
-    )}
