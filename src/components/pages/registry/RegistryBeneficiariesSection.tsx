@@ -20,10 +20,7 @@ export function RegistryBeneficiariesSection() {
     const { openModal } = useModal();
     const [showInactive, setShowInactive] = useState(false);
 
-    const visibleBeneficiaries = useMemo(
-        () => beneficiaries.filter((beneficiary) => showInactive || beneficiary.isActive),
-        [beneficiaries, showInactive],
-    );
+    const visibleBeneficiaries = useMemo(() => beneficiaries.filter((beneficiary) => showInactive || beneficiary.isActive), [beneficiaries, showInactive]);
     const [orderedBeneficiaries, setOrderedBeneficiaries] = useState(visibleBeneficiaries);
 
     useEffect(() => {
@@ -38,17 +35,17 @@ export function RegistryBeneficiariesSection() {
     };
 
     return (
-        <section className="flex h-full min-h-0 flex-col rounded-xl border border-white/[0.08] bg-[#111111] p-4">
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <section className="flex h-full min-h-0 flex-col rounded-xl">
+            <div className="mt-2 mb-3 ml-1 flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
-                    <UserRound size={18} className="text-white/80" />
-                    <p className="text-sm uppercase tracking-[0.12em] text-white/60">Beneficiarios ({visibleCount})</p>
+                    <p className="text-lg uppercase tracking-[0.07em] text-white/80">Seus beneficiários</p>
+                    <span className="rounded-full bg-white/10 px-2 py-0.5 text-xs text-white/60 border border-white/10">{visibleCount}</span>
                 </div>
                 <RegistrySectionActions
                     isShowingInactive={showInactive}
                     showLabel="Mostrar inativos"
                     hideLabel="Ocultar inativos"
-                    createLabel="Novo beneficiÃ¡rio"
+                    createLabel="Novo beneficiário"
                     onToggleInactive={() => setShowInactive((current) => !current)}
                     onCreate={() => openModal(<AddBeneficiary mode="create" />)}
                 />
@@ -56,7 +53,7 @@ export function RegistryBeneficiariesSection() {
 
             <div className="elegant-scrollbar min-h-0 flex-1 overflow-y-auto overflow-x-hidden pr-2">
                 {orderedBeneficiaries.length < 1 ? (
-                    <div className="rounded-lg border border-white/6 bg-white/[0.02] p-3 text-sm text-white/45">Nenhum beneficiario para os filtros atuais.</div>
+                    <div className="rounded-lg border border-white/6 bg-white/[0.02] p-3 text-sm text-white/45">Nenhum beneficiário para os filtros atuais.</div>
                 ) : (
                     <Reorder.Group axis="y" values={orderedBeneficiaries} onReorder={setOrderedBeneficiaries} className="space-y-2">
                         {orderedBeneficiaries.map((beneficiary) => (
@@ -75,7 +72,7 @@ export function RegistryBeneficiariesSection() {
 }
 
 function BeneficiaryCard({ beneficiary, onEdit }: { beneficiary: Beneficiary; onEdit?: () => void }) {
-    const originLabel = beneficiary.source === "family_shared" ? "Membro da família" : beneficiary.isSelfProfile ? "Perfil" : BENEFICIARY_TYPE_LABELS[beneficiary.type] ?? beneficiary.type;
+    const originLabel = beneficiary.source === "family_shared" ? "Membro da família" : beneficiary.isSelfProfile ? "Perfil" : (BENEFICIARY_TYPE_LABELS[beneficiary.type] ?? beneficiary.type);
     const isMe = beneficiary.isSelfProfile && beneficiary.source === "personal";
 
     return (

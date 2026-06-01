@@ -45,18 +45,8 @@ export function RegistryPage() {
 
     return (
         <AuthShell>
-            <div className="flex h-[calc(95vh-5rem)] justify-center overflow-hidden px-4 pb-6 pt-1 md:px-6">
-                <section className="flex h-full w-full max-w-6xl flex-col space-y-3 overflow-hidden">
-                    <div className="rounded-xl text-left">
-                        <div className="flex flex-wrap items-end justify-between gap-3">
-                            <div>
-                                <h1 className="text-2xl font-semibold text-white">Cadastros</h1>
-                                
-                            </div>
-                            
-                        </div>
-                    </div>
-
+            <div className="flex h-[calc(95vh-5rem)] justify-center overflow-hidden">
+                <section className="flex h-full w-full flex-col space-y-3 overflow-hidden">
                     <div className="flex flex-wrap gap-2">
                         {REGISTRY_TABS.map((tab) => {
                             const isActive = tab.page === activeTab;

@@ -1,4 +1,4 @@
-import { ExternalLink, Flag, Gift, Plus } from "lucide-react";
+import { ExternalLink, Flag, Gift, Plus, Search, UserRound } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { SharedWishlistSnapshot } from "../../context/FinanceContext";
 import { useFinanceCategories, useFinanceFamily, useFinanceSession, useFinanceSharedWishlists, useFinanceWishItems } from "../../context/FinanceContext";
@@ -192,11 +192,53 @@ export function WishlistPage() {
 
     return (
         <AuthShell mainClassName="text-white">
-            <div className="mx-auto flex min-h-[calc(100vh-8rem)] w-[90em] flex-col gap-4 px-4 pb-6 pt-2 lg:px-6">
-                <header className="flex flex-wrap items-end justify-between gap-3 text-left">
-                    <div>
-                        <h1 className="text-2xl font-semibold text-white">Lista de desejos</h1>
-                    </div>
+            <div className="flex min-h-[calc(100vh-8rem) w-full flex-col">
+                <header className="flex flex-wrap items-end justify-between gap-2 text-left mb-3">
+                    {hasFamilyTabs ? (
+                        <div className="flex flex-wrap gap-2">
+                            {wishlistTabs
+                                .sort((a, b) => Number(b.owner.isCurrentUser) - Number(a.owner.isCurrentUser))
+                                .map((snapshot) => {
+                                    const isActive = snapshot.owner.uid === activeWishlist.owner.uid;
+                                    const iconContainerClass = isActive
+                                        ? "border-neutral-300/45 bg-neutral-500/18 text-neutral-100"
+                                        : "border-neutral-400/20 bg-neutral-500/10 text-neutral-300/85 group-hover:border-neutral-300/35 group-hover:bg-neutral-500/16 group-hover:text-neutral-200";
+
+                                    return (
+                                        <button
+                                            key={snapshot.owner.uid}
+                                            type="button"
+                                            onClick={() => setActiveOwnerUid(snapshot.owner.uid)}
+                                            className={`group inline-flex items-center gap-2 rounded-xl text-sm border pl-2 pr-3 py-2 text-left transition-all duration-200 ${
+                                                isActive ? "border-neutral-300/30 bg-neutral-500/14 text-neutral-50" : "border-white/[0.08] bg-white/[0.03] text-white/65 hover:text-white"
+                                            }`}
+                                        >
+                                            <span className={`inline-flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${iconContainerClass}`}>
+                                                <UserRound size={18} strokeWidth={2.2} />
+                                            </span>
+
+                                            {snapshot.owner.isCurrentUser ? "Lista de Desejos" : snapshot.owner.name}
+                                        </button>
+                                        //                                         <button
+                                        //     type="button"
+                                        //     key={tab.key}
+                                        //     onClick={() => onTabChange(tab.key)}
+                                        //     aria-pressed={isActive}
+                                        //     className={`group inline-flex items-center gap-2 rounded-xl border pl-2 pr-3 py-2 text-left transition-all duration-200 ${
+                                        //         isActive
+                                        //             ? "border-neutral-300/45 bg-neutral-500/15 text-neutral-50"
+                                        //             : "border-white/[0.09] bg-white/[0.02] text-white/80 hover:-translate-y-0.5 hover:border-white/[0.22] hover:bg-white/[0.06] hover:text-white"
+                                        //     }`}
+                                        // >
+                                        //     <span className={`inline-flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${iconContainerClass}`}>
+                                        //         <Icon size={18} strokeWidth={2.2} />
+                                        //     </span>
+                                        //     <span className="text-sm">{tab.label}</span>
+                                        // </button>
+                                    );
+                                })}
+                        </div>
+                    ) : null}
 
                     <div className="flex items-center gap-2">
                         {isOwnWishlist ? (
@@ -220,37 +262,15 @@ export function WishlistPage() {
                     </div>
                 </header>
 
-                {hasFamilyTabs ? (
-                    <div className="flex flex-wrap gap-2">
-                        {wishlistTabs
-                            .sort((a, b) => Number(b.owner.isCurrentUser) - Number(a.owner.isCurrentUser))
-                            .map((snapshot) => {
-                                const isActive = snapshot.owner.uid === activeWishlist.owner.uid;
-
-                                return (
-                                    <button
-                                        key={snapshot.owner.uid}
-                                        type="button"
-                                        onClick={() => setActiveOwnerUid(snapshot.owner.uid)}
-                                        className={`rounded-2xl border px-4 py-2 text-sm transition-colors ${
-                                            isActive ? "border-emerald-300/30 bg-emerald-500/14 text-emerald-50" : "border-white/[0.08] bg-white/[0.03] text-white/65 hover:text-white"
-                                        }`}
-                                    >
-                                        {snapshot.owner.isCurrentUser ? "Sua lista de desejos" : snapshot.owner.name}
-                                    </button>
-                                );
-                            })}
-                    </div>
-                ) : null}
-
                 <section className="">
-                    <div className="mb-4">
+                    <div className="relative w-full mb-3">
+                        <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-white/40" />
                         <input
                             type="text"
                             value={searchTerm}
                             onChange={(event) => setSearchTerm(event.target.value)}
-                            placeholder="Pesquisar"
-                            className="w-full rounded-2xl border border-white/[0.1] bg-white/[0.04] px-4 py-3 text-sm text-white outline-none transition-colors placeholder:text-white/35 focus:border-white/[0.22]"
+                            placeholder="Buscar"
+                            className="w-full rounded-xl border border-white/[0.08] bg-black/25 py-2 pl-9 pr-3 text-sm text-white outline-none transition-colors placeholder:text-white/30 focus:border-white/[0.24] focus:bg-black/40"
                         />
                     </div>
                     {activeWishlist.items.length === 0 ? (
@@ -303,26 +323,25 @@ export function WishlistPage() {
                                         <div className="grow flex flex-col justify-between">
                                             <div>
                                                 <div className="mb-1 flex items-start gap-3">
-                                                <h2 className="text-xl font-base text-white">{wishItem.description}</h2>
-                                            </div>
-
-                                            <div className="flex items-center justify-between">
-                                                <p className="text-lg font-light text-white/70">{currencyFormatter.format(wishItem.value)}</p>
-
-                                                <div
-                                                    className="inline-flex items-center gap-0.5 rounded-lg border px-2 py-1.5 text-xs font-medium"
-                                                    style={{
-                                                        color: priorityMeta.color,
-                                                        borderColor: `${priorityMeta.color}40`,
-                                                        backgroundColor: `${priorityMeta.color}14`,
-                                                    }}
-                                                >
-                                                    {Array.from({ length: wishItem.priority }, (_, index) => (
-                                                        <Flag key={`${wishItem.id}-priority-flag-${index}`} size={14} />
-                                                    ))}
+                                                    <h2 className="text-xl font-base text-white">{wishItem.description}</h2>
                                                 </div>
-                                            </div>
 
+                                                <div className="flex items-center justify-between">
+                                                    <p className="text-lg font-light text-white/70">{currencyFormatter.format(wishItem.value)}</p>
+
+                                                    <div
+                                                        className="inline-flex items-center gap-0.5 rounded-lg border px-2 py-1.5 text-xs font-medium"
+                                                        style={{
+                                                            color: priorityMeta.color,
+                                                            borderColor: `${priorityMeta.color}40`,
+                                                            backgroundColor: `${priorityMeta.color}14`,
+                                                        }}
+                                                    >
+                                                        {Array.from({ length: wishItem.priority }, (_, index) => (
+                                                            <Flag key={`${wishItem.id}-priority-flag-${index}`} size={14} />
+                                                        ))}
+                                                    </div>
+                                                </div>
                                             </div>
                                             <div className="mt-2 flex items-center justify-between gap-3 border-t border-white/[0.07] pt-3">
                                                 <span className="inline-flex items-center gap-2 rounded-full border-white/[0.1] text-xs font-medium text-white/75 transition-colors">

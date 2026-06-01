@@ -13,7 +13,7 @@ interface PlanningTimelinePanelProps {
 export function PlanningTimelinePanel({ months, selectedMonthKey, selectedPanel, compareMode, horizontalMode, onSelectPanel }: PlanningTimelinePanelProps) {
     return (
         <section className="flex min-w-0 w-full flex-col text-left">
-            <div className={`elegant-scrollbar grow -mx-1 flex gap-2 max-h-186 overflow-auto px-1 pb-1 ${horizontalMode ? "flex-row" : "flex-col"}`}>
+            <div className={`elegant-scrollbar grow -mx-1 flex gap-2 overflow-auto px-1 pb-1 ${horizontalMode ? "flex-row" : "flex-col"}`}>
                 {months.map((month) => (
                     <PlanningMonthCard
                         key={month.monthKey}

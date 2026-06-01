@@ -8,8 +8,9 @@ import { normalizeCategoryIconName } from "../../lib/categoryIcons";
 import { CategoryIconPicker } from "../common/CategoryIconPicker";
 import { ConfirmActionModal } from "./ConfirmActionModal";
 import { ModalStructure } from "./ModalStructure";
+import { FIELD_LABEL_CLASS } from "../transactions/transactionForm.constants";
 
-const FIELD_LABEL_CLASS = "text-[11px] uppercase tracking-[0.12em] text-white/50";
+
 const FIELD_INPUT_CLASS = "rounded-xl border border-white/[0.1] bg-black/35 p-2.5 text-white outline-none transition-colors placeholder:text-white/35 focus:border-white/[0.24]";
 
 const CATEGORY_TYPES = [
@@ -96,13 +97,7 @@ export function AddCategory({ mode = "create", categoryId, initialCategory }: Ad
 
     const availableParents = useMemo(() => {
         const currentParentId = editingCategory?.parentId ?? parentId;
-        return categories.filter(
-            (item) =>
-                item.type === type &&
-                !blockedParentIds.has(item.id) &&
-                !isInvoicePaymentCategoryId(item.id) &&
-                (item.isActive || item.id === currentParentId),
-        );
+        return categories.filter((item) => item.type === type && !blockedParentIds.has(item.id) && !isInvoicePaymentCategoryId(item.id) && (item.isActive || item.id === currentParentId));
     }, [blockedParentIds, categories, editingCategory?.parentId, parentId, type]);
 
     useEffect(() => {
@@ -180,13 +175,10 @@ export function AddCategory({ mode = "create", categoryId, initialCategory }: Ad
 
         openModal(
             <ConfirmActionModal
-                title="Excluir categoria em definitivo?"
-                description={`A categoria "${editingCategory.name}" sera removida permanentemente.`}
-                consequences={[
-                    "A categoria e todas as subcategorias dela serao removidas em definitivo.",
-                    "Transacoes relacionadas passarao automaticamente para Sem categoria.",
-                ]}
-                confirmLabel="Excluir em definitivo"
+                title="Excluir categoria permanentemente?"
+                description={`A categoria "${editingCategory.name}" será removida permanentemente.`}
+                consequences={["A categoria e todas as subcategorias dela serão removidas em definitivo.", "Transações relacionadas passarão automaticamente para categoria padrão."]}
+                confirmLabel="Excluir"
                 onConfirm={() => permanentlyDeleteCategory(editingCategory.id)}
             />,
         );
@@ -195,28 +187,26 @@ export function AddCategory({ mode = "create", categoryId, initialCategory }: Ad
     return (
         <ModalStructure height="auto" width="620px">
             <div className="rounded-2xl border border-white/[0.09] bg-[#131313] p-4 text-white shadow-[0_26px_70px_-38px_rgba(0,0,0,0.95)]">
-                <div className="flex items-start justify-between gap-3">
-                    <div>
-                        <h2 className="text-2xl font-medium">{isEditMode ? "Editar categoria" : "Nova categoria"}</h2>
-                    </div>
+                <header className="flex items-center justify-between gap-3">
+                    <h1 className="text-sm ml-1 uppercase opacity-50">{isEditMode ? "Editar categoria" : "Nova categoria"}</h1>
                     <button
                         type="button"
                         onClick={closeModal}
                         disabled={submitting}
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-white/[0.12] bg-white/[0.03] text-white/70 transition-colors hover:border-white/[0.22] hover:text-white disabled:cursor-not-allowed disabled:opacity-55"
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/[0.12] bg-white/[0.03] text-white/70 transition-colors hover:border-white/[0.22] hover:text-white disabled:cursor-not-allowed disabled:opacity-55"
                         aria-label="Fechar modal"
                         title="Fechar"
                     >
                         <X size={15} />
                     </button>
-                </div>
+                </header>
 
-                <section className="mt-2 grid grid-cols-1 gap-3">
+                <section className="mt-2 grid grid-cols-1 gap-2">
                     {mode === "edit" && !editingCategory && <p className="rounded-md border border-amber-400/25 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">Categoria nao encontrada.</p>}
 
                     {isInvoicePaymentCategory && (
                         <p className="flex items-center gap-2 rounded-md border border-blue-300/25 bg-blue-500/10 px-3 py-2 text-[12px] text-blue-200">
-                            <Info size={16} /> Essa categoria e reservada para pagamentos de fatura. Voce pode editar apenas nome, cor e icone.
+                            <Info size={16} /> <p className="ml-2">Essa categoria é nativa para os pagamentos de fatura. <br /> Você pode editar apenas nome, cor e ícone.</p>
                         </p>
                     )}
 
@@ -262,9 +252,24 @@ export function AddCategory({ mode = "create", categoryId, initialCategory }: Ad
 
                     <CategoryIconPicker value={icon} categoryType={type} onChange={setIcon} />
 
-                    <div className="flex items-center gap-3">
-                        <input type="color" value={color} onChange={(event) => setColor(event.target.value)} className="h-10 w-14 rounded border border-white/[0.12] bg-black/35 p-1" />
-                        <input type="text" value={color} onChange={(event) => setColor(event.target.value)} className={FIELD_INPUT_CLASS} placeholder="#6B7280" />
+                    <div className="rounded-xl border border-white/[0.1] bg-black/35 p-3">
+                        <p className={`${FIELD_LABEL_CLASS} mb-2`}>Cor da categoria</p>
+                        <div className="flex items-center gap-3">
+                            <input
+                                type="color"
+                                value={color}
+                                onChange={(event) => setColor(event.target.value)}
+                                className="h-10 w-14 rounded-lg border border-white/[0.16] bg-black/40 p-1"
+                            />
+                            <input
+                                type="text"
+                                value={color}
+                                onChange={(event) => setColor(event.target.value)}
+                                className={FIELD_INPUT_CLASS}
+                                placeholder="#4B5563"
+        
+                            />
+                        </div>
                     </div>
                 </section>
 
@@ -294,7 +299,7 @@ export function AddCategory({ mode = "create", categoryId, initialCategory }: Ad
                                         className="inline-flex min-w-40 items-center justify-center gap-2 rounded-xl border border-red-400/25 bg-red-500/10 px-3 py-2 text-sm font-medium text-red-200 transition-colors hover:border-red-400/45 hover:text-red-100 disabled:cursor-not-allowed disabled:opacity-60"
                                     >
                                         <Trash2 size={15} />
-                                        Excluir em definitivo
+                                        Excluir
                                     </button>
                                 ) : null}
                             </>

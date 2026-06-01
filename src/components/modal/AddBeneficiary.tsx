@@ -20,16 +20,16 @@ type BeneficiaryTypeOption = {
 };
 
 const BENEFICIARY_TYPES: BeneficiaryTypeOption[] = [
-    { value: "person", label: "Pessoa", icon: UserRound, description: "Pessoa fisica ou contato principal" },
-    { value: "pet", label: "Pet", icon: PawPrint, description: "Animal de estimacao ou cuidado recorrente" },
-    { value: "other", label: "Outro", icon: Shapes, description: "Qualquer outro tipo de beneficiario" },
+    { value: "person", label: "Pessoa", icon: UserRound, description: "Pessoa física ou contato principal" },
+    { value: "pet", label: "Pet", icon: PawPrint, description: "Animal de estimação ou cuidado recorrente" },
+    { value: "other", label: "Outro", icon: Shapes, description: "Qualquer outro tipo de beneficiário" },
 ] as const;
 
 const LEGACY_BENEFICIARY_TYPE: BeneficiaryTypeOption = {
     value: "cost_center",
     label: "Centro de custo",
     icon: Building2,
-    description: "Tipo legado mantido para edicoes existentes",
+    description: "Tipo legado mantido para edições existentes",
     isLegacy: true,
 };
 
@@ -299,10 +299,7 @@ export function AddBeneficiary({ mode = "create", beneficiaryId, initialBenefici
             <ConfirmActionModal
                 title="Excluir beneficiário em definitivo?"
                 description={`O beneficiário "${editingBeneficiary.name}" será removido permanentemente.`}
-                consequences={[
-                    "O beneficiário será removido do cadastro em definitivo.",
-                    "As transações relacionadas passarao automaticamente para o beneficiário do usuário.",
-                ]}
+                consequences={["O beneficiário será removido do cadastro em definitivo.", "As transações relacionadas passarao automaticamente para o beneficiário do usuário."]}
                 confirmLabel="Excluir em definitivo"
                 onConfirm={() => permanentlyDeleteBeneficiary(editingBeneficiary.id)}
             />,
@@ -326,7 +323,7 @@ export function AddBeneficiary({ mode = "create", beneficiaryId, initialBenefici
                     </button>
                 </header>
 
-                <section className="mt-4 grid grid-cols-1 gap-3">
+                <section className="mt-4 grid grid-cols-1 gap-2">
                     {mode === "edit" && !editingBeneficiary && <p className="rounded-md border border-amber-400/25 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">Beneficiário não encontrado.</p>}
                     {isEditMode && isReadOnlyBeneficiary && <p className="rounded-md border border-cyan-400/25 bg-cyan-500/10 px-3 py-2 text-sm text-cyan-100">{readOnlyMessage}</p>}
 
@@ -337,7 +334,7 @@ export function AddBeneficiary({ mode = "create", beneficiaryId, initialBenefici
                                 type="text"
                                 value={name}
                                 onChange={(event) => setName(event.target.value)}
-                                className={FIELD_INPUT_CLASS}
+                                className={FIELD_INPUT_CLASS + " h-full"}
                                 placeholder="Nome do beneficiário"
                                 disabled={submitting || isReadOnlyBeneficiary}
                             />
@@ -355,15 +352,10 @@ export function AddBeneficiary({ mode = "create", beneficiaryId, initialBenefici
                                 renderSelectedContent={(option) => <BeneficiaryTypeOptionContent option={option} />}
                                 labelClassName={FIELD_LABEL_CLASS}
                                 disabled={submitting || isReadOnlyBeneficiary}
+                                disableSearch
                             />
                         </div>
                     </div>
-
-                    {type === "cost_center" && (
-                        <p className="rounded-md border border-amber-400/25 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">
-                            Este beneficiário usa um tipo legado. Você pode mantê-lo assim ou trocar para uma das opções atuais.
-                        </p>
-                    )}
 
                     <div className="rounded-xl border border-white/[0.1] bg-black/35 p-3">
                         <div className="mb-3 flex items-center gap-3">
@@ -426,23 +418,25 @@ export function AddBeneficiary({ mode = "create", beneficiaryId, initialBenefici
                             {uploadError && <p className="text-sm text-amber-200">{uploadError}</p>}
                         </div>
                     </div>
-
-                    <div className="flex items-center gap-3">
-                        <input
-                            type="color"
-                            value={avatarColor}
-                            onChange={(event) => setAvatarColor(event.target.value)}
-                            className="h-10 w-14 rounded border border-white/[0.12] bg-black/35 p-1"
-                            disabled={submitting || isColorReadOnly}
-                        />
-                        <input
-                            type="text"
-                            value={avatarColor}
-                            onChange={(event) => setAvatarColor(event.target.value)}
-                            className={FIELD_INPUT_CLASS}
-                            placeholder="#4B5563"
-                            disabled={submitting || isColorReadOnly}
-                        />
+                    <div className="rounded-xl border border-white/[0.1] bg-black/35 p-3">
+                        <p className={`${FIELD_LABEL_CLASS} mb-2`}>Cor</p>
+                        <div className="flex items-center gap-3">
+                            <input
+                                type="color"
+                                value={avatarColor}
+                                onChange={(event) => setAvatarColor(event.target.value)}
+                                className="h-10 w-14 rounded-lg border border-white/[0.16] bg-black/40 p-1"
+                                disabled={submitting || isColorReadOnly}
+                            />
+                            <input
+                                type="text"
+                                value={avatarColor}
+                                onChange={(event) => setAvatarColor(event.target.value)}
+                                className={FIELD_INPUT_CLASS}
+                                placeholder="#4B5563"
+                                disabled={submitting || isColorReadOnly}
+                            />
+                        </div>
                     </div>
                 </section>
 

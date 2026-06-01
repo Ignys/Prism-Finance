@@ -1,9 +1,10 @@
 import { ReceiptText, TriangleAlert } from "lucide-react";
 import { useMemo } from "react";
 import { type Transaction, useFinanceCreditCardInvoices, useFinanceCreditCards } from "../../../context/FinanceContext";
+import { getCreditCardInvoiceReadState } from "../../../context/finance/invoiceStatus";
 import { getMonthKeyFromDateValue } from "../../../context/financeTypes";
 import { usePage } from "../../../context/PageContext";
-import { getLocalTodayDate, parseAppDate } from "../../../lib/localDate";
+import { parseAppDate } from "../../../lib/localDate";
 import { formatCurrencyBRL } from "../../transactions/transactionView";
 
 interface SpendingBillsAlertCardProps {
@@ -57,13 +58,14 @@ export function SpendingBillsAlertCard({ transactions }: SpendingBillsAlertCardP
     }, [transactions]);
 
     const overdueInvoiceAlertsByCard = useMemo<OverdueInvoiceByCardAlert[]>(() => {
+        const cardById = new Map(creditCards.map((card) => [card.id, card]));
         const cardNameById = new Map(creditCards.map((card) => [card.id, card.name]));
-        const today = getLocalTodayDate();
         const alertsByCard = new Map<string, OverdueInvoiceByCardAlert>();
 
         creditCardInvoices.forEach((invoice) => {
-            const openAmount = Math.max(0, invoice.totalAmount - invoice.paidAmount);
-            const isOverdue = invoice.status !== "paid" && openAmount > 0 && today > invoice.dueDate;
+            const card = cardById.get(invoice.creditCardId) ?? null;
+            const { openAmount, hasPendingBalance, visualStatus } = getCreditCardInvoiceReadState(invoice, card);
+            const isOverdue = hasPendingBalance && visualStatus === "overdue";
             const invoiceDueMonth = getMonthKeyFromDateValue(invoice.dueDate);
 
             if (!isOverdue) {

@@ -306,10 +306,10 @@ export function TransactionForm({ type, transaction, mode = "default", prefill, 
                             )}
 
                             <SingleSelectCombobox
-                                label="Beneficiario"
+                                label="Beneficiário"
                                 value={form.beneficiaryId}
-                                placeholder="Selecione um beneficiario"
-                                emptyMessage="Nenhum beneficiario encontrado."
+                                placeholder="Selecione um beneficiário"
+                                emptyMessage="Nenhum beneficiário encontrado."
                                 options={beneficiaryOptions}
                                 onChange={form.setBeneficiaryId}
                                 renderOptionContent={(option) => <BeneficiaryOptionContent option={option} />}
@@ -336,8 +336,8 @@ export function TransactionForm({ type, transaction, mode = "default", prefill, 
                         )}
 
                         <label className="flex flex-col gap-1.5">
-                            <span className={FIELD_LABEL_CLASS}>Descricao</span>
-                            <input className={FIELD_INPUT_CLASS} placeholder="Descricao da transacao" value={form.description} onChange={(event) => form.setDescription(event.target.value)} />
+                            <span className={FIELD_LABEL_CLASS}>Descrição</span>
+                            <input className={FIELD_INPUT_CLASS} placeholder="Descrição da transação" value={form.description} onChange={(event) => form.setDescription(event.target.value)} />
                         </label>
                     </section>
 

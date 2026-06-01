@@ -344,7 +344,7 @@ export function PlanningPage() {
 
     return (
         <AuthShell mainClassName="text-white">
-            <div className="flex justify-self-center flex-col min-h-[calc(100vh-8rem)] w-[90%] gap-4 pb-3 mt-1">
+            <div className="flex flex-col min-h-full gap-3">
                 <PlanningPageHeader
                     activePlanningTab={activePlanningTab}
                     onTabChange={setActivePlanningTab}
@@ -374,7 +374,7 @@ export function PlanningPage() {
                 {isReportsTab ? (
                     <PlanningReportsTab range={reportRange} transactions={reportScopedTransactions} />
                 ) : (
-                    <div className="flex max-h-180 flex-1 flex-col gap-2 xl:flex-row">
+                    <div className="flex max-h-190 flex-1 flex-col gap-2 xl:flex-row">
                         <PlanningTimelinePanel
                             months={projection.months}
                             selectedMonthKey={selectedMonth?.monthKey ?? null}

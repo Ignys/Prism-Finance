@@ -1,8 +1,8 @@
 import { type CreditCard, type CreditCardInvoice, type Transaction } from "../../../context/FinanceContext";
-import { getMonthKeyFromDateValue, resolveCreditCardInvoiceCycle } from "../../../context/financeTypes";
-import { getLocalTodayDate } from "../../../lib/localDate";
+import { getCreditCardInvoiceOpenAmount, getCreditCardInvoiceReadState, type CreditCardInvoiceVisualStatus } from "../../../context/finance/invoiceStatus";
+import { buildCreditCardInvoiceId, getMonthKeyFromDateValue, resolveOpenCreditCardInvoiceCycle } from "../../../context/financeTypes";
 
-export type StatementInvoiceVisualStatus = "paid" | "overdue" | "closed" | "open" | "future";
+export type StatementInvoiceVisualStatus = CreditCardInvoiceVisualStatus;
 
 export interface StatementFilterState {
     // Month key (YYYY-MM) used by statement page filters, always based on invoice due date.
@@ -69,11 +69,11 @@ export const STATEMENT_STATUS_LABELS: Record<StatementInvoiceVisualStatus, strin
 };
 
 export const STATEMENT_STATUS_BADGE_CLASS: Record<StatementInvoiceVisualStatus, string> = {
-    open: "border-amber-300/30 bg-amber-500/10 text-amber-200",
+    open: "border-emerald-300/30 bg-emerald-500/10 text-emerald-200",
     future: "border-violet-300/30 bg-violet-500/10 text-violet-200",
     closed: "border-sky-300/30 bg-sky-500/10 text-sky-200",
     overdue: "border-red-400/30 bg-red-500/10 text-red-200",
-    paid: "border-emerald-300/30 bg-emerald-500/10 text-emerald-200",
+    paid: "border-zinc-300/30 bg-zinc-500/10 text-zinc-200",
 };
 
 const monthLabelFormatter = new Intl.DateTimeFormat("pt-BR", {
@@ -89,7 +89,7 @@ const currencyFormatter = new Intl.NumberFormat("pt-BR", {
 
 export const INITIAL_STATEMENT_FILTER_STATE: StatementFilterState = {
     selectedMonth: getCurrentMonthKey(),
-    selectedCardId: "all",
+    selectedCardId: "",
 };
 
 function padMonthPart(value: number): string {
@@ -131,7 +131,7 @@ export function formatCurrency(value: number): string {
 }
 
 export function getInvoiceOpenAmount(invoice: CreditCardInvoice): number {
-    return Math.max(0, invoice.totalAmount - invoice.paidAmount);
+    return getCreditCardInvoiceOpenAmount(invoice);
 }
 
 export function resolveInvoiceVisualStatus(
@@ -139,49 +139,7 @@ export function resolveInvoiceVisualStatus(
     creditCard: Pick<CreditCard, "closingDay" | "dueDay"> | null = null,
     referenceDate = new Date(),
 ): StatementInvoiceVisualStatus {
-    const openAmount = getInvoiceOpenAmount(invoice);
-    const today = getLocalTodayDate(referenceDate);
-
-    if (creditCard) {
-        const currentOpenCycleKey = resolveCreditCardInvoiceCycle(today, creditCard.closingDay, creditCard.dueDay).cycleKey;
-        const cycleComparison = invoice.cycleKey.localeCompare(currentOpenCycleKey);
-
-        if (cycleComparison === 0) {
-            if (invoice.status === "paid") {
-                return "paid";
-            }
-
-            return today >= invoice.closingDate ? "closed" : "open";
-        }
-
-        if (cycleComparison > 0) {
-            return "future";
-        }
-
-        if (today > invoice.dueDate && openAmount > 0) {
-            return "overdue";
-        }
-
-        if (invoice.status === "paid" || openAmount <= 0) {
-            return "paid";
-        }
-
-        return "closed";
-    }
-
-    if (today > invoice.dueDate && openAmount > 0) {
-        return "overdue";
-    }
-
-    if (invoice.status === "paid" || openAmount <= 0) {
-        return "paid";
-    }
-
-    if (today >= invoice.closingDate && today <= invoice.dueDate) {
-        return "closed";
-    }
-
-    return "open";
+    return getCreditCardInvoiceReadState(invoice, creditCard, referenceDate).visualStatus;
 }
 
 export function compareInvoicesByDueDate(a: CreditCardInvoice, b: CreditCardInvoice): number {
@@ -192,16 +150,60 @@ export function compareInvoicesByDueDate(a: CreditCardInvoice, b: CreditCardInvo
     return a.dueDate.localeCompare(b.dueDate);
 }
 
-export function resolveDefaultStatementMonth(invoices: CreditCardInvoice[], fallbackMonth = getCurrentMonthKey()): string {
-    const firstOpenInvoice = [...invoices]
-        .filter((invoice) => invoice.status !== "paid" && getInvoiceOpenAmount(invoice) > 0)
-        .sort(compareInvoicesByDueDate)[0];
-
-    if (!firstOpenInvoice) {
+function resolveDefaultStatementMonth(creditCard: CreditCard, invoices: CreditCardInvoice[], fallbackMonth = getCurrentMonthKey()): string {
+    if (invoices.length < 1) {
         return fallbackMonth;
     }
 
-    return getMonthKeyFromDateValue(firstOpenInvoice.dueDate);
+    const currentOpenCycle = resolveOpenCreditCardInvoiceCycle(creditCard.closingDay, creditCard.dueDay);
+    const currentOpenInvoiceId = buildCreditCardInvoiceId(creditCard.id, currentOpenCycle.cycleKey);
+    const currentOpenInvoice = invoices.find((invoice) => invoice.id === currentOpenInvoiceId);
+    if (currentOpenInvoice) {
+        return getMonthKeyFromDateValue(currentOpenInvoice.dueDate);
+    }
+
+    const firstPendingInvoice = [...invoices]
+        .filter((invoice) => getCreditCardInvoiceReadState(invoice, creditCard).hasPendingBalance)
+        .sort(compareInvoicesByDueDate)[0];
+    if (firstPendingInvoice) {
+        return getMonthKeyFromDateValue(firstPendingInvoice.dueDate);
+    }
+
+    const mostRecentInvoice = [...invoices].sort(compareInvoicesByDueDate).at(-1);
+    return mostRecentInvoice ? getMonthKeyFromDateValue(mostRecentInvoice.dueDate) : fallbackMonth;
+}
+
+function resolveDefaultStatementCard(creditCards: CreditCard[], favoriteCreditCardId: string | null): CreditCard | null {
+    const favoriteCard = favoriteCreditCardId ? creditCards.find((card) => card.id === favoriteCreditCardId && card.isActive) ?? null : null;
+    if (favoriteCard) {
+        return favoriteCard;
+    }
+
+    return creditCards.find((card) => card.isActive) ?? creditCards[0] ?? null;
+}
+
+export function resolveDefaultStatementFilters(params: {
+    creditCards: CreditCard[];
+    creditCardInvoices: CreditCardInvoice[];
+    favoriteCreditCardId: string | null;
+    fallbackMonth?: string;
+}): StatementFilterState {
+    const { creditCards, creditCardInvoices, favoriteCreditCardId, fallbackMonth = getCurrentMonthKey() } = params;
+    const selectedCard = resolveDefaultStatementCard(creditCards, favoriteCreditCardId);
+
+    if (!selectedCard) {
+        return {
+            selectedCardId: "",
+            selectedMonth: fallbackMonth,
+        };
+    }
+
+    const cardInvoices = creditCardInvoices.filter((invoice) => invoice.creditCardId === selectedCard.id);
+
+    return {
+        selectedCardId: selectedCard.id,
+        selectedMonth: resolveDefaultStatementMonth(selectedCard, cardInvoices, fallbackMonth),
+    };
 }
 
 function getFocusedInvoice(entries: StatementInvoiceSnapshot[]): StatementInvoiceSnapshot | null {
@@ -238,7 +240,7 @@ export function buildStatementSummary({
     const scopedCardById = new Map(scopedCards.map((card) => [card.id, card]));
     const monthSnapshots = monthInvoices.map((invoice) => {
         const status = resolveInvoiceVisualStatus(invoice, scopedCardById.get(invoice.creditCardId) ?? null, referenceDate);
-        const openAmount = getInvoiceOpenAmount(invoice);
+        const openAmount = getCreditCardInvoiceReadState(invoice, scopedCardById.get(invoice.creditCardId) ?? null, referenceDate).openAmount;
         const cardName = cardNameById.get(invoice.creditCardId) ?? "Cartao removido";
 
         return {

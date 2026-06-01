@@ -1,20 +1,35 @@
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { usePage } from "../../context/PageContext";
 import { Header } from "../home/Header";
 import { DisplayModal } from "../modal/DisplayModal";
+import { AppSidebar } from "./AppSidebar";
 
 interface AuthShellProps {
     children: ReactNode;
     mainClassName?: string;
 }
 
-export function AuthShell({ children, mainClassName = "justify-center text-center text-white" }: AuthShellProps) {
+export function AuthShell({ children, mainClassName = "text-white" }: AuthShellProps) {
+    const { currentPage } = usePage();
+    const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+
+    useEffect(() => {
+        setIsMobileSidebarOpen(false);
+    }, [currentPage]);
+
     return (
         <>
             <DisplayModal />
-            <main className={mainClassName}>
-                <Header />
-                {children}
-            </main>
+            <div className="min-h-screen bg-[#0e0e10] text-white">
+                <div className="flex">
+                    <AppSidebar isMobileOpen={isMobileSidebarOpen} onCloseMobile={() => setIsMobileSidebarOpen(false)} />
+
+                    <div className="flex min-w-0 flex-1 flex-col">
+                        <Header onOpenSidebar={() => setIsMobileSidebarOpen(true)} />
+                        <main className={["min-w-0 flex-1 p-3 px-4", mainClassName].join(" ")}>{children}</main>
+                    </div>
+                </div>
+            </div>
         </>
     );
 }

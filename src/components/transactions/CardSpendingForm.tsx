@@ -14,6 +14,7 @@ import {
     useFinanceTransactions,
     useFinanceTransactionGroups,
 } from "../../context/FinanceContext";
+import { getCreditCardInvoiceReadState, type CreditCardInvoiceVisualStatus } from "../../context/finance/invoiceStatus";
 import { buildCreditCardInvoiceId, getCreditCardInvoiceMonthKey, parseCreditCardInvoiceId, resolveCreditCardInvoiceCycle, resolveCreditCardInvoiceCycleFromCycleKey } from "../../context/financeTypes";
 import { findCurrentUserSelfBeneficiary, roundToCents, splitAmountAcrossInstallments } from "../../context/finance/helpers";
 import { useModal } from "../../context/ModalContext";
@@ -31,9 +32,7 @@ import { FooterButton } from "./TransactionForm";
 
 const FIELD_INPUT_CLASS = "rounded-xl border border-white/[0.1] bg-black/35 p-2.5 text-white outline-none transition-colors placeholder:text-white/35 focus:border-white/[0.24]";
 
-type InvoiceVisualStatus = "paid" | "overdue" | "closed" | "open" | "future";
-
-const INVOICE_STATUS_LABELS: Record<InvoiceVisualStatus, string> = {
+const INVOICE_STATUS_LABELS: Record<CreditCardInvoiceVisualStatus, string> = {
     open: "Aberta",
     future: "Futura",
     closed: "Fechada",
@@ -66,7 +65,7 @@ interface CreditCardOption extends ComboboxOptionBase {
 
 interface InvoiceOption extends ComboboxOptionBase {
     invoice: CreditCardInvoice;
-    visualStatus: InvoiceVisualStatus;
+    visualStatus: CreditCardInvoiceVisualStatus;
     monthLabel: string;
     cycleKey: string;
 }
@@ -176,7 +175,7 @@ function CreditCardOptionContent({ option }: { option: CreditCardOption }) {
 }
 
 function InvoiceOptionContent({ option }: { option: InvoiceOption }) {
-    const statusClassNameByStatus: Record<InvoiceVisualStatus, string> = {
+    const statusClassNameByStatus: Record<CreditCardInvoiceVisualStatus, string> = {
         open: "border-emerald-400/35 bg-emerald-500/15 text-emerald-100",
         future: "border-violet-300/35 bg-violet-500/15 text-violet-100",
         closed: "border-amber-400/30 bg-amber-500/15 text-amber-100",
@@ -312,53 +311,6 @@ function normalizeIgnoredInstallmentsCountInput(value: string, installmentCount:
     const parsedValue = Number(value);
     const safeValue = Number.isFinite(parsedValue) ? Math.floor(parsedValue) : 0;
     return Math.max(0, Math.min(installmentCount - 1, safeValue));
-}
-
-function resolveInvoiceVisualStatus(
-    params: { status: "open" | "paid"; cycleKey: string; closingDate: string; dueDate: string; currentOpenCycleKey: string },
-    referenceDate = new Date(),
-): InvoiceVisualStatus {
-    const today = getLocalTodayDate(referenceDate);
-
-    if (params.currentOpenCycleKey) {
-        const cycleComparison = params.cycleKey.localeCompare(params.currentOpenCycleKey);
-
-        if (cycleComparison === 0) {
-            if (params.status === "paid") {
-                return "paid";
-            }
-
-            return today >= params.closingDate ? "closed" : "open";
-        }
-
-        if (cycleComparison > 0) {
-            return "future";
-        }
-
-        if (today > params.dueDate && params.status !== "paid") {
-            return "overdue";
-        }
-
-        if (params.status === "paid") {
-            return "paid";
-        }
-
-        return "closed";
-    }
-
-    if (today > params.dueDate && params.status !== "paid") {
-        return "overdue";
-    }
-
-    if (params.status === "paid") {
-        return "paid";
-    }
-
-    if (today >= params.closingDate && today <= params.dueDate) {
-        return "closed";
-    }
-
-    return "open";
 }
 
 function formatPreviewCurrency(value: number): string {
@@ -692,7 +644,6 @@ export function CardSpendingForm({ transaction = null, prefill, onAdvancedOpenCh
 
         return resolveCreditCardInvoiceCycle(date || getLocalTodayDate(), selectedCard.closingDay, selectedCard.dueDay);
     }, [date, selectedCard]);
-    const currentOpenCycleKey = openCycle?.cycleKey ?? "";
     const prefillInvoiceId = !isEditing ? (prefill?.initialInvoiceId?.trim() ?? "") : "";
     const prefillParsedInvoice = useMemo(() => (prefillInvoiceId ? parseCreditCardInvoiceId(prefillInvoiceId) : null), [prefillInvoiceId]);
     const prefillCycleKey = useMemo(() => {
@@ -791,13 +742,7 @@ export function CardSpendingForm({ transaction = null, prefill, onAdvancedOpenCh
                 return a.dueDate.localeCompare(b.dueDate);
             })
             .map((invoice) => {
-                const visualStatus = resolveInvoiceVisualStatus({
-                    status: invoice.status,
-                    cycleKey: invoice.cycleKey,
-                    closingDate: invoice.closingDate,
-                    dueDate: invoice.dueDate,
-                    currentOpenCycleKey,
-                });
+                const visualStatus = getCreditCardInvoiceReadState(invoice, selectedCard).visualStatus;
                 const monthKey = getCreditCardInvoiceMonthKey(invoice);
                 const monthLabel = formatMonthLabel(monthKey);
                 return {
@@ -810,7 +755,7 @@ export function CardSpendingForm({ transaction = null, prefill, onAdvancedOpenCh
                     invoice,
                 };
             });
-    }, [anchorCycleKey, automaticCycle?.cycleKey, creditCardInvoices, currentOpenCycleKey, openCycle, selectedCard]);
+    }, [anchorCycleKey, automaticCycle?.cycleKey, creditCardInvoices, openCycle, selectedCard]);
 
     const automaticInvoiceId = useMemo(() => {
         if (!selectedCard || !automaticCycle?.cycleKey) {

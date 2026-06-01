@@ -11,8 +11,8 @@ export function HomePage() {
     const transactions = useFinanceTransactions();
 
     return (
-        <AuthShell mainClassName="justify-center text-center text-white">
-            <div className="flex gap-2 px-8">
+        <AuthShell mainClassName=" text-center text-white">
+            <div className="flex gap-2">
                 <section className="w-[28%] space-y-2">
                     <SpendingBillsAlertCard transactions={transactions} />
                     <RecentTransactionsPanel transactions={transactions} />

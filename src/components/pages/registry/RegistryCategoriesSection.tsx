@@ -62,11 +62,13 @@ export function RegistryCategoriesSection() {
     const visibleCount = showInactive ? groupedCategories.totalCount : groupedCategories.activeCount;
 
     return (
-        <section className="row-span-2 flex h-full min-h-0 flex-col rounded-xl border border-white/[0.08] bg-[#111111] p-4">
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <section className="row-span-2 flex h-full min-h-0 flex-col">
+            <div className="mt-2 mb-3 ml-1 flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
-                    <FolderKanban size={18} className="text-white/80" />
-                    <p className="text-sm uppercase tracking-[0.12em] text-white/60">Categorias ({visibleCount})</p>
+                    <p className="text-lg uppercase tracking-[0.07em] text-white/80">Suas categorias</p>
+                    <span className="rounded-full bg-white/10 px-2 py-0.5 text-xs text-white/60 border border-white/10">
+                        {visibleCount}
+                    </span>
                 </div>
                 <RegistrySectionActions
                     isShowingInactive={showInactive}

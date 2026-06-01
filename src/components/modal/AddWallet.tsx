@@ -1,5 +1,5 @@
 import { ChangeEvent, useEffect, useMemo, useState } from "react";
-import { RotateCcw, Trash2 } from "lucide-react";
+import { RotateCcw, Trash2, X } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
 import { DEFAULT_WALLET_ID, type Wallet, useFinanceActions, useFinanceWallets } from "../../context/FinanceContext";
 import { useModal } from "../../context/ModalContext";
@@ -7,6 +7,7 @@ import { extractCurrencyDigits, formatCurrencyFromDigits, parseCurrencyDigitsToN
 import { DEFAULT_WALLET_COLOR, DEFAULT_WALLET_ICON, isDefaultWalletIcon, normalizeWalletColor, normalizeWalletIcon } from "../../lib/walletVisual";
 import { WalletAvatar } from "../common/WalletAvatar";
 import { ConfirmActionModal } from "./ConfirmActionModal";
+import { FIELD_LABEL_CLASS } from "../transactions/transactionForm.constants";
 
 const MAX_IMAGE_SIZE_BYTES = 350 * 1024;
 const MAX_IMAGE_DIMENSION = 320;
@@ -94,9 +95,7 @@ function parseAmountInput(value: string): number {
     return parseCurrencyDigitsToNumber(extractCurrencyDigits(value));
 }
 
-const FIELD_LABEL_CLASS = "text-[11px] uppercase tracking-[0.12em] text-white/50";
-const FIELD_INPUT_CLASS =
-    "w-full rounded-xl border border-white/[0.12] bg-black/35 px-3 py-2.5 text-sm text-white outline-none transition-colors placeholder:text-white/35 focus:border-white/[0.24]";
+const FIELD_INPUT_CLASS = "w-full rounded-xl border border-white/[0.12] bg-black/35 px-3 py-2.5 text-sm text-white outline-none transition-colors placeholder:text-white/35 focus:border-white/[0.24]";
 const SECONDARY_BUTTON_CLASS =
     "rounded-lg border border-white/[0.18] px-3 py-2 text-xs font-medium uppercase tracking-[0.08em] text-white/75 transition-colors hover:border-white/[0.28] hover:bg-white/[0.08]";
 
@@ -324,19 +323,28 @@ export function AddWallet({ mode = "create", walletId, initialWallet }: AddWalle
     };
 
     return (
-        <div className="rounded-2xl border border-white/[0.09] bg-[#131313] p-5 text-white shadow-[0_26px_70px_-38px_rgba(0,0,0,0.95)]">
-            <h2 className="text-2xl font-medium uppercase">{isEditMode ? "Editar carteira" : "Nova carteira"}</h2>
-
+        <div className="flex flex-col justify-between rounded-xl border border-white/[0.09] bg-[#131313] p-4 text-white shadow-[0_26px_70px_-38px_rgba(0,0,0,0.95)]">
+                <header className="flex items-center justify-between">
+                    <h1 className="text-sm ml-1 uppercase opacity-50">{isEditMode ? "Editar carteira" : "Nova carteira"}</h1>
+                    <button
+                        type="button"
+                        onClick={closeModal}
+                        disabled={submitting}
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/[0.12] bg-white/[0.03] text-white/70 transition-colors hover:border-white/[0.22] hover:text-white disabled:cursor-not-allowed disabled:opacity-55"
+                        aria-label="Fechar modal"
+                        title="Fechar"
+                    >
+                        <X size={15} />
+                    </button>
+                </header>
             <form
-                className="mt-4 flex flex-col gap-4"
+                className="mt-4 flex flex-col gap-2"
                 onSubmit={(event) => {
                     event.preventDefault();
                     void handleSubmit();
                 }}
             >
-                {mode === "edit" && !editingWallet && (
-                    <p className="rounded-lg border border-amber-400/25 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">Carteira nao encontrada.</p>
-                )}
+                {mode === "edit" && !editingWallet && <p className="rounded-lg border border-amber-400/25 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">Carteira nao encontrada.</p>}
 
                 <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                     <label className="flex flex-col gap-1.5">
@@ -366,11 +374,8 @@ export function AddWallet({ mode = "create", walletId, initialWallet }: AddWalle
                 </div>
 
                 <div className="rounded-xl border border-white/[0.1] bg-black/35 p-3">
-                    <div className="flex items-start justify-between gap-3">
-                        <div>
-                            <p className="text-sm font-medium text-white">Contabilizar nos numeros principais</p>
-                            <p className="mt-1 text-xs text-white/50">Quando desligado, esta carteira nao entra no Saldo, Receitas e Despesas globais do app.</p>
-                        </div>
+                    <div className="flex items-center justify-between gap-3">
+                        <p className="text-sm font-medium text-white">Contabilizar no saldo atual</p>
                         <button
                             type="button"
                             role="switch"
@@ -380,11 +385,7 @@ export function AddWallet({ mode = "create", walletId, initialWallet }: AddWalle
                                 includeInMainTotals ? "border-emerald-400/45 bg-emerald-500/20" : "border-white/[0.14] bg-white/[0.06]"
                             }`}
                         >
-                            <span
-                                className={`inline-block h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${
-                                    includeInMainTotals ? "translate-x-6" : "translate-x-1"
-                                }`}
-                            />
+                            <span className={`inline-block h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${includeInMainTotals ? "translate-x-6" : "translate-x-1"}`} />
                         </button>
                     </div>
                 </div>
@@ -437,19 +438,8 @@ export function AddWallet({ mode = "create", walletId, initialWallet }: AddWalle
                 <div className="rounded-xl border border-white/[0.1] bg-black/35 p-3">
                     <p className={`${FIELD_LABEL_CLASS} mb-2`}>Cor da carteira</p>
                     <div className="flex items-center gap-3">
-                        <input
-                            type="color"
-                            value={walletColor}
-                            onChange={(event) => setWalletColor(event.target.value)}
-                            className="h-10 w-14 rounded-lg border border-white/[0.16] bg-black/40 p-1"
-                        />
-                        <input
-                            type="text"
-                            value={walletColor}
-                            onChange={(event) => setWalletColor(event.target.value)}
-                            className={FIELD_INPUT_CLASS}
-                            placeholder={DEFAULT_WALLET_COLOR}
-                        />
+                        <input type="color" value={walletColor} onChange={(event) => setWalletColor(event.target.value)} className="h-10 w-14 rounded-lg border border-white/[0.16] bg-black/40 p-1" />
+                        <input type="text" value={walletColor} onChange={(event) => setWalletColor(event.target.value)} className={FIELD_INPUT_CLASS} placeholder={DEFAULT_WALLET_COLOR} />
                     </div>
                 </div>
 
@@ -503,7 +493,7 @@ export function AddWallet({ mode = "create", walletId, initialWallet }: AddWalle
                             disabled={!canSubmit || isProcessingUpload || submitting}
                             className="inline-flex min-w-32 items-center justify-center rounded-xl border border-emerald-400/35 bg-emerald-500/15 px-4 py-2 text-sm font-semibold text-emerald-100 transition-colors hover:border-emerald-400/55 hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-60"
                         >
-                            {submitting ? "Processando..." : isEditMode ? "Salvar alteracoes" : "Criar carteira"}
+                            {submitting ? "Processando..." : isEditMode ? "Salvar" : "Criar carteira"}
                         </button>
                     </div>
                 </div>

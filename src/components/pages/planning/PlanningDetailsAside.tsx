@@ -170,7 +170,7 @@ export function PlanningDetailsAside({
     };
 
     return (
-        <aside className="flex max-h-[calc(100vh-6rem)] w-full max-w-[380px] shrink-0 flex-col overflow-hidden rounded-lg border border-white/[0.08] bg-[#111111] p-3 text-left shadow-[0_24px_60px_-36px_rgba(0,0,0,0.9)] xl:sticky xl:top-4">
+        <aside className="flex max-h-[calc(100vh-2rem)] w-full max-w-[360px] shrink-0 flex-col overflow-hidden rounded-lg border border-white/[0.08] bg-[#111111] p-3 text-left shadow-[0_24px_60px_-36px_rgba(0,0,0,0.9)] xl:sticky xl:top-4">
             <div className="shrink-0">
                 <div className="flex items-center justify-between">
                     <div className="flex gap-2 items-center">

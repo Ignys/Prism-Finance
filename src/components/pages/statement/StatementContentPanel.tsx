@@ -19,7 +19,6 @@ import {
 
 interface StatementContentPanelProps {
     selectedMonth: string;
-    allCardsSelected: boolean;
     invoices: CreditCardInvoice[];
     transactions: Transaction[];
     cardById: Map<string, CreditCard>;
@@ -207,7 +206,6 @@ function compareByText(aValue: string, bValue: string): number {
 
 export function StatementContentPanel({
     selectedMonth,
-    allCardsSelected,
     invoices,
     transactions,
     cardById,
@@ -338,33 +336,20 @@ export function StatementContentPanel({
         return formatMonthLabel(selectedMonth);
     }, [selectedMonth]);
 
-    const headerTitle = `${allCardsSelected ? "Faturas" : "Fatura"} de ${invoiceMonthLabel}`;
+    const headerTitle = `Fatura de ${invoiceMonthLabel}`;
 
     const headerStatus = useMemo<ConsolidatedHeaderStatus>(() => {
         if (invoiceSnapshots.length < 1) {
             return "none";
         }
 
-        if (!allCardsSelected) {
-            return invoiceSnapshots[0].visualStatus;
-        }
-
-        const uniqueStatuses = new Set(invoiceSnapshots.map((snapshot) => snapshot.visualStatus));
-        if (uniqueStatuses.size === 1) {
-            return invoiceSnapshots[0].visualStatus;
-        }
-
-        return "mixed";
-    }, [allCardsSelected, invoiceSnapshots]);
+        return invoiceSnapshots[0].visualStatus;
+    }, [invoiceSnapshots]);
 
     const payableSnapshot = useMemo(() => {
         const payable = invoiceSnapshots.filter((snapshot): snapshot is InvoiceSnapshot & { creditCard: CreditCard } => Boolean(snapshot.creditCard) && snapshot.openAmount > 0);
         if (payable.length < 1) {
             return null;
-        }
-
-        if (!allCardsSelected) {
-            return payable[0];
         }
 
         return [...payable].sort((a, b) => {
@@ -379,9 +364,9 @@ export function StatementContentPanel({
 
             return a.invoice.dueDate.localeCompare(b.invoice.dueDate);
         })[0];
-    }, [allCardsSelected, invoiceSnapshots]);
+    }, [invoiceSnapshots]);
 
-    const payButtonLabel = payableSnapshot?.visualStatus === "open" || payableSnapshot?.visualStatus === "future" ? "Pagar adiantado" : allCardsSelected ? "Pagar faturas" : "Pagar fatura";
+    const payButtonLabel = payableSnapshot?.visualStatus === "open" || payableSnapshot?.visualStatus === "future" ? "Pagar adiantado" : "Pagar fatura";
     const closeableSnapshots = useMemo(
         () => invoiceSnapshots.filter((snapshot): snapshot is InvoiceSnapshot & { creditCard: CreditCard } => Boolean(snapshot.creditCard) && snapshot.visualStatus === "overdue" && snapshot.openAmount > 0),
         [invoiceSnapshots],
@@ -389,8 +374,7 @@ export function StatementContentPanel({
     const reopenableSnapshots = useMemo(() => invoiceSnapshots.filter((snapshot) => snapshot.visualStatus === "paid"), [invoiceSnapshots]);
     const manualActionMode: "close" | "reopen" | null = closeableSnapshots.length > 0 ? "close" : reopenableSnapshots.length > 0 ? "reopen" : null;
     const manualActionInvoices = manualActionMode === "close" ? closeableSnapshots.map((snapshot) => snapshot.invoice) : manualActionMode === "reopen" ? reopenableSnapshots.map((snapshot) => snapshot.invoice) : [];
-    const manualActionLabel =
-        manualActionMode === "close" ? (allCardsSelected && manualActionInvoices.length > 1 ? "Fechar vencidas" : "Fechar vencida") : manualActionMode === "reopen" ? (allCardsSelected && manualActionInvoices.length > 1 ? "Reabrir pagas" : "Reabrir paga") : "";
+    const manualActionLabel = manualActionMode === "close" ? "Fechar vencida" : manualActionMode === "reopen" ? "Reabrir paga" : "";
     const canCreateCardSpending = cardById.size > 0;
     return (
         <div className="flex flex-col gap-3">

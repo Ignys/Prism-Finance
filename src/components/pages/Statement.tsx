@@ -18,7 +18,7 @@ import {
     buildStatementSummary,
     compareInvoicesByDueDate,
     INITIAL_STATEMENT_FILTER_STATE,
-    resolveDefaultStatementMonth,
+    resolveDefaultStatementFilters,
     type StatementFilterState,
 } from "./statement/statementPageShared";
 import { StatementSummaryCards } from "./statement/StatementSummaryCards";
@@ -58,13 +58,15 @@ export function StatementPage() {
         }
 
         hasResolvedEntryFiltersRef.current = true;
-        const defaultOpenMonth = resolveDefaultStatementMonth(creditCardInvoices, INITIAL_STATEMENT_FILTER_STATE.selectedMonth);
+        const defaultFilters = resolveDefaultStatementFilters({
+            creditCards,
+            creditCardInvoices,
+            favoriteCreditCardId,
+            fallbackMonth: INITIAL_STATEMENT_FILTER_STATE.selectedMonth,
+        });
 
-        setFilters((current) => ({
-            ...current,
-            selectedMonth: defaultOpenMonth,
-        }));
-    }, [consumePendingNavigation, creditCardInvoices, sessionLoading]);
+        setFilters(defaultFilters);
+    }, [consumePendingNavigation, creditCardInvoices, creditCards, favoriteCreditCardId, sessionLoading]);
 
     const { selectedMonth: selectedDueMonth, selectedCardId } = filters;
 
@@ -100,23 +102,27 @@ export function StatementPage() {
     }, [creditCardInvoices]);
 
     const selectedCardName = useMemo(() => {
-        if (selectedCardId === "all") {
-            return "Todos os cartoes";
+        if (!selectedCardId) {
+            return "Nenhum cartao";
         }
 
         return cardById.get(selectedCardId)?.name ?? "Cartao removido";
     }, [cardById, selectedCardId]);
 
     const scopedCards = useMemo(() => {
-        if (selectedCardId === "all") {
-            return creditCards;
+        if (!selectedCardId) {
+            return [];
         }
 
         return creditCards.filter((creditCard) => creditCard.id === selectedCardId);
     }, [creditCards, selectedCardId]);
 
     const scopedInvoices = useMemo(() => {
-        return creditCardInvoices.filter((invoice) => selectedCardId === "all" || invoice.creditCardId === selectedCardId);
+        if (!selectedCardId) {
+            return [];
+        }
+
+        return creditCardInvoices.filter((invoice) => invoice.creditCardId === selectedCardId);
     }, [creditCardInvoices, selectedCardId]);
 
     const monthInvoices = useMemo(() => {
@@ -135,7 +141,7 @@ export function StatementPage() {
                     Boolean(transaction.invoiceId),
             )
             .filter((transaction) => {
-                if (selectedCardId !== "all" && transaction.creditCardId !== selectedCardId) {
+                if (transaction.creditCardId !== selectedCardId) {
                     return false;
                 }
 
@@ -221,10 +227,7 @@ export function StatementPage() {
         const favoriteCard = favoriteCreditCardId ? creditCards.find((card) => card.id === favoriteCreditCardId) ?? null : null;
         const fallbackCard = activeCards[0] ?? creditCards[0] ?? null;
 
-        const selectedCard =
-            selectedCardId === "all"
-                ? (favoriteCard && favoriteCard.isActive ? favoriteCard : fallbackCard)
-                : (creditCards.find((card) => card.id === selectedCardId) ?? favoriteCard ?? fallbackCard);
+        const selectedCard = creditCards.find((card) => card.id === selectedCardId) ?? (favoriteCard && favoriteCard.isActive ? favoriteCard : fallbackCard);
 
         if (!selectedCard) {
             return;
@@ -248,22 +251,19 @@ export function StatementPage() {
 
     return (
         <AuthShell mainClassName="text-white">
-            <div className="w-full flex justify-center space-y-3">
-                <div className="flex flex-col gap-3 2xl:flex-row w-[90%]">
+            <div className="flex">
+                <div className="flex flex-col gap-3 2xl:flex-row w-full">
                     <div className="min-w-0 flex-1 space-y-3">
                         <StatementFiltersPanel
                             selectedMonth={selectedDueMonth}
                             selectedCardId={selectedCardId}
-                            selectedCardName={selectedCardName}
                             creditCards={creditCards}
-                            openInMonth={summary.openInMonth}
                             onMonthChange={(value) => setFilter("selectedMonth", value)}
                             onCardChange={(value) => setFilter("selectedCardId", value)}
                         />
 
                         <StatementContentPanel
                             selectedMonth={selectedDueMonth}
-                            allCardsSelected={selectedCardId === "all"}
                             invoices={monthInvoices}
                             transactions={monthTransactions}
                             cardById={cardById}

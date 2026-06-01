@@ -303,8 +303,8 @@ export function TransactionsPage() {
 
     return (
         <AuthShell mainClassName="text-white">
-            <div className="w-full flex justify-center space-y-3">
-                <div className="flex flex-col gap-3 2xl:flex-row w-[90%]">
+            <div className="w-full flex">
+                <div className="flex flex-col gap-3 2xl:flex-row w-full">
                     <div className="min-w-0 flex-1 space-y-3">
                         <TransactionsFiltersPanel
                             activeTab={activeTab}

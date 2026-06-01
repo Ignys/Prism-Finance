@@ -283,11 +283,6 @@ export function AccountSettingsTab({
     return (
         <section className="space-y-4">
             <article className="">
-                <div className="flex flex-wrap items-start justify-between gap-4">
-                    <div>
-                        <p className="text-xs uppercase tracking-[0.22em] text-cyan-100/55">Detalhes da conta</p>
-                    </div>
-                </div>
                 <div className="flex items-center gap-4 py-7">
                     <span className="inline-flex h-14 w-14 items-center justify-center overflow-hidden rounded-full bg-white/[0.05] text-lg font-semibold text-white">
                         {previewPhotoUrl ? <img src={previewPhotoUrl} alt={`Foto de ${userName}`} className="h-full w-full object-cover" /> : userInitial}

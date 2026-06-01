@@ -47,7 +47,7 @@ export function SettingsPage() {
 
     return (
         <AuthShell mainClassName="text-white">
-            <div className="mx-auto flex min-h-[calc(100vh-8rem)] w-[90%] flex-col gap-5 pb-6 pt-2">
+            <div className="mx-auto flex min-h-[calc(100vh-8rem)] flex-col gap-5">
                 <header className="flex flex-wrap items-end justify-between gap-3 text-left px-3">
                     <div>
                         <h1 className="mt-2 text-2xl font-semibold text-white">Configurações</h1>

@@ -20,19 +20,17 @@ export function RegistryCreditCardsSection() {
     const { openModal } = useModal();
     const [showArchivedCreditCards, setShowArchivedCreditCards] = useState(false);
 
-    const visibleCreditCards = useMemo(
-        () => creditCards.filter((card) => showArchivedCreditCards || card.isActive),
-        [creditCards, showArchivedCreditCards],
-    );
+    const visibleCreditCards = useMemo(() => creditCards.filter((card) => showArchivedCreditCards || card.isActive), [creditCards, showArchivedCreditCards]);
     const activeCount = creditCards.filter((card) => card.isActive).length;
     const visibleCount = showArchivedCreditCards ? creditCards.length : activeCount;
 
     return (
-        <section className="flex h-full min-h-0 flex-col rounded-xl border border-white/[0.08] bg-[#111111] p-4">
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <section className="flex h-full min-h-0 flex-col">
+            <div className="mt-2 mb-3 ml-1 flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
-                    <CreditCard size={18} className="text-white/80" />
-                    <p className="text-sm uppercase tracking-[0.12em] text-white/60">Cartões de crédito ({visibleCount})</p>
+                    {" "}
+                    <p className="text-lg uppercase tracking-[0.07em] text-white/80">Seus cartões de crédito</p>
+                    <span className="rounded-full bg-white/10 px-2 py-0.5 text-xs text-white/60 border border-white/10">{visibleCount}</span>
                 </div>
                 <RegistrySectionActions
                     isShowingInactive={showArchivedCreditCards}
@@ -78,12 +76,8 @@ export function RegistryCreditCardsSection() {
                                                 <p className="rounded-full border border-white/10 bg-neutral-200/5 px-2.5 py-0.5 text-xs text-white/45">
                                                     Limite: {currencyFormatter.format(creditCard.limit)}
                                                 </p>
-                                                <p className="rounded-full border border-white/10 bg-neutral-200/5 px-2.5 py-0.5 text-xs text-white/45">
-                                                    Fechamento: {creditCard.closingDay}
-                                                </p>
-                                                <p className="rounded-full border border-white/10 bg-neutral-200/5 px-2.5 py-0.5 text-xs text-white/45">
-                                                    Vencimento: {creditCard.dueDay}
-                                                </p>
+                                                <p className="rounded-full border border-white/10 bg-neutral-200/5 px-2.5 py-0.5 text-xs text-white/45">Fechamento: {creditCard.closingDay}</p>
+                                                <p className="rounded-full border border-white/10 bg-neutral-200/5 px-2.5 py-0.5 text-xs text-white/45">Vencimento: {creditCard.dueDay}</p>
                                             </div>
                                         </div>
                                     </div>

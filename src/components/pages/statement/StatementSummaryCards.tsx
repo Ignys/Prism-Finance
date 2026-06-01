@@ -33,7 +33,7 @@ export function StatementSummaryCards({ summary }: StatementSummaryCardsProps) {
                 glowColor="bg-sky-400/20"
             />
             <SummaryCard
-                title="Limite disponivel"
+                title="Limite disponível"
                 value={formatCurrency(summary.availableLimitEstimate)}
                 glowColor="bg-emerald-400/20"
                 valueClassName="text-emerald-200"
