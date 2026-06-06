@@ -3,6 +3,7 @@ import { ArrowDown, ArrowUp, Circle, CreditCard as CreditCardIcon, Pencil, Plus,
 import { type Beneficiary, type CreditCard, type CreditCardInvoice, type Transaction, useFinanceBeneficiaries, useFinanceTransactionGroups } from "../../../context/FinanceContext";
 import { normalizeComparisonText } from "../../../context/finance/helpers";
 import { getCategoryIconComponent } from "../../../lib/categoryIcons";
+import { getTransactionCategoryDisplayLabel } from "../../../lib/transactionCategory";
 import { BeneficiaryAvatar } from "../../common/BeneficiaryAvatar";
 import { WalletAvatar } from "../../common/WalletAvatar";
 import { formatTransactionDate } from "../../transactions/transactionView";
@@ -173,17 +174,6 @@ function SortableHeader({ label, field, sortMode, align = "left", onSortModeChan
     );
 }
 
-function getCategoryDisplayLabel(transaction: Transaction): string {
-    const categoryLabel = transaction.category.label;
-    if (!transaction.category.parentLabel) {
-        return categoryLabel;
-    }
-
-    const parts = categoryLabel.split("/");
-    const subcategoryLabel = parts[parts.length - 1]?.trim();
-    return subcategoryLabel || categoryLabel;
-}
-
 function compareByDateDesc(a: StatementTransactionSnapshot, b: StatementTransactionSnapshot): number {
     if (a.transaction.date === b.transaction.date) {
         return b.transaction.meta.criado_em.localeCompare(a.transaction.meta.criado_em);
@@ -245,7 +235,7 @@ export function StatementContentPanel({
                 return {
                     transaction,
                     transactionStatus: transaction.status === "skipped" ? "skipped" : invoice ? resolveInvoiceVisualStatus(invoice, cardById.get(invoice.creditCardId) ?? null) : null,
-                    categoryLabel: getCategoryDisplayLabel(transaction),
+                    categoryLabel: getTransactionCategoryDisplayLabel(transaction.category),
                 };
             }),
         [cardById, invoiceById, transactions],

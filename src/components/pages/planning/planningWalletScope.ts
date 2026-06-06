@@ -91,7 +91,9 @@ export function getReportScopedTransactions(
 
     return transactions.filter((transaction) => {
         const belongsToWallet = selectedWalletIdSet.has(transaction.inWallet);
-        const belongsToCreditCard = transaction.creditCardId !== null && selectedCreditCardIdSet.has(transaction.creditCardId);
+        const belongsToCreditCard =
+            (transaction.creditCardId !== null && selectedCreditCardIdSet.has(transaction.creditCardId)) ||
+            (transaction.invoicePaymentMeta?.creditCardId !== undefined && selectedCreditCardIdSet.has(transaction.invoicePaymentMeta.creditCardId));
         return belongsToWallet || belongsToCreditCard;
     });
 }

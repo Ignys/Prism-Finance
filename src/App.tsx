@@ -1,5 +1,4 @@
 import { Suspense, lazy, useEffect } from "react";
-import "./App.css";
 import { LoadingPage } from "./components/pages/Loading";
 import { FinanceProvider, useFinanceSession } from "./context/FinanceContext";
 import { ModalProvider } from "./context/ModalContext";
@@ -8,7 +7,7 @@ import "./lib/chart";
 
 const LoginPage = lazy(() => import("./components/pages/Login").then((module) => ({ default: module.LoginPage })));
 const HomePage = lazy(() => import("./components/pages/Home").then((module) => ({ default: module.HomePage })));
-const PlanningPage = lazy(() => import("./components/pages/Planning").then((module) => ({ default: module.PlanningPage })));
+const PlanningPage = lazy(() => import("./components/pages/Analysis").then((module) => ({ default: module.PlanningPage })));
 const StatementPage = lazy(() => import("./components/pages/Statement").then((module) => ({ default: module.StatementPage })));
 const RegistryPage = lazy(() => import("./components/pages/Registry").then((module) => ({ default: module.RegistryPage })));
 const SettingsPage = lazy(() => import("./components/pages/Settings").then((module) => ({ default: module.SettingsPage })));

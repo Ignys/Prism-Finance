@@ -1,6 +1,7 @@
 import { ArrowDownRight, ArrowUpRight, MoveRight, UserRound } from "lucide-react";
 import { useModal } from "../../../context/ModalContext";
 import { type Transaction, useFinanceCreditCards, useFinanceWallets } from "../../../context/FinanceContext";
+import { getTransactionCategoryDisplayLabel } from "../../../lib/transactionCategory";
 import { WalletAvatar } from "../../common/WalletAvatar";
 import { EditTransaction } from "../../modal/EditTransaction";
 import { formatCurrencyBRL, formatTransactionDate, getTransactionTypeMeta, resolveTransactionWallet } from "../../transactions/transactionView";
@@ -14,17 +15,6 @@ export function MiniTransactionBlock({ transaction }: { transaction: Transaction
     const paymentSource = transaction.paymentMethod === "credit_card" && creditCard ? creditCard : wallet;
 
     const typeMeta = getTransactionTypeMeta(transaction.type);
-
-    function getCategoryDisplayLabel(transaction: Transaction): string {
-        const categoryLabel = transaction.category.label;
-        if (!transaction.category.parentLabel) {
-            return categoryLabel;
-        }
-
-        const parts = categoryLabel.split("/");
-        const subcategoryLabel = parts[parts.length - 1]?.trim();
-        return subcategoryLabel || categoryLabel;
-    }
 
     return (
         <button
@@ -57,7 +47,7 @@ export function MiniTransactionBlock({ transaction }: { transaction: Transaction
                 <div className="flex justify-between items-center w-full">
                     <div className="flex flex-col text-left truncate max-w-[70%]">
                         <p className="truncate text-sm font-semibold text-white">{transaction.description || "Sem descricao"}</p>
-                        <p className="truncate text-xs text-neutral-400"> {getCategoryDisplayLabel(transaction)}</p>
+                        <p className="truncate text-xs text-neutral-400"> {getTransactionCategoryDisplayLabel(transaction.category)}</p>
                     </div>
                     <div className="flex flex-col text-right pr-1">
                         <span className={`text-sm font-semibold ${typeMeta.amountColorClass}`}>R$ {formatCurrencyBRL(transaction.value)}</span>

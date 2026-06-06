@@ -3,6 +3,7 @@ import {
     type PlanningSimulatedExpense,
     type PlanningSimulatedIncome,
     type PlanningWishlistSelection,
+    type ReportPeriod,
     useFinanceActions,
     useFinanceCategories,
     useFinanceCreditCardInvoices,
@@ -18,7 +19,7 @@ import { AuthShell } from "../layout/AuthShell";
 import { PlanningSimulationModal } from "../modal/PlanningSimulationModal";
 import { PlanningDetailsAside } from "./planning/PlanningDetailsAside";
 import { DEFAULT_PLANNING_TAB, PlanningPageHeader } from "./planning/PlanningPageHeader";
-import { PlanningReportsTab, type ReportRange } from "./planning/PlanningReportsTab";
+import { PlanningReportsTab } from "./planning/PlanningReportsTab";
 import { PlanningTimelinePanel } from "./planning/PlanningTimelinePanel";
 import { DEFAULT_TIMELINE_MONTHS, type MonthProjection, type PlanningPanel, type PlanningTab, type SimulatedIncomeItem } from "./planning/planningTimelineTypes";
 import { buildTimelineProjection, getCurrentMonthKey, mergePlanningUpdate, parseCurrencyInput } from "./planning/planningTimelineUtils";
@@ -68,7 +69,7 @@ export function PlanningPage() {
     const compareMode = planning.timelineCompareMode ?? true;
     const horizontalMode = planning.timelineHorizontalMode ?? false;
     const timelineMonthCount = planning.timelineMonthCount ?? DEFAULT_TIMELINE_MONTHS;
-    const reportRange: ReportRange = planning.reportsRange ?? 9;
+    const reportPeriod = planning.reportsPeriod;
     const scopedWallets = useMemo(() => getScopedWallets(wallets, timelineSelectedWalletIds), [timelineSelectedWalletIds, wallets]);
     const scopedCreditCards = useMemo(() => getScopedCreditCards(creditCards, timelineSelectedWalletIds, timelineSelectedWalletIds.length === walletIds.length), [creditCards, timelineSelectedWalletIds, walletIds.length]);
     const scopedCreditCardInvoices = useMemo(() => getScopedCreditCardInvoices(creditCardInvoices, scopedCreditCards), [creditCardInvoices, scopedCreditCards]);
@@ -332,10 +333,10 @@ export function PlanningPage() {
         );
     };
 
-    const handleReportsRangeChange = (range: ReportRange) => {
+    const handleReportsPeriodChange = (period: ReportPeriod) => {
         void updatePlanningState(
             mergePlanningUpdate(planning, {
-                reportsRange: range,
+                reportsPeriod: period,
             }),
         );
     };
@@ -361,18 +362,18 @@ export function PlanningPage() {
                     }}
                     reportsToolbarProps={{
                         creditCards,
-                        range: reportRange,
+                        period: reportPeriod,
                         selectedCreditCardIds: reportsSelectedCreditCardIds,
                         selectedWalletIds: reportsSelectedWalletIds,
                         wallets,
-                        onRangeChange: handleReportsRangeChange,
+                        onPeriodChange: handleReportsPeriodChange,
                         onSelectedCreditCardIdsChange: handleReportsCreditCardIdsChange,
                         onSelectedWalletIdsChange: handleReportsWalletIdsChange,
                     }}
                 />
 
                 {isReportsTab ? (
-                    <PlanningReportsTab range={reportRange} transactions={reportScopedTransactions} />
+                    <PlanningReportsTab period={reportPeriod} transactions={reportScopedTransactions} allTransactions={transactions} creditCardInvoices={creditCardInvoices} />
                 ) : (
                     <div className="flex max-h-190 flex-1 flex-col gap-2 xl:flex-row">
                         <PlanningTimelinePanel

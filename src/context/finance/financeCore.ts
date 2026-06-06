@@ -34,6 +34,7 @@ export interface TransactionEntity {
     paymentMethod: PaymentMethod;
     creditCardId: string | null;
     systemKind: TransactionSystemKind | null;
+    invoicePaymentMeta: InvoicePaymentMeta | null;
     meta: {
         criado_em: string;
         atualizado_em: string | null;
@@ -230,6 +231,11 @@ export interface PlanningRevenueOverride {
     updatedAt: string;
 }
 
+export interface ReportPeriod {
+    startMonth: string;
+    endMonth: string;
+}
+
 export interface PlanningState {
     simulatedExpenses: PlanningSimulatedExpense[];
     simulatedIncomes: PlanningSimulatedIncome[];
@@ -243,7 +249,7 @@ export interface PlanningState {
     timelineMonthCount: 3 | 6 | 9 | 12;
     reportsSelectedWalletIds: string[];
     reportsSelectedCreditCardIds: string[];
-    reportsRange: 6 | 9;
+    reportsPeriod: ReportPeriod;
 }
 
 export interface FinanceSnapshot {
@@ -375,6 +381,16 @@ export const DEFAULT_WALLET: Wallet = {
     createdAt: new Date().toISOString(),
 };
 
+function buildDefaultReportsPeriod(referenceDate = new Date()): ReportPeriod {
+    const endMonth = formatYearMonth(referenceDate.getFullYear(), referenceDate.getMonth());
+    const startDate = new Date(referenceDate.getFullYear(), referenceDate.getMonth() - 8, 1);
+
+    return {
+        startMonth: formatYearMonth(startDate.getFullYear(), startDate.getMonth()),
+        endMonth,
+    };
+}
+
 export const DEFAULT_PLANNING_STATE: PlanningState = {
     simulatedExpenses: [],
     simulatedIncomes: [],
@@ -388,7 +404,7 @@ export const DEFAULT_PLANNING_STATE: PlanningState = {
     timelineMonthCount: 9,
     reportsSelectedWalletIds: [],
     reportsSelectedCreditCardIds: [],
-    reportsRange: 9,
+    reportsPeriod: buildDefaultReportsPeriod(),
 };
 
 interface SystemCategorySeed {
@@ -418,16 +434,16 @@ const SYSTEM_CATEGORY_SEED: SystemCategorySeed[] = [
 
 const INVOICE_PAYMENT_CATEGORY_SEED = SYSTEM_CATEGORY_SEED.find((item) => item.id === SYSTEM_EXPENSE_CARD_INVOICE_CATEGORY_ID) as SystemCategorySeed;
 
-interface InvoicePaymentNotePayload {
+export interface InvoicePaymentMeta {
     invoiceId: string;
     creditCardId: string;
 }
 
-export function buildInvoicePaymentNote(payload: InvoicePaymentNotePayload): string {
+export function buildInvoicePaymentNote(payload: InvoicePaymentMeta): string {
     return `${INVOICE_PAYMENT_NOTE_PREFIX}|${payload.invoiceId}|${payload.creditCardId}`;
 }
 
-export function parseInvoicePaymentNote(note: string | null): InvoicePaymentNotePayload | null {
+export function parseInvoicePaymentNote(note: string | null): InvoicePaymentMeta | null {
     if (!note || !note.startsWith(`${INVOICE_PAYMENT_NOTE_PREFIX}|`)) {
         return null;
     }
@@ -1239,8 +1255,29 @@ export function normalizePlanningState(rawPlanning: unknown): PlanningState {
         rawTimelineMonthCount === 3 || rawTimelineMonthCount === 6 || rawTimelineMonthCount === 9 || rawTimelineMonthCount === 12
             ? rawTimelineMonthCount
             : DEFAULT_PLANNING_STATE.timelineMonthCount;
-    const rawReportsRange = asNumber(rawPlanning.reportsRange, DEFAULT_PLANNING_STATE.reportsRange);
-    const normalizedReportsRange = rawReportsRange === 6 || rawReportsRange === 9 ? rawReportsRange : DEFAULT_PLANNING_STATE.reportsRange;
+    const rawReportsRange = asNumber(rawPlanning.reportsRange, 9);
+    const normalizedReportsRange =
+        rawReportsRange === 1 || rawReportsRange === 3 || rawReportsRange === 6 || rawReportsRange === 9 || rawReportsRange === 12
+            ? rawReportsRange
+            : 9;
+    const fallbackReportsPeriod = buildDefaultReportsPeriod();
+    const rawReportsPeriod = isRecord(rawPlanning.reportsPeriod) ? rawPlanning.reportsPeriod : null;
+    const migratedStartDate = new Date();
+    migratedStartDate.setDate(1);
+    migratedStartDate.setMonth(migratedStartDate.getMonth() - normalizedReportsRange + 1);
+    const migratedReportsPeriod: ReportPeriod = {
+        startMonth: formatYearMonth(migratedStartDate.getFullYear(), migratedStartDate.getMonth()),
+        endMonth: fallbackReportsPeriod.endMonth,
+    };
+    const normalizedReportsStartMonth = normalizePlanningMonthKey(rawReportsPeriod?.startMonth, migratedReportsPeriod.startMonth);
+    const normalizedReportsEndMonth = normalizePlanningMonthKey(rawReportsPeriod?.endMonth, migratedReportsPeriod.endMonth);
+    const currentMonth = fallbackReportsPeriod.endMonth;
+    const clampedReportsStartMonth = normalizedReportsStartMonth > currentMonth ? currentMonth : normalizedReportsStartMonth;
+    const clampedReportsEndMonth = normalizedReportsEndMonth > currentMonth ? currentMonth : normalizedReportsEndMonth;
+    const normalizedReportsPeriod =
+        clampedReportsStartMonth <= clampedReportsEndMonth
+            ? { startMonth: clampedReportsStartMonth, endMonth: clampedReportsEndMonth }
+            : { startMonth: clampedReportsEndMonth, endMonth: clampedReportsStartMonth };
 
     return {
         simulatedExpenses: Array.from(expensesById.values()).sort((a, b) => {
@@ -1303,7 +1340,7 @@ export function normalizePlanningState(rawPlanning: unknown): PlanningState {
                 ),
             ),
         ).sort((a, b) => a.localeCompare(b)),
-        reportsRange: normalizedReportsRange,
+        reportsPeriod: normalizedReportsPeriod,
     };
 }
 
@@ -1587,7 +1624,8 @@ export function toTransactionList(
                   type: fallbackCategoryType,
               };
 
-        const systemKind = parseInvoicePaymentNote(transaction.notes) ? "invoice_payment" : null;
+        const invoicePaymentMeta = parseInvoicePaymentNote(transaction.notes);
+        const systemKind = invoicePaymentMeta ? "invoice_payment" : null;
         const transactionEntity: TransactionEntity = {
             id: transaction.id,
             groupId: transaction.groupId,
@@ -1605,6 +1643,7 @@ export function toTransactionList(
             paymentMethod: group?.creditCardId ? "credit_card" : "wallet",
             creditCardId: group?.creditCardId ?? null,
             systemKind,
+            invoicePaymentMeta,
             meta: {
                 criado_em: transaction.createdAt,
                 atualizado_em: transaction.paidAt,

@@ -25,6 +25,7 @@ export type {
     PlanningSimulatedIncome,
     PlanningWishlistSelection,
     PlanningState,
+    ReportPeriod,
     ResolvedTransactionCategory,
     Tag,
     WishItem,

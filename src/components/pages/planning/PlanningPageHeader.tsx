@@ -50,12 +50,14 @@ function PlanningHeaderTabButton({ tab, isActive, onTabChange }: PlanningHeaderT
         <button
             type="button"
             onClick={() => onTabChange(tab.id)}
-            className={`inline-flex items-center gap-2 rounded-md border px-2.5 py-2 text-lg font-medium transition-colors ${
-                isActive ? "border-white/20 bg-white/[0.08] text-white" : "border-white/10 text-white/58 hover:bg-white/[0.03] hover:text-white/80"
+            className={`group inline-flex items-center gap-2 rounded-xl border pl-2 pr-3 py-2 text-left transition-all duration-200 text-sm ${
+                isActive
+                    ? "border-neutral-300/45 bg-neutral-500/15 text-neutral-50"
+                    : "border-white/[0.09] bg-white/[0.02] text-white/80 hover:-translate-y-0.5 hover:border-white/[0.22] hover:bg-white/[0.06] hover:text-white"
             }`}
         >
-            <span className={`${tab.iconClassName} rounded p-1`}>
-                <Icon size={18} />
+            <span className={`${tab.iconClassName} inline-flex h-8 w-8 items-center justify-center rounded-lg transition-colors`}>
+                <Icon size={18} strokeWidth={2.2} />
             </span>
             {tab.label}
         </button>
@@ -65,7 +67,7 @@ function PlanningHeaderTabButton({ tab, isActive, onTabChange }: PlanningHeaderT
 export function PlanningPageHeader({ activePlanningTab, onTabChange, reportsToolbarProps, timelineToolbarProps }: PlanningPageHeaderProps) {
     return (
         <header className="flex flex-wrap items-center justify-between gap-3 text-left">
-            <div className="inline-flex gap-1">
+            <div className="inline-flex gap-2">
                 {PLANNING_TAB_CONFIGS.map((tab) => (
                     <PlanningHeaderTabButton key={tab.id} tab={tab} isActive={activePlanningTab === tab.id} onTabChange={onTabChange} />
                 ))}

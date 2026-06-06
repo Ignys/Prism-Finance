@@ -394,6 +394,6 @@ export function mergePlanningUpdate(planning: PlanningState, update: Partial<Pla
         timelineMonthCount: update.timelineMonthCount ?? planning.timelineMonthCount ?? DEFAULT_TIMELINE_MONTHS,
         reportsSelectedWalletIds: update.reportsSelectedWalletIds ?? planning.reportsSelectedWalletIds ?? [],
         reportsSelectedCreditCardIds: update.reportsSelectedCreditCardIds ?? planning.reportsSelectedCreditCardIds ?? [],
-        reportsRange: update.reportsRange ?? planning.reportsRange ?? 9,
+        reportsPeriod: update.reportsPeriod ?? planning.reportsPeriod,
     };
 }

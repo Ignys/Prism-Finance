@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { ArrowDown, ArrowUp, Circle, Check, Pencil, Repeat2, Trash2 } from "lucide-react";
 import { type Beneficiary, type Transaction, type Wallet, useFinanceBeneficiaries, useFinanceTransactionGroups } from "../../../context/FinanceContext";
 import { getCategoryIconComponent } from "../../../lib/categoryIcons";
+import { getTransactionCategoryDisplay, getTransactionCategoryDisplayLabel } from "../../../lib/transactionCategory";
 import { BeneficiaryAvatar } from "../../common/BeneficiaryAvatar";
 import { WalletAvatar } from "../../common/WalletAvatar";
 import { formatCurrencyBRL, formatTransactionDate, getTransactionTypeMeta, resolveTransactionWallet } from "../../transactions/transactionView";
@@ -122,17 +123,6 @@ function SortableHeader({ label, field, sortMode, align = "left", onSortModeChan
     );
 }
 
-function getCategoryDisplayLabel(transaction: Transaction): string {
-    const categoryLabel = transaction.category.label;
-    if (!transaction.category.parentLabel) {
-        return categoryLabel;
-    }
-
-    const parts = categoryLabel.split("/");
-    const subcategoryLabel = parts[parts.length - 1]?.trim();
-    return subcategoryLabel || categoryLabel;
-}
-
 function TransactionsTable({
     tabs,
     activeTab,
@@ -179,8 +169,9 @@ function TransactionsTable({
                                 const seriesIndicator = resolveTransactionSeriesIndicator(transaction, group);
                                 const wallet = resolveTransactionWallet(wallets, transaction.inWallet);
                                 const typeMeta = getTransactionTypeMeta(transaction.type);
-                                const CategoryIcon = getCategoryIconComponent(transaction.category.icon, transaction.category.type);
-                                const categoryColor = transaction.category.color ?? "#9CA3AF";
+                                const categoryDisplay = getTransactionCategoryDisplay(transaction.category);
+                                const CategoryIcon = getCategoryIconComponent(categoryDisplay.icon, categoryDisplay.type);
+                                const categoryColor = categoryDisplay.color ?? "#9CA3AF";
                                 const categoryBackground = `${categoryColor}22`;
                                 const beneficiary = transaction.beneficiaryId ? beneficiariesById.get(transaction.beneficiaryId) : null;
                                 const visibleTags = transaction.tags.slice(0, 2);
@@ -218,7 +209,7 @@ function TransactionsTable({
                                                 >
                                                     <CategoryIcon size={16} />
                                                 </span>
-                                                <span>{getCategoryDisplayLabel(transaction)}</span>
+                                                <span>{getTransactionCategoryDisplayLabel(transaction.category)}</span>
                                             </div>
                                         </td>
                                         <td className="border-b border-white/[0.04] px-3 py-2.5 text-white/70">

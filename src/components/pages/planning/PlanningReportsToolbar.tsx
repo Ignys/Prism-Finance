@@ -1,18 +1,17 @@
-import type { ReactNode } from "react";
-import type { CreditCard, Wallet } from "../../../context/FinanceContext";
+import type { CreditCard, ReportPeriod, Wallet } from "../../../context/FinanceContext";
 import { WalletAvatar } from "../../common/WalletAvatar";
 import { MultiSelectCombobox } from "../../transactions/MultiSelectCombobox";
-import { SingleSelectCombobox, type ComboboxOptionBase } from "../../transactions/SingleSelectCombobox";
-import { PLANNING_CONTROL_TRIGGER_CLASS, PlanningControlGroup } from "./PlanningControlGroup";
-import type { ReportRange } from "./PlanningReportsTab";
+import type { ComboboxOptionBase } from "../../transactions/SingleSelectCombobox";
+import { PlanningControlGroup, PLANNING_CONTROL_TRIGGER_CLASS } from "./PlanningControlGroup";
+import { PlanningReportPeriodSelector } from "./PlanningReportPeriodSelector";
 
 export interface PlanningReportsToolbarProps {
     creditCards: CreditCard[];
-    range: ReportRange;
+    period: ReportPeriod;
     selectedCreditCardIds: string[];
     selectedWalletIds: string[];
     wallets: Wallet[];
-    onRangeChange: (range: ReportRange) => void;
+    onPeriodChange: (period: ReportPeriod) => void;
     onSelectedCreditCardIdsChange: (creditCardIds: string[]) => void;
     onSelectedWalletIdsChange: (walletIds: string[]) => void;
 }
@@ -25,24 +24,13 @@ interface CreditCardOption extends ComboboxOptionBase {
     creditCard: CreditCard;
 }
 
-interface ReportRangeOption extends ComboboxOptionBase {
-    value: ReportRange;
-}
-
-const REPORT_RANGE_OPTIONS: ReportRangeOption[] = ([6, 9] as const).map((value) => ({
-    id: String(value),
-    label: `${value} meses`,
-    searchText: `${value} meses`,
-    value,
-}));
-
 export function PlanningReportsToolbar({
     creditCards,
-    range,
+    period,
     selectedCreditCardIds,
     selectedWalletIds,
     wallets,
-    onRangeChange,
+    onPeriodChange,
     onSelectedCreditCardIdsChange,
     onSelectedWalletIdsChange,
 }: PlanningReportsToolbarProps) {
@@ -94,25 +82,7 @@ export function PlanningReportsToolbar({
             </PlanningControlGroup>
 
             <PlanningControlGroup>
-                <SingleSelectCombobox
-                    label="Período"
-                    labelClassName="sr-only"
-                    triggerClassName={PLANNING_CONTROL_TRIGGER_CLASS}
-                    value={String(range)}
-                    placeholder="Selecione"
-                    emptyMessage="Nenhuma opção encontrada."
-                    options={REPORT_RANGE_OPTIONS}
-                    disableSearch
-                    compactTrigger
-                    onChange={(value) => {
-                        const nextRange = Number(value);
-                        if (nextRange === 6 || nextRange === 9) {
-                            onRangeChange(nextRange);
-                        }
-                    }}
-                    renderOptionContent={(option) => <SelectOptionContent>{option.label}</SelectOptionContent>}
-                    renderSelectedContent={(option) => <SelectOptionContent>{option.label}</SelectOptionContent>}
-                />
+                <PlanningReportPeriodSelector period={period} onPeriodChange={onPeriodChange} />
             </PlanningControlGroup>
         </div>
     );
@@ -140,10 +110,6 @@ function CreditCardOptionContent({ option }: { option: CreditCardOption }) {
             </div>
         </div>
     );
-}
-
-function SelectOptionContent({ children }: { children: ReactNode }) {
-    return <span className="truncate text-sm text-white/85">{children}</span>;
 }
 
 function renderSelectionCount(count: number, singular: string, plural: string) {
