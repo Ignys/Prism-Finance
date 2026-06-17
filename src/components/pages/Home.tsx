@@ -13,7 +13,7 @@ export function HomePage() {
     return (
         <AuthShell mainClassName=" text-center text-white">
             <div className="flex gap-2">
-                <section className="w-[28%] space-y-2">
+                <section className="w-[30%] space-y-2">
                     <SpendingBillsAlertCard transactions={transactions} />
                     <RecentTransactionsPanel transactions={transactions} />
                 </section>

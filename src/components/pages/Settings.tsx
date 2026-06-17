@@ -1,10 +1,11 @@
-import { ChevronRight, UserRound, Users } from "lucide-react";
+import { ChevronRight, Database, UserRound, Users } from "lucide-react";
 import { signOut } from "firebase/auth";
 import { useMemo, useState } from "react";
 import { AuthShell } from "../layout/AuthShell";
 import { usePage } from "../../context/PageContext";
 import { auth } from "../../firebase/firebaseClient";
 import { AccountSettingsTab } from "./settings/AccountSettingsTab";
+import { DataSettingsTab } from "./settings/DataSettingsTab";
 import { FamilySettingsTab } from "./settings/FamilySettingsTab";
 import { SettingsSidebarButton } from "./settings/SettingsSidebarButton";
 import type { SettingsTab, SettingsTabId } from "./settings/types";
@@ -31,6 +32,12 @@ export function SettingsPage() {
                 label: "Família",
                 description: "Espaço para vínculos, convites e permissões compartilhadas.",
                 icon: Users,
+            },
+            {
+                id: "data",
+                label: "Dados",
+                description: "Backups, importacao e restauracao de snapshots.",
+                icon: Database,
             },
         ],
         []
@@ -92,6 +99,8 @@ export function SettingsPage() {
                                 onOpenWishlist={() => goToPage("wishlist")}
                                 onSignOut={handleSignOut}
                             />
+                        ) : activeTab === "data" ? (
+                            <DataSettingsTab />
                         ) : (
                             <FamilySettingsTab />
                         )}

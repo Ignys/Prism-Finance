@@ -97,11 +97,66 @@ import {
     permanentlyDeleteWalletData,
 } from "./permanentDeletion";
 import { getDefaultCategoryIconName } from "../../lib/categoryIcons";
+import { saveLocalFinanceBackup } from "../../lib/financeBackup";
 import { parseAppDate } from "../../lib/localDate";
 import { buildUserProfileData, type UserProfileData } from "../../lib/userProfile";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === "object" && value !== null;
+}
+
+const AUTO_REPAIR_GUARDED_KEYS = [
+    "wallets",
+    "creditCards",
+    "creditCardInvoices",
+    "transactionGroups",
+    "transactions",
+    "ledgerEntries",
+    "beneficiaries",
+    "categories",
+    "tags",
+    "wishItems",
+    "transactionTags",
+] as const;
+
+function getRawCollectionCount(rawFinance: unknown, key: (typeof AUTO_REPAIR_GUARDED_KEYS)[number]): number {
+    if (!isRecord(rawFinance)) {
+        return 0;
+    }
+
+    const value = rawFinance[key];
+    return Array.isArray(value) ? value.length : 0;
+}
+
+function shouldSkipFinanceAutoRepair(rawFinance: unknown, snapshot: FinanceSnapshot): { skip: boolean; reasons: string[] } {
+    if (!isRecord(rawFinance)) {
+        return { skip: false, reasons: [] };
+    }
+
+    const normalizedCounts: Record<(typeof AUTO_REPAIR_GUARDED_KEYS)[number], number> = {
+        wallets: snapshot.wallets.length,
+        creditCards: snapshot.creditCards.length,
+        creditCardInvoices: snapshot.creditCardInvoices.length,
+        transactionGroups: snapshot.transactionGroups.length,
+        transactions: snapshot.transactions.length,
+        ledgerEntries: snapshot.ledgerEntries.length,
+        beneficiaries: snapshot.beneficiaries.length,
+        categories: snapshot.categories.length,
+        tags: snapshot.tags.length,
+        wishItems: snapshot.wishItems.length,
+        transactionTags: snapshot.transactionTags.length,
+    };
+
+    const reasons = AUTO_REPAIR_GUARDED_KEYS.flatMap((key) => {
+        const rawCount = getRawCollectionCount(rawFinance, key);
+        const normalizedCount = normalizedCounts[key];
+        return rawCount > normalizedCount ? [`${key}: ${rawCount} -> ${normalizedCount}`] : [];
+    });
+
+    return {
+        skip: reasons.length > 0,
+        reasons,
+    };
 }
 
 function resolveFavoriteWalletId(candidate: unknown, wallets: Wallet[]): string {
@@ -850,6 +905,25 @@ export function useFinanceStore(): FinanceStoreValue {
         setSharedWishlists(nextSharedWishlists);
     }, []);
 
+    const saveLocalSnapshotBackup = useCallback(
+        (snapshot: FinanceSnapshot, trigger: string, favoriteWalletIdOverride?: string | null) => {
+            if (!user) {
+                return;
+            }
+
+            const resolvedProfile = profileRef.current ?? buildUserProfileData(user);
+            saveLocalFinanceBackup({
+                uid: user.uid,
+                email: user.email ?? null,
+                displayName: resolvedProfile.displayName,
+                favoriteWalletId: favoriteWalletIdOverride ?? favoriteWalletIdRef.current,
+                finance: snapshot,
+                trigger,
+            });
+        },
+        [user],
+    );
+
     const buildSnapshot = useCallback((overrides: Partial<FinanceSnapshot> = {}): FinanceSnapshot => {
         return createFinanceSnapshot(
             overrides.wallets ?? walletsRef.current,
@@ -1006,6 +1080,7 @@ export function useFinanceStore(): FinanceStoreValue {
                 const rawFavoriteWalletId = isRecord(rawFinance) ? rawFinance.favoriteWalletId : undefined;
                 const normalizedFavoriteWalletId = resolveFavoriteWalletId(rawFavoriteWalletId, snapshot.wallets);
                 const favoriteChanged = normalizedFavoriteWalletId !== rawFavoriteWalletId;
+                const autoRepairGuard = shouldSkipFinanceAutoRepair(rawFinance, snapshot);
 
                 if (!isActive) {
                     return;
@@ -1013,24 +1088,32 @@ export function useFinanceStore(): FinanceStoreValue {
 
                 setSnapshotState(snapshot);
                 setFavoriteWalletId(normalizedFavoriteWalletId);
+                saveLocalSnapshotBackup(snapshot, "load-success", normalizedFavoriteWalletId);
 
                 if (normalizedFinance.changed || recurringHydration.changed || syncedInvoices.changed || favoriteChanged || hasLegacyDotFields) {
-                    await mergeFinanceFields(user.uid, {
-                        wallets: snapshot.wallets,
-                        creditCards: snapshot.creditCards,
-                        creditCardInvoices: snapshot.creditCardInvoices,
-                        favoriteCreditCardId: snapshot.favoriteCreditCardId,
-                        transactionGroups: snapshot.transactionGroups,
-                        transactions: snapshot.transactions,
-                        ledgerEntries: snapshot.ledgerEntries,
-                        beneficiaries: getPersistableBeneficiaries(snapshot.beneficiaries),
-                        categories: snapshot.categories,
-                        tags: snapshot.tags,
-                        wishItems: snapshot.wishItems,
-                        transactionTags: snapshot.transactionTags,
-                        planning: snapshot.planning,
-                        favoriteWalletId: normalizedFavoriteWalletId,
-                    });
+                    if (autoRepairGuard.skip) {
+                        console.error("Skipped automatic finance repair because the normalized snapshot would remove persisted data.", {
+                            uid: user.uid,
+                            reasons: autoRepairGuard.reasons,
+                        });
+                    } else {
+                        await mergeFinanceFields(user.uid, {
+                            wallets: snapshot.wallets,
+                            creditCards: snapshot.creditCards,
+                            creditCardInvoices: snapshot.creditCardInvoices,
+                            favoriteCreditCardId: snapshot.favoriteCreditCardId,
+                            transactionGroups: snapshot.transactionGroups,
+                            transactions: snapshot.transactions,
+                            ledgerEntries: snapshot.ledgerEntries,
+                            beneficiaries: getPersistableBeneficiaries(snapshot.beneficiaries),
+                            categories: snapshot.categories,
+                            tags: snapshot.tags,
+                            wishItems: snapshot.wishItems,
+                            transactionTags: snapshot.transactionTags,
+                            planning: snapshot.planning,
+                            favoriteWalletId: normalizedFavoriteWalletId,
+                        });
+                    }
                 }
 
                 if (nextFamilyState.family?.id) {
@@ -1067,7 +1150,7 @@ export function useFinanceStore(): FinanceStoreValue {
         return () => {
             isActive = false;
         };
-    }, [profileVersion, refreshFamilyState, setFamilyState, setSnapshotState, syncCurrentUserFamilyBeneficiary, user]);
+    }, [profileVersion, refreshFamilyState, saveLocalSnapshotBackup, setFamilyState, setSnapshotState, syncCurrentUserFamilyBeneficiary, user]);
 
     const persistFinanceFields = useCallback(
         async (fields: PersistFields) => {
@@ -1079,8 +1162,9 @@ export function useFinanceStore(): FinanceStoreValue {
                 beneficiaries: fields.beneficiaries ? getPersistableBeneficiaries(fields.beneficiaries) : fields.beneficiaries,
                 beneficiaryOrder: fields.beneficiaryOrder,
             });
+            saveLocalSnapshotBackup(buildSnapshot(), "persist-fields", fields.favoriteWalletId);
         },
-        [user],
+        [buildSnapshot, saveLocalSnapshotBackup, user],
     );
 
     const persistFullSnapshot = useCallback(

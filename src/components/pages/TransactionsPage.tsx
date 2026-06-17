@@ -341,6 +341,11 @@ export function TransactionsPage() {
                             onTagToggle={toggleTagFilter}
                             onCreateFromActiveTab={handleCreateFromActiveTab}
                         />
+
+                    <div className="flex flex-col 2xl:flex-row-reverse w-full gap-2 shrink-0">
+                                            <div className="w-full 2xl:w-[230px]">
+                        <TransactionsSummaryCards activeTab={activeTab} summary={summary} />
+                    </div>
                         <TransactionsListPanel
                             activeTab={activeTab}
                             incomeTransactions={incomeTransactions}
@@ -355,8 +360,6 @@ export function TransactionsPage() {
                             selectedMonth={selectedMonth}
                         />
                     </div>
-                    <div className="w-full 2xl:w-[230px]">
-                        <TransactionsSummaryCards activeTab={activeTab} summary={summary} />
                     </div>
                 </div>
             </div>
