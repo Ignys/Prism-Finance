@@ -23,4 +23,9 @@ dist-ssr
 *.sln
 *.sw?
 
+firebase-service.json
+supabase-service.json
+local.env.sh
+.migration-tools/
+
 AGENTS.md

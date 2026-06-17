@@ -1,9 +1,8 @@
 import { ChevronRight, UserRound, Users } from "lucide-react";
-import { signOut } from "firebase/auth";
 import { useMemo, useState } from "react";
 import { AuthShell } from "../layout/AuthShell";
 import { usePage } from "../../context/PageContext";
-import { auth } from "../../firebase/firebaseClient";
+import { signOutSupabase } from "../../supabase/auth/authService";
 import { AccountSettingsTab } from "./settings/AccountSettingsTab";
 import { FamilySettingsTab } from "./settings/FamilySettingsTab";
 import { SettingsSidebarButton } from "./settings/SettingsSidebarButton";
@@ -39,7 +38,7 @@ export function SettingsPage() {
 
     async function handleSignOut() {
         try {
-            await signOut(auth);
+            await signOutSupabase();
         } catch (error) {
             console.error("Falha ao sair da conta:", error);
         }
@@ -63,9 +62,9 @@ export function SettingsPage() {
                     </button>
                 </header>
 
-                <section className="flex justify-center gap-2 ">
-                    <aside className=" border-white/[0.08] p-2 min-w-[280px] max-w-[280px]">
-                        <nav className="space-y-1">
+                <section className="flex min-w-0 flex-col justify-center gap-2 lg:flex-row">
+                    <aside className="w-full border-white/[0.08] p-2 lg:min-w-[280px] lg:max-w-[280px]">
+                        <nav className="flex gap-2 overflow-x-auto lg:block lg:space-y-1 lg:overflow-visible">
                             {tabs.map((tab) => (
                                 <SettingsSidebarButton
                                     key={tab.id}
@@ -78,7 +77,7 @@ export function SettingsPage() {
                         </nav>
                     </aside>
 
-                    <div className="grow px-3">
+                    <div className="min-w-0 grow px-0 sm:px-3">
                         {activeTab === "account" ? (
                             <AccountSettingsTab
                                 emailAlertsEnabled={emailAlertsEnabled}

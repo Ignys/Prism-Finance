@@ -12,7 +12,7 @@ export function SettingsSidebarButton({ active, icon: Icon, label, onClick }: Se
         <button
             type="button"
             onClick={onClick}
-            className={`w-full rounded-lg border p-1 text-left transition-all ${
+            className={`min-w-max rounded-lg border p-1 text-left transition-all lg:w-full ${
                 active
                     ? "border-white/[0.08] bg-white/[0.03]"
                     : "border-transparent hover:border-white/[0.14] hover:bg-white/[0.05]"

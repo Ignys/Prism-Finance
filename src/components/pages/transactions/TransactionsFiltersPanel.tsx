@@ -75,8 +75,7 @@ export function TransactionsFiltersPanel({
     onTagToggle,
     onCreateFromActiveTab,
 }: TransactionsFiltersPanelProps) {
-    const canCreateTransaction = activeTab !== "transfer";
-    const createLabel = activeTab === "income" ? "Adicionar receita" : "Adicionar despesa";
+    const createLabel = activeTab === "income" ? "Adicionar receita" : activeTab === "spending" ? "Adicionar despesa" : "Adicionar transferencia";
     const tabs = [
         { key: "income" as const, label: "Receitas", icon: ArrowUpRight },
         { key: "spending" as const, label: "Despesas", icon: ArrowDownRight },
@@ -86,8 +85,8 @@ export function TransactionsFiltersPanel({
     return (
         <section className="">
             <div className="relative flex flex-col gap-4">
-                <div className="flex items-center justify-between">
-                    <div className="flex gap-2">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                    <div className="flex flex-wrap gap-2 overflow-x-auto pb-1">
                         {tabs.map((tab) => {
                             const isActive = activeTab === tab.key;
                             const Icon = tab.icon;
@@ -110,7 +109,7 @@ export function TransactionsFiltersPanel({
                                     key={tab.key}
                                     onClick={() => onTabChange(tab.key)}
                                     aria-pressed={isActive}
-                                    className={`group inline-flex items-center gap-2 rounded-xl border pl-2 pr-3 py-2 text-left transition-all duration-200 ${
+                                    className={`group inline-flex shrink-0 items-center gap-2 rounded-xl border py-2 pl-2 pr-3 text-left transition-all duration-200 ${
                                         isActive
                                             ? "border-neutral-300/45 bg-neutral-500/15 text-neutral-50"
                                             : "border-white/[0.09] bg-white/[0.02] text-white/80 hover:-translate-y-0.5 hover:border-white/[0.22] hover:bg-white/[0.06] hover:text-white"
@@ -119,15 +118,15 @@ export function TransactionsFiltersPanel({
                                     <span className={`inline-flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${iconContainerClass}`}>
                                         <Icon size={18} strokeWidth={2.2} />
                                     </span>
-                                    <span className="text-sm">{tab.label}</span>
+                                    <span className="text-xs md:text-sm">{tab.label}</span>
                                 </button>
                             );
                         })}
                     </div>
                     <StatementMonthSelector selectedMonth={selectedMonth} onMonthChange={onMonthChange} ariaLabel="Selecionar mês e ano das transações" />
                 </div>
-                <div className="flex h-10 justify-between items-center gap-3">
-                    <div className="w-full">
+                <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
+                    <div className="w-full min-w-0">
                         <div className="relative w-full">
                             <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-white/40" />
                             <input
@@ -139,11 +138,11 @@ export function TransactionsFiltersPanel({
                             />
                         </div>
                     </div>
-                    <div className="flex py-1.5 gap-2">
+                    <div className="flex w-full flex-wrap gap-2 py-1.5 lg:w-auto lg:flex-nowrap">
                         <button
                             type="button"
                             onClick={onToggleAdvancedFilters}
-                            className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-white/[0.12] bg-white/[0.04] px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.05em] text-white/75 transition-all hover:border-white/[0.2] hover:bg-white/[0.08]"
+                            className="inline-flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-full border border-white/[0.12] bg-white/[0.04] px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.05em] text-white/75 transition-all hover:border-white/[0.2] hover:bg-white/[0.08] sm:flex-none"
                         >
                             <FunnelPlus size={14} />
                             {showAdvancedFilters ? "Ocultar" : "Mostrar"}
@@ -152,22 +151,20 @@ export function TransactionsFiltersPanel({
                             <button
                                 type="button"
                                 onClick={onClearAdvancedFilters}
-                                className="inline-flex truncate cursor-pointer items-center gap-2 rounded-full border border-white/[0.12] bg-white/[0.02] px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.05em] text-white/70 transition-all hover:border-white/[0.2] hover:bg-white/[0.08]"
+                                className="inline-flex flex-1 cursor-pointer items-center justify-center gap-2 truncate rounded-full border border-white/[0.12] bg-white/[0.02] px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.05em] text-white/70 transition-all hover:border-white/[0.2] hover:bg-white/[0.08] sm:flex-none"
                             >
                                 <X size={14} />
                                 Limpar filtros
                             </button>
                         )}
-                        {canCreateTransaction && (
-                            <button
-                                type="button"
-                                onClick={onCreateFromActiveTab}
-                                className="inline-flex truncate cursor-pointer items-center gap-2 rounded-full border border-emerald-300/30 bg-emerald-500/15 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.05em] text-emerald-100 transition-all hover:border-emerald-300/45 hover:bg-emerald-500/20"
-                            >
-                                <Plus size={14} />
-                                {createLabel}
-                            </button>
-                        )}
+                        <button
+                            type="button"
+                            onClick={onCreateFromActiveTab}
+                            className="inline-flex flex-1 cursor-pointer items-center justify-center gap-2 truncate rounded-full border border-emerald-300/30 bg-emerald-500/15 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.05em] text-emerald-100 transition-all hover:border-emerald-300/45 hover:bg-emerald-500/20 sm:flex-none"
+                        >
+                            <Plus size={14} />
+                            {createLabel}
+                        </button>
                     </div>
                 </div>
 

@@ -39,8 +39,8 @@ function WishlistItemImage({ src, alt }: { src: string | null; alt: string }) {
     }
 
     return (
-        <div className="mb-4 overflow-hidden rounded-2xl h-full w-30 border-white/[0.08] bg-black/20">
-            <img src={src} alt={alt} loading="lazy" onError={() => setHasError(true)} className="w-full h-full object-cover" />
+        <div className="mb-3 h-40 w-full overflow-hidden rounded-2xl border-white/[0.08] bg-black/20 sm:mb-0 sm:h-full sm:w-30 sm:shrink-0">
+            <img src={src} alt={alt} loading="lazy" onError={() => setHasError(true)} className="h-full w-full object-cover" />
         </div>
     );
 }
@@ -192,7 +192,7 @@ export function WishlistPage() {
 
     return (
         <AuthShell mainClassName="text-white">
-            <div className="flex min-h-[calc(100vh-8rem) w-full flex-col">
+            <div className="flex min-h-[calc(100vh-8rem)] w-full flex-col">
                 <header className="flex flex-wrap items-end justify-between gap-2 text-left mb-3">
                     {hasFamilyTabs ? (
                         <div className="flex flex-wrap gap-2">
@@ -240,12 +240,12 @@ export function WishlistPage() {
                         </div>
                     ) : null}
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
                         {isOwnWishlist ? (
                             <button
                                 type="button"
                                 onClick={() => openModal(<AddWishItem />)}
-                                className="inline-flex items-center gap-1 rounded-full border border-emerald-300/25 bg-emerald-500/10 px-4 py-2 text-xs font-medium uppercase text-emerald-100 transition-colors hover:bg-emerald-500/16"
+                                className="inline-flex flex-1 items-center justify-center gap-1 rounded-full border border-emerald-300/25 bg-emerald-500/10 px-4 py-2 text-xs font-medium uppercase text-emerald-100 transition-colors hover:bg-emerald-500/16 sm:flex-none"
                             >
                                 <Plus size={12} />
                                 Adicionar novo item
@@ -255,7 +255,7 @@ export function WishlistPage() {
                         <button
                             type="button"
                             onClick={() => setSortOption((current) => (current === "price" ? "priority" : "price"))}
-                            className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-medium uppercase text-white/80 transition-colors hover:text-white"
+                            className="inline-flex flex-1 items-center justify-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-medium uppercase text-white/80 transition-colors hover:text-white sm:flex-none"
                         >
                             Ordenar por: {sortLabel}
                         </button>
@@ -315,18 +315,18 @@ export function WishlistPage() {
                                                   }
                                                 : undefined
                                         }
-                                        className={`flex gap-4 justify-between rounded-2xl bg-white/[0.03] p-4 text-left h-35 ${
+                                        className={`flex h-auto min-w-0 flex-col justify-between gap-4 rounded-2xl bg-white/[0.03] p-4 text-left sm:min-h-35 sm:flex-row ${
                                             isOwnWishlist ? "cursor-pointer transition-colors hover:border-neutral-300/20 hover:bg-white/[0.05]" : ""
                                         }`}
                                     >
                                         <WishlistItemImage src={wishItem.imageUrl} alt={wishItem.description} />
-                                        <div className="grow flex flex-col justify-between">
+                                        <div className="flex min-w-0 grow flex-col justify-between">
                                             <div>
                                                 <div className="mb-1 flex items-start gap-3">
-                                                    <h2 className="text-xl font-base text-white">{wishItem.description}</h2>
+                                                    <h2 className="break-words text-lg font-normal text-white sm:text-xl">{wishItem.description}</h2>
                                                 </div>
 
-                                                <div className="flex items-center justify-between">
+                                                <div className="flex flex-wrap items-center justify-between gap-2">
                                                     <p className="text-lg font-light text-white/70">{currencyFormatter.format(wishItem.value)}</p>
 
                                                     <div
@@ -343,7 +343,7 @@ export function WishlistPage() {
                                                     </div>
                                                 </div>
                                             </div>
-                                            <div className="mt-2 flex items-center justify-between gap-3 border-t border-white/[0.07] pt-3">
+                                            <div className="mt-2 flex flex-wrap items-center justify-between gap-3 border-t border-white/[0.07] pt-3">
                                                 <span className="inline-flex items-center gap-2 rounded-full border-white/[0.1] text-xs font-medium text-white/75 transition-colors">
                                                     <span
                                                         className="inline-flex h-7 w-7 items-center justify-center rounded-lg border"

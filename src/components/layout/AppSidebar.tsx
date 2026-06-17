@@ -1,7 +1,5 @@
-import { useEffect, useState } from "react";
-import { Hexagon, PanelLeftClose, type LucideIcon } from "lucide-react";
-import { type AppPage, usePage } from "../../context/PageContext";
-import { normalizeNavigationPage } from "./appNavigation";
+import { useEffect } from "react";
+import { Hexagon, X } from "lucide-react";
 import { NavSection } from "./NavSection";
 
 interface AppSidebarProps {
@@ -32,21 +30,60 @@ export function AppSidebar({ isMobileOpen, onCloseMobile }: AppSidebarProps) {
         };
     }, [isMobileOpen, onCloseMobile]);
 
-    return (
-        <aside>
-            <section className="p-2 w-[240px] h-full min-h-[calc(100vh)] bg-zinc-950/70">
-                <div className="sticky top-4 flex flex-col gap-1 ">
-                    <div className="pt-1.5 pb-2 px-2.5 flex gap-2 items-center transition duration-75 ease-in-out  text-white font-medium">
-                        <Hexagon size={25} />
-                        <h1 className="uppercase">Prism</h1>
+    if (isMobileOpen) {
+        return (
+            <aside
+                className={`${isMobileOpen ? "pointer-events-auto" : "pointer-events-none"} fixed inset-0 z-40 lg:pointer-events-auto lg:sticky lg:top-0 lg:z-auto lg:block lg:h-screen lg:w-[240px] lg:shrink-0`}
+            >
+                <button
+                    type="button"
+                    aria-label="Fechar menu lateral"
+                    onClick={onCloseMobile}
+                    className={`absolute inset-0 bg-black/60 transition-opacity lg:hidden ${isMobileOpen ? "opacity-100" : "opacity-0"}`}
+                />
+                <section
+                    className={[
+                        "relative h-full min-h-screen w-[min(82vw,240px)] bg-zinc-950/95 p-2 shadow-2xl transition-transform duration-200 lg:w-[240px] lg:translate-x-0 lg:bg-zinc-950/70 lg:shadow-none",
+                        isMobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0",
+                    ].join(" ")}
+                >
+                    <div className="sticky top-4 flex flex-col gap-1">
+                        <div className="flex items-center justify-between gap-2 px-2.5 pb-2 pt-1.5 text-white transition duration-75 ease-in-out">
+                            <div className="flex items-center gap-2 font-medium">
+                                <Hexagon size={25} />
+                                <h1 className="uppercase">Prism</h1>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={onCloseMobile}
+                                aria-label="Fechar menu lateral"
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.03] text-white/70 transition-colors hover:bg-white/[0.07] hover:text-white lg:hidden"
+                            >
+                                <X size={16} />
+                            </button>
+                        </div>
+                        <Divider />
+                        <NavSection />
                     </div>
-                    <Divider/>
-                    <NavSection />
-
-                </div>
-            </section>
-        </aside>
-    );
+                </section>
+            </aside>
+        );
+    } else if (!isMobileOpen) {
+        return (
+            <aside className="hidden lg:block">
+                <section className="p-2 w-[240px] h-full min-h-[calc(100vh)] bg-zinc-950/70">
+                    <div className="sticky top-4 flex flex-col gap-1 ">
+                        <div className="pt-1.5 pb-2 px-2.5 flex gap-2 items-center transition duration-75 ease-in-out  text-white font-medium">
+                            <Hexagon size={25} />
+                            <h1 className="uppercase">Prism</h1>
+                        </div>
+                        <Divider />
+                        <NavSection />
+                    </div>
+                </section>
+            </aside>
+        );
+    }
 }
 
 function Divider() {

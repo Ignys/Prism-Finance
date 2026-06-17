@@ -32,7 +32,6 @@ export function PlanningReportsCategoriesSection({ categoryReports, totalSpendin
             <div className="mb-4 flex items-start justify-between gap-3">
                 <div>
                     <p className="text-base font-medium text-white">Gastos por categoria</p>
-                    <p className="text-xs text-white/42">Participação no período selecionado</p>
                 </div>
                 {categoryReports.length > 0 ? (
                     <button

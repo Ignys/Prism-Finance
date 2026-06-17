@@ -1,12 +1,11 @@
 import { useMemo } from "react";
 import { Menu } from "lucide-react";
-import { signOut } from "firebase/auth";
 import { useFinanceCreditCardInvoices, useFinanceSession, useFinanceSummary, useFinanceTransactions, useFinanceWallets } from "../../context/FinanceContext";
 import { getMonthKeyFromDateValue } from "../../context/financeTypes";
 import { usePage } from "../../context/PageContext";
-import { auth } from "../../firebase/firebaseClient";
 import { getLocalTodayDate } from "../../lib/localDate";
 import { resolveUserDisplayName } from "../../lib/userProfile";
+import { signOutSupabase } from "../../supabase/auth/authService";
 import { HeaderMetricsRow } from "./header/HeaderMetricsRow";
 import { HeaderProfileMenu } from "./header/HeaderProfileMenu";
 
@@ -93,14 +92,14 @@ export function Header({ onOpenSidebar }: HeaderProps) {
 
     async function handleSwitchAccount() {
         try {
-            await signOut(auth);
+            await signOutSupabase();
         } catch (error) {
             console.error("Falha ao trocar de conta:", error);
         }
     }
 
     return (
-        <header className="pointer-events-none sticky mx-2 top-2.5 z-20 mb-2.5">
+        <header className="pointer-events-none sticky top-2.5 z-20 mx-2 mb-2.5">
             <div
                 className="pointer-events-auto rounded-[18px] border border-white/[0.08] px-3 py-2 bg-zinc-950/70"
                 style={{
@@ -108,8 +107,8 @@ export function Header({ onOpenSidebar }: HeaderProps) {
                     WebkitBackdropFilter: "blur(20px) saturate(180%)",
                 }}
             >
-                <div className="flex items-center justify-between gap-3">
-                    <div className="flex min-w-0 items-center gap-3">
+                <div className="flex min-w-0 items-center justify-between gap-2 sm:gap-3">
+                    <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
                         <button
                             type="button"
                             onClick={onOpenSidebar}
@@ -118,7 +117,9 @@ export function Header({ onOpenSidebar }: HeaderProps) {
                         >
                             <Menu size={18} />
                         </button>
-                        <HeaderMetricsRow amounts={metricAmounts} />
+                        <div className="elegant-scrollbar min-w-0 flex-1 overflow-x-auto pb-0.5">
+                            <HeaderMetricsRow amounts={metricAmounts} />
+                        </div>
                     </div>
                     <HeaderProfileMenu onOpenSettings={handleOpenSettings} onSignOut={handleSwitchAccount} userName={userName} userPhotoUrl={userPhotoUrl} />
                 </div>

@@ -412,8 +412,8 @@ export function StatementContentPanel({
                 </div>
             </section>
 
-            <div className="flex items-center gap-2 justify-between">
-                <div className="relative w-full">
+            <div className="flex flex-col justify-between gap-2 lg:flex-row lg:items-center">
+                <div className="relative w-full min-w-0">
                     <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-white/40" />
                     <input
                         type="text"
@@ -423,12 +423,12 @@ export function StatementContentPanel({
                         className="w-full rounded-xl border border-white/[0.08] bg-black/25 py-2 pl-9 pr-3 text-sm text-white outline-none transition-colors placeholder:text-white/30 focus:border-white/[0.24] focus:bg-black/40"
                     />
                 </div>
-                <div className="flex py-1.5 gap-2">
+                <div className="flex w-full gap-2 py-1.5 lg:w-auto">
                     <button
                         type="button"
                         onClick={onCreateCardSpending}
                         disabled={!canCreateCardSpending}
-                        className="inline-flex truncate cursor-pointer items-center gap-2 rounded-full border border-emerald-300/30 bg-emerald-500/15 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.05em] text-emerald-100 transition-all hover:border-emerald-300/45 hover:bg-emerald-500/20"
+                        className="inline-flex w-full cursor-pointer items-center justify-center gap-2 truncate rounded-full border border-emerald-300/30 bg-emerald-500/15 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.05em] text-emerald-100 transition-all hover:border-emerald-300/45 hover:bg-emerald-500/20 lg:w-auto"
                     >
                         <Plus size={14} />
                         Adicionar gasto
@@ -448,7 +448,8 @@ export function StatementContentPanel({
                         {!canCreateCardSpending && <p className="mt-3 text-xs text-white/40">Cadastre um cartão para lançar gastos em fatura.</p>}
                     </div>
                 ) : (
-                    <table className="w-full border-separate border-spacing-0 text-sm text-white/85">
+                    <div className="elegant-scrollbar overflow-x-auto">
+                        <table className="min-w-[980px] w-full border-separate border-spacing-0 text-sm text-white/85">
                         <thead>
                             <tr>
                                 <SortableHeader label="Status" field="status" sortMode={sortMode} onSortModeChange={setSortMode} />
@@ -573,7 +574,8 @@ export function StatementContentPanel({
                                 );
                             })}
                         </tbody>
-                    </table>
+                        </table>
+                    </div>
                 )}
             </section>
         </div>

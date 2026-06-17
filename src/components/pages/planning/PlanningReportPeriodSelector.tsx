@@ -107,9 +107,6 @@ export function PlanningReportPeriodSelector({ period, onPeriodChange }: Plannin
 
     return (
         <div ref={pickerRef} className="relative inline-flex items-center gap-1">
-            <button type="button" onClick={() => movePeriod(-1)} className={`${PLANNING_CONTROL_TRIGGER_CLASS} w-9 px-0`} aria-label="Mover período um mês para trás">
-                <ChevronLeft size={16} />
-            </button>
             <button
                 type="button"
                 onClick={() => setIsOpen((current) => !current)}
@@ -120,15 +117,6 @@ export function PlanningReportPeriodSelector({ period, onPeriodChange }: Plannin
             >
                 <CalendarRange size={15} />
                 <span className="truncate text-sm text-white/85">{periodLabel}</span>
-            </button>
-            <button
-                type="button"
-                onClick={() => movePeriod(1)}
-                disabled={!canMoveForward}
-                className={`${PLANNING_CONTROL_TRIGGER_CLASS} w-9 px-0 disabled:cursor-not-allowed disabled:opacity-35`}
-                aria-label="Mover período um mês para frente"
-            >
-                <ChevronRight size={16} />
             </button>
 
             {isOpen ? (

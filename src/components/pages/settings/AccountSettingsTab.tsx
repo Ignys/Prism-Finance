@@ -1,13 +1,12 @@
 import { Bell, ImagePlus, KeyRound, LogOut, ShieldCheck, Sparkles, Trash2 } from "lucide-react";
 import { useFinanceSession } from "../../../context/FinanceContext";
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
-import { EmailAuthProvider, reauthenticateWithCredential, updatePassword, updateProfile } from "firebase/auth";
 import { resolveUserDisplayName } from "../../../lib/userProfile";
-import { resolveAuthErrorMessage } from "../../../firebase/authErrorMessages";
-import { syncUserProfileEverywhere } from "../../../firebase/familyService";
 import { dispatchAuthProfileUpdated } from "../../../lib/authProfileEvents";
 import { uploadAvatarToCloudinary } from "../../../lib/cloudinary";
-import { auth } from "../../../firebase/firebaseClient";
+import { resolveSupabaseAuthErrorMessage } from "../../../supabase/auth/authErrorMessages";
+import { setSupabasePassword, updateSupabasePassword, updateSupabaseProfile } from "../../../supabase/auth/authService";
+import { PASSWORD_RECOVERY_STORAGE_KEY } from "../../../hooks/useAuthListener";
 
 type AccountSettingsTabProps = {
     emailAlertsEnabled: boolean;
@@ -79,6 +78,7 @@ export function AccountSettingsTab({
     const [confirmPassword, setConfirmPassword] = useState("");
     const [profileLoading, setProfileLoading] = useState(false);
     const [passwordLoading, setPasswordLoading] = useState(false);
+    const [isPasswordRecoverySession, setIsPasswordRecoverySession] = useState(false);
 
     const userInitial = userName.charAt(0).toUpperCase();
     const userPhotoUrl = profile ? profile.photoURL : user?.photoURL?.trim() ? user.photoURL : null;
@@ -137,6 +137,10 @@ export function AccountSettingsTab({
                 URL.revokeObjectURL(previewObjectUrlRef.current);
             }
         };
+    }, []);
+
+    useEffect(() => {
+        setIsPasswordRecoverySession(window.localStorage.getItem(PASSWORD_RECOVERY_STORAGE_KEY) === "true");
     }, []);
 
     function handlePhotoFileChange(event: ChangeEvent<HTMLInputElement>) {
@@ -201,13 +205,7 @@ export function AccountSettingsTab({
                 nextPhotoPublicId = null;
             }
 
-            await updateProfile(user, {
-                displayName: nextDisplayName,
-                photoURL: nextPhotoUrl,
-            });
-            await user.reload();
-            const syncedUser = auth.currentUser ?? user;
-            await syncUserProfileEverywhere(syncedUser, {
+            await updateSupabaseProfile({
                 displayName: nextDisplayName,
                 photoURL: nextPhotoUrl,
                 photoPublicId: nextPhotoPublicId,
@@ -218,7 +216,7 @@ export function AccountSettingsTab({
             setProfileSuccess("Perfil atualizado com sucesso.");
         } catch (error) {
             console.error("Falha ao atualizar perfil:", error);
-            setProfileError(resolveAuthErrorMessage(error, "Nao foi possivel atualizar o perfil agora."));
+            setProfileError(resolveSupabaseAuthErrorMessage(error, "Nao foi possivel atualizar o perfil agora."));
         } finally {
             setProfileLoading(false);
         }
@@ -236,7 +234,7 @@ export function AccountSettingsTab({
             return;
         }
 
-        if (!currentPassword.trim()) {
+        if (!isPasswordRecoverySession && !currentPassword.trim()) {
             setPasswordError("Digite sua senha atual.");
             setPasswordSuccess("");
             return;
@@ -265,16 +263,24 @@ export function AccountSettingsTab({
         setPasswordSuccess("");
 
         try {
-            const credential = EmailAuthProvider.credential(user.email, currentPassword);
-            await reauthenticateWithCredential(user, credential);
-            await updatePassword(user, newPassword);
+            if (isPasswordRecoverySession) {
+                await setSupabasePassword(newPassword);
+                window.localStorage.removeItem(PASSWORD_RECOVERY_STORAGE_KEY);
+                setIsPasswordRecoverySession(false);
+            } else {
+                await updateSupabasePassword({
+                    email: user.email,
+                    currentPassword,
+                    newPassword,
+                });
+            }
             setCurrentPassword("");
             setNewPassword("");
             setConfirmPassword("");
             setPasswordSuccess("Senha alterada com sucesso.");
         } catch (error) {
             console.error("Falha ao trocar senha:", error);
-            setPasswordError(resolveAuthErrorMessage(error, "Nao foi possivel alterar a senha agora."));
+            setPasswordError(resolveSupabaseAuthErrorMessage(error, "Nao foi possivel alterar a senha agora."));
         } finally {
             setPasswordLoading(false);
         }
@@ -382,21 +388,25 @@ export function AccountSettingsTab({
                     </div>
 
                     <form onSubmit={handlePasswordSubmit} className="mt-5 space-y-4">
-                        <label className="block text-sm text-white/80">
-                            <span className="ml-1 font-light">Senha atual</span>
-                            <input
-                                type="password"
-                                value={currentPassword}
-                                onChange={(event) => {
-                                    setCurrentPassword(event.target.value);
-                                    setPasswordError("");
-                                    setPasswordSuccess("");
-                                }}
-                                autoComplete="current-password"
-                                disabled={!supportsPasswordChange || passwordLoading}
-                                className="mt-2 w-full rounded-2xl border border-white/[0.1] bg-white/[0.03] px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-400/70 disabled:cursor-not-allowed disabled:opacity-60"
-                            />
-                        </label>
+                        {!isPasswordRecoverySession ? (
+                            <label className="block text-sm text-white/80">
+                                <span className="ml-1 font-light">Senha atual</span>
+                                <input
+                                    type="password"
+                                    value={currentPassword}
+                                    onChange={(event) => {
+                                        setCurrentPassword(event.target.value);
+                                        setPasswordError("");
+                                        setPasswordSuccess("");
+                                    }}
+                                    autoComplete="current-password"
+                                    disabled={!supportsPasswordChange || passwordLoading}
+                                    className="mt-2 w-full rounded-2xl border border-white/[0.1] bg-white/[0.03] px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-400/70 disabled:cursor-not-allowed disabled:opacity-60"
+                                />
+                            </label>
+                        ) : (
+                            <p className="rounded-2xl border border-cyan-400/20 bg-cyan-500/10 px-4 py-3 text-sm text-cyan-100">Sessao de redefinicao ativa. Defina uma nova senha para concluir.</p>
+                        )}
 
                         <label className="block text-sm text-white/80">
                             <span className="ml-1 font-light">Nova senha</span>

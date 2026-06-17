@@ -1,4 +1,4 @@
-import type { User } from "firebase/auth";
+import type { AppUser } from "../../auth/appUser";
 import type { UserProfileData } from "../../lib/userProfile";
 import type { FamilyInvite, FamilySummary, SharedWishlistSnapshot } from "../familyTypes";
 import type {
@@ -46,7 +46,7 @@ export interface UpdateTransactionDraft {
 }
 
 export interface FinanceSessionValue {
-    user: User | null;
+    user: AppUser | null;
     profile: UserProfileData | null;
     loading: boolean;
     family: FamilySummary | null;
@@ -103,7 +103,7 @@ export interface FinanceActionsValue {
 }
 
 export interface FinanceContextType extends FinanceActionsValue {
-    user: User | null;
+    user: AppUser | null;
     profile: UserProfileData | null;
     loading: boolean;
     profileVersion: number;
@@ -145,7 +145,7 @@ export interface PersistFields {
 }
 
 export interface FinanceStoreValue extends FinanceActionsValue {
-    user: User | null;
+    user: AppUser | null;
     profile: UserProfileData | null;
     loading: boolean;
     profileVersion: number;

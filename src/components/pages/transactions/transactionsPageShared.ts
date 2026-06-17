@@ -171,12 +171,13 @@ export function getTransactionCategoryLabel(transaction: Transaction): string {
     return transaction.category.label;
 }
 
-export function getTransactionSearchSource(transaction: Transaction, walletName: string): string {
+export function getTransactionSearchSource(transaction: Transaction, walletName: string, destinationWalletName = ""): string {
     return [
         transaction.description,
         transaction.beneficiary,
         transaction.category.label,
         walletName,
+        destinationWalletName,
         ...transaction.tags.map((tag) => tag.name),
     ].join(" ");
 }

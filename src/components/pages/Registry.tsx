@@ -45,8 +45,8 @@ export function RegistryPage() {
 
     return (
         <AuthShell>
-            <div className="flex h-[calc(95vh-5rem)] justify-center overflow-hidden">
-                <section className="flex h-full w-full flex-col space-y-3 overflow-hidden">
+            <div className="flex min-h-[calc(100vh-8rem)] justify-center overflow-visible lg:h-[calc(95vh-5rem)] lg:min-h-0 lg:overflow-hidden">
+                <section className="flex min-h-0 w-full flex-col space-y-3 overflow-visible lg:h-full lg:overflow-hidden">
                     <div className="flex flex-wrap gap-2">
                         {REGISTRY_TABS.map((tab) => {
                             const isActive = tab.page === activeTab;
@@ -69,7 +69,7 @@ export function RegistryPage() {
                         })}
                     </div>
 
-                    <div className="min-h-0 flex-1 overflow-hidden">{renderRegistrySection(activeTab)}</div>
+                    <div className="min-h-0 flex-1 overflow-visible lg:overflow-hidden">{renderRegistrySection(activeTab)}</div>
                 </section>
             </div>
         </AuthShell>

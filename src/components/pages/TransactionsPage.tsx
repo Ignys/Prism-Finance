@@ -6,6 +6,7 @@ import { usePage } from "../../context/PageContext";
 import { getLocalTodayDate } from "../../lib/localDate";
 import { AuthShell } from "../layout/AuthShell";
 import { AddTransactionModal } from "../modal/AddTransaction";
+import { AddTransferModal } from "../modal/AddTransferModal";
 import { ConfirmActionModal } from "../modal/ConfirmActionModal";
 import { EditTransaction } from "../modal/EditTransaction";
 import { TransactionsFiltersPanel } from "./transactions/TransactionsFiltersPanel";
@@ -159,7 +160,11 @@ export function TransactionsPage() {
                 return false;
             }
 
-            if (selectedWalletId !== "all" && transaction.inWallet !== selectedWalletId) {
+            const matchesSelectedWallet =
+                transaction.inWallet === selectedWalletId ||
+                (transaction.type === "transfer" && transaction.destinationWalletId === selectedWalletId);
+
+            if (selectedWalletId !== "all" && !matchesSelectedWallet) {
                 return false;
             }
 
@@ -196,7 +201,8 @@ export function TransactionsPage() {
             }
 
             const walletName = walletNameById.get(transaction.inWallet) ?? "Carteira removida";
-            return normalizeComparisonText(getTransactionSearchSource(transaction, walletName)).includes(normalizedSearch);
+            const destinationWalletName = transaction.destinationWalletId ? (walletNameById.get(transaction.destinationWalletId) ?? "Carteira removida") : "Nenhuma carteira";
+            return normalizeComparisonText(getTransactionSearchSource(transaction, walletName, destinationWalletName)).includes(normalizedSearch);
         });
     }, [dateFrom, dateTo, maxAmount, minAmount, searchQuery, selectedBeneficiary, selectedCategoryKey, selectedStatus, selectedTagIds, selectedWalletId, nonCreditCardTransactions, walletNameById]);
 
@@ -288,6 +294,13 @@ export function TransactionsPage() {
 
     const handleCreateFromActiveTab = () => {
         if (activeTab === "transfer") {
+            openModal(
+                <AddTransferModal
+                    prefill={{
+                        initialDate: resolveMonthStartDate(selectedMonth),
+                    }}
+                />,
+            );
             return;
         }
 

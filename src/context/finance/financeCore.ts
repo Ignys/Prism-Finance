@@ -24,6 +24,7 @@ export interface TransactionEntity {
     value: number;
     date: string;
     inWallet: string;
+    destinationWalletId: string | null;
     categoryId: string | null;
     beneficiaryId: string | null;
     tagIds: string[];
@@ -1633,6 +1634,7 @@ export function toTransactionList(
             value: roundToCents(transaction.amount),
             date: transaction.scheduledDate,
             inWallet: group?.sourceWalletId ?? DEFAULT_WALLET_ID,
+            destinationWalletId: group?.destinationWalletId ?? null,
             categoryId: resolvedCategory.id,
             beneficiaryId: group?.beneficiaryId ?? null,
             tagIds,

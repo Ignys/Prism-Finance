@@ -1,4 +1,4 @@
-import type { User } from "firebase/auth";
+import type { AppUser } from "../auth/appUser";
 
 export interface UserProfileData {
     displayName: string;
@@ -39,7 +39,7 @@ interface BuildUserProfileOptions {
     preferCurrentProfilePhoto?: boolean;
 }
 
-export function buildUserProfileData(user: User, options: BuildUserProfileOptions = {}): UserProfileData {
+export function buildUserProfileData(user: AppUser, options: BuildUserProfileOptions = {}): UserProfileData {
     const currentProfile = typeof options.currentProfile === "object" && options.currentProfile !== null ? (options.currentProfile as Record<string, unknown>) : null;
     const resolvedDisplayName = asOptionalTrimmedString(options.displayName) ?? resolveUserDisplayName(user);
     const resolvedPhotoURL =

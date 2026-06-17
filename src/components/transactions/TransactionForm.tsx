@@ -262,7 +262,7 @@ export function TransactionForm({ type, transaction, mode = "default", prefill, 
                     </button>
                 </header>
 
-                <div className="mt-2 flex gap-3">
+                <div className="mt-2 flex flex-col gap-3 lg:flex-row">
                     <section className="flex grow flex-col gap-3">
                         <label className="flex flex-col gap-1.5">
                             <input
@@ -343,9 +343,9 @@ export function TransactionForm({ type, transaction, mode = "default", prefill, 
 
                     {advancedOpen && (
                         <>
-                            <div className={`w-px rounded-full bg-white/5`} />
+                            <div className="h-px rounded-full bg-white/5 lg:h-auto lg:w-px" />
 
-                            <aside className={`flex flex-col gap-3 w-[280px] `}>
+                            <aside className="flex w-full flex-col gap-3 lg:w-[280px]">
                                 {form.isEditing && form.isSeriesTransaction && !form.isInvoicePaymentEdit && (
                                     <SingleSelectCombobox
                                         disableSearch
@@ -420,7 +420,7 @@ export function TransactionForm({ type, transaction, mode = "default", prefill, 
                     </button>
                 </div>
 
-                <div className="flex items-end justify-between gap-1">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
                     <div className="flex flex-wrap gap-1">
                         {form.isEditing && !form.isInvoicePaymentEdit && (
                             <>
@@ -439,7 +439,7 @@ export function TransactionForm({ type, transaction, mode = "default", prefill, 
                         )}
                     </div>
 
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center justify-end gap-1">
                         <button
                             type="button"
                             onClick={closeModal}

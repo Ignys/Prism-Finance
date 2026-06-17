@@ -1,11 +1,8 @@
 import { useState } from "react";
-import { createUserWithEmailAndPassword, GoogleAuthProvider, signInWithEmailAndPassword, signInWithPopup } from "firebase/auth";
 import { LoadingPage } from "./Loading";
-import { auth } from "../../firebase/firebaseClient";
 import { useFinanceSession } from "../../context/FinanceContext";
-import { resolveAuthErrorMessage } from "../../firebase/authErrorMessages";
-
-const googleProvider = new GoogleAuthProvider();
+import { resolveSupabaseAuthErrorMessage } from "../../supabase/auth/authErrorMessages";
+import { sendSupabasePasswordReset, signInWithEmail, signInWithGoogle, signUpWithEmail } from "../../supabase/auth/authService";
 
 export function LoginPage() {
     const { loading } = useFinanceSession();
@@ -14,11 +11,13 @@ export function LoginPage() {
     const [confirmPassword, setConfirmPassword] = useState("");
     const [isSignUpMode, setIsSignUpMode] = useState(false);
     const [error, setError] = useState("");
+    const [success, setSuccess] = useState("");
     const [authActionLoading, setAuthActionLoading] = useState<"email" | "google" | null>(null);
 
     const handleEmailAuth = async (e: React.FormEvent) => {
         e.preventDefault();
         setError("");
+        setSuccess("");
 
         if (!email.trim()) {
             setError("Digite um e-mail valido.");
@@ -46,13 +45,13 @@ export function LoginPage() {
 
         try {
             if (isSignUpMode) {
-                await createUserWithEmailAndPassword(auth, email.trim(), password);
+                await signUpWithEmail(email.trim(), password);
             } else {
-                await signInWithEmailAndPassword(auth, email.trim(), password);
+                await signInWithEmail(email.trim(), password);
             }
         } catch (err) {
             console.error(err);
-            setError(resolveAuthErrorMessage(err, "Nao foi possivel concluir a autenticacao. Tente novamente."));
+            setError(resolveSupabaseAuthErrorMessage(err, "Nao foi possivel concluir a autenticacao. Tente novamente."));
         } finally {
             setAuthActionLoading(null);
         }
@@ -60,13 +59,14 @@ export function LoginPage() {
 
     const handleGoogleLogin = async () => {
         setError("");
+        setSuccess("");
         setAuthActionLoading("google");
 
         try {
-            await signInWithPopup(auth, googleProvider);
+            await signInWithGoogle();
         } catch (err) {
             console.error(err);
-            setError(resolveAuthErrorMessage(err, "Nao foi possivel concluir a autenticacao. Tente novamente."));
+            setError(resolveSupabaseAuthErrorMessage(err, "Nao foi possivel concluir a autenticacao. Tente novamente."));
         } finally {
             setAuthActionLoading(null);
         }
@@ -76,9 +76,32 @@ export function LoginPage() {
 
     const handleModeChange = (nextModeIsSignUp: boolean) => {
         setError("");
+        setSuccess("");
         setIsSignUpMode(nextModeIsSignUp);
         setPassword("");
         setConfirmPassword("");
+    };
+
+    const handlePasswordReset = async () => {
+        setError("");
+        setSuccess("");
+
+        const normalizedEmail = email.trim();
+        if (!normalizedEmail) {
+            setError("Digite seu e-mail para receber a redefinicao de senha.");
+            return;
+        }
+
+        setAuthActionLoading("email");
+        try {
+            await sendSupabasePasswordReset(normalizedEmail);
+            setSuccess("Enviamos um link de redefinicao para seu e-mail.");
+        } catch (err) {
+            console.error(err);
+            setError(resolveSupabaseAuthErrorMessage(err, "Nao foi possivel enviar a redefinicao de senha."));
+        } finally {
+            setAuthActionLoading(null);
+        }
     };
 
     if (loading) return <LoadingPage />;
@@ -184,6 +207,7 @@ export function LoginPage() {
                                 )}
 
                                 {error && <p className="rounded-xl border border-red-400/30 bg-red-500/10 p-3 text-sm text-red-200">{error}</p>}
+                                {success && <p className="rounded-xl border border-emerald-400/30 bg-emerald-500/10 p-3 text-sm text-emerald-100">{success}</p>}
 
                                 <button
                                     type="submit"
@@ -193,6 +217,17 @@ export function LoginPage() {
                                     {authActionLoading === "email" ? (isSignUpMode ? "Criando conta..." : "Entrando...") : isSignUpMode ? "Criar conta" : "Entrar"}
                                 </button>
                             </form>
+
+                            {!isSignUpMode ? (
+                                <button
+                                    type="button"
+                                    onClick={() => void handlePasswordReset()}
+                                    disabled={isLoading}
+                                    className="mt-3 w-full text-center text-sm font-medium text-cyan-300 transition hover:text-cyan-200 disabled:cursor-not-allowed disabled:opacity-60"
+                                >
+                                    Esqueci minha senha
+                                </button>
+                            ) : null}
 
                             <div className="my-5 flex items-center gap-3">
                                 <span className="h-px flex-1 bg-white/10" />

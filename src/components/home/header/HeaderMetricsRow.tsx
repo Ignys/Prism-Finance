@@ -55,7 +55,7 @@ export function HeaderMetricsRow({ amounts }: HeaderMetricsRowProps) {
                     <div key={label} className="contents">
                         {index > 0 ? <div className="mx-0.5 h-5 w-px bg-white/[0.06]" /> : null}
                         {!isBalance ? (
-                            <div className="group relative flex cursor-pointer items-center gap-2 rounded-[9px] border border-transparent px-5 py-1.5 transition-all duration-200 hover:border-white/[0.08] hover:bg-white/[0.05]">
+                            <div className="group relative flex cursor-pointer items-center gap-2 rounded-[9px] border border-transparent px-3 py-1.5 transition-all duration-200 hover:border-white/[0.08] hover:bg-white/[0.05] sm:px-5">
                                 <div className="flex flex-col transition-opacity duration-150 group-hover:opacity-0">
                                     <span className={METRIC_LABEL_CLASS}>{label}</span>
                                     <span className={`whitespace-nowrap text-[15px] font-normal ${amountColor}`} style={{ fontFamily: "'Azeret Mono', monospace" }}>
@@ -77,7 +77,7 @@ export function HeaderMetricsRow({ amounts }: HeaderMetricsRowProps) {
                                 </button>
                             </div>
                         ) : (
-                            <div className="flex items-center gap-2 rounded-[9px] border border-transparent pl-2 pr-5 py-1.5">
+                            <div className="flex items-center gap-2 rounded-[9px] border border-transparent py-1.5 pl-1 pr-3 sm:pl-2 sm:pr-5">
                                 <div className="flex flex-col">
                                     <span className={METRIC_LABEL_CLASS}>{label}</span>
                                     <span className={`whitespace-nowrap text-[15px] font-normal ${amountColor}`} style={{ fontFamily: "'Azeret Mono', monospace" }}>

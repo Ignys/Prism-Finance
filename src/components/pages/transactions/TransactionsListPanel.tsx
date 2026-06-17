@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { ArrowDown, ArrowUp, Circle, Check, Pencil, Repeat2, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, Circle, CircleSlash, Check, Pencil, Repeat2, Trash2 } from "lucide-react";
 import { type Beneficiary, type Transaction, type Wallet, useFinanceBeneficiaries, useFinanceTransactionGroups } from "../../../context/FinanceContext";
 import { getCategoryIconComponent } from "../../../lib/categoryIcons";
 import { getTransactionCategoryDisplay, getTransactionCategoryDisplayLabel } from "../../../lib/transactionCategory";
@@ -123,6 +123,26 @@ function SortableHeader({ label, field, sortMode, align = "left", onSortModeChan
     );
 }
 
+function WalletTableCell({ wallet }: { wallet: Wallet }) {
+    return (
+        <div className="flex items-center gap-2">
+            <WalletAvatar wallet={wallet} className="h-8 w-8 rounded-md border border-white/[0.1]" iconSize={16} iconStrokeWidth={1.8} />
+            <span className="text-white/75">{wallet.name}</span>
+        </div>
+    );
+}
+
+function NoDestinationWalletCell() {
+    return (
+        <div className="flex items-center gap-2 text-white/55">
+            <span className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-white/[0.1] bg-white/[0.03]">
+                <CircleSlash size={15} />
+            </span>
+            <span>Nenhuma carteira</span>
+        </div>
+    );
+}
+
 function TransactionsTable({
     tabs,
     activeTab,
@@ -149,16 +169,16 @@ function TransactionsTable({
             {transactions.length < 1 ? (
                 <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] px-3 py-6 text-center text-sm text-white/55">{activeTabConfig.emptyMessage}</div>
             ) : (
-                <div>
-                    <table className="w-full border-separate border-spacing-0 text-sm text-white/85">
+                <div className="elegant-scrollbar overflow-x-auto">
+                    <table className="min-w-[980px] w-full border-separate border-spacing-0 text-sm text-white/85">
                         <thead>
                             <tr>
                                 <SortableHeader label="Status" field="status" sortMode={sortMode} onSortModeChange={onSortModeChange} />
                                 <SortableHeader label="Data" field="date" sortMode={sortMode} onSortModeChange={onSortModeChange} />
                                 <th className="border-b border-white/[0.08] px-3 py-2 text-left text-[11px] uppercase tracking-[0.08em] text-white/45">Descrição</th>
-                                <SortableHeader label="Categoria" field="category" sortMode={sortMode} onSortModeChange={onSortModeChange} />
+                                <SortableHeader label={activeTab === "transfer" ? "Origem" : "Categoria"} field="category" sortMode={sortMode} onSortModeChange={onSortModeChange} />
                                 <th className="border-b border-white/[0.08] px-3 py-2 text-left text-[11px] uppercase tracking-[0.08em] text-white/45">Tags</th>
-                                <SortableHeader label="Beneficiário" field="beneficiary" sortMode={sortMode} onSortModeChange={onSortModeChange} />
+                                <SortableHeader label={activeTab === "transfer" ? "Destino" : "Beneficiário"} field="beneficiary" sortMode={sortMode} onSortModeChange={onSortModeChange} />
                                 <SortableHeader label="Valor" field="value" sortMode={sortMode} align="right" onSortModeChange={onSortModeChange} />
                                 <th className="border-b border-white/[0.08] px-3 py-2 text-right text-[11px] uppercase tracking-[0.08em] text-white/45">Ações</th>
                             </tr>
@@ -168,6 +188,7 @@ function TransactionsTable({
                                 const group = transactionGroupsById.get(transaction.groupId);
                                 const seriesIndicator = resolveTransactionSeriesIndicator(transaction, group);
                                 const wallet = resolveTransactionWallet(wallets, transaction.inWallet);
+                                const destinationWallet = transaction.destinationWalletId ? resolveTransactionWallet(wallets, transaction.destinationWalletId) : null;
                                 const typeMeta = getTransactionTypeMeta(transaction.type);
                                 const categoryDisplay = getTransactionCategoryDisplay(transaction.category);
                                 const CategoryIcon = getCategoryIconComponent(categoryDisplay.icon, categoryDisplay.type);
@@ -202,15 +223,19 @@ function TransactionsTable({
                                             </div>
                                         </td>
                                         <td className="border-b border-white/[0.04] px-3 py-2.5 text-white/70">
-                                            <div className="flex items-center gap-2">
-                                                <span
-                                                    className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-white/[0.1]"
-                                                    style={{ color: categoryColor, backgroundColor: categoryBackground }}
-                                                >
-                                                    <CategoryIcon size={16} />
-                                                </span>
-                                                <span>{getTransactionCategoryDisplayLabel(transaction.category)}</span>
-                                            </div>
+                                            {transaction.type === "transfer" ? (
+                                                <WalletTableCell wallet={wallet} />
+                                            ) : (
+                                                <div className="flex items-center gap-2">
+                                                    <span
+                                                        className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-white/[0.1]"
+                                                        style={{ color: categoryColor, backgroundColor: categoryBackground }}
+                                                    >
+                                                        <CategoryIcon size={16} />
+                                                    </span>
+                                                    <span>{getTransactionCategoryDisplayLabel(transaction.category)}</span>
+                                                </div>
+                                            )}
                                         </td>
                                         <td className="border-b border-white/[0.04] px-3 py-2.5 text-white/70">
                                             {visibleTags.length < 1 ? (
@@ -235,10 +260,18 @@ function TransactionsTable({
                                             )}
                                         </td>
                                         <td className="border-b border-white/[0.04] px-3 py-2.5">
-                                            <div className="flex items-center text-white/70 gap-2">
-                                                <BeneficiaryAvatar beneficiary={{ name: beneficiary?.name ?? "BeneficiÃ¡rio", avatarImage: beneficiary?.avatarImage ?? null, avatarColor: beneficiary?.avatarColor ?? "#374151" }} />
-                                                <span>{beneficiary?.name ?? "Beneficiário"}</span>
-                                            </div>
+                                            {transaction.type === "transfer" ? (
+                                                destinationWallet ? (
+                                                    <WalletTableCell wallet={destinationWallet} />
+                                                ) : (
+                                                    <NoDestinationWalletCell />
+                                                )
+                                            ) : (
+                                                <div className="flex items-center text-white/70 gap-2">
+                                                    <BeneficiaryAvatar beneficiary={{ name: beneficiary?.name ?? "BeneficiÃ¡rio", avatarImage: beneficiary?.avatarImage ?? null, avatarColor: beneficiary?.avatarColor ?? "#374151" }} />
+                                                    <span>{beneficiary?.name ?? "Beneficiário"}</span>
+                                                </div>
+                                            )}
                                         </td>
                                         <td className={`border-b border-white/[0.04] px-3 py-2.5 text-right font-semibold ${typeMeta.amountColorClass}`}>R$ {formatCurrencyBRL(transaction.value)}</td>
                                         <td className="border-b border-white/[0.04] px-3 py-2.5">
