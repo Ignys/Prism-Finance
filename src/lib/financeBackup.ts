@@ -147,6 +147,18 @@ export function buildFinanceBackupFile(params: BuildFinanceBackupParams): Financ
     };
 }
 
+export function downloadFinanceBackupFile(backup: FinanceBackupFile, label: string): void {
+    const safeLabel = label.replace(/[^a-z0-9-_]+/gi, "-").replace(/^-+|-+$/g, "").toLowerCase() || "backup";
+    const filename = `${safeLabel}-${backup.exportedAt.slice(0, 19).replace(/[:T]/g, "-")}.json`;
+    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
+    const objectUrl = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = objectUrl;
+    anchor.download = filename;
+    anchor.click();
+    URL.revokeObjectURL(objectUrl);
+}
+
 export function saveLocalFinanceBackup(params: SaveLocalFinanceBackupParams): void {
     const nextBackup: LocalFinanceBackupRecord = {
         ...buildFinanceBackupFile(params),

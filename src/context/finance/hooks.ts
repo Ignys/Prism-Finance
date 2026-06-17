@@ -42,6 +42,7 @@ import {
     FinanceSessionContext,
     FinanceStoredTransactionsContext,
     FinanceSummaryContext,
+    FinanceSyncContext,
     FinanceSharedWishlistsContext,
     FinanceTagsContext,
     FinanceWishItemsContext,
@@ -163,6 +164,10 @@ export function useFinanceActions() {
     return useRequiredContext(FinanceActionsContext, "useFinanceActions");
 }
 
+export function useFinanceSync() {
+    return useRequiredContext(FinanceSyncContext, "useFinanceSync");
+}
+
 export function useFinance(): FinanceContextType {
     const { user, profile, loading, profileVersion } = useFinanceSession();
     const family = useFinanceFamily();
@@ -184,6 +189,7 @@ export function useFinance(): FinanceContextType {
     const planning = useFinancePlanning();
     const { despesas, receitas, balance } = useFinanceSummary();
     const actions = useFinanceActions();
+    const sync = useFinanceSync();
 
     const finance = useMemo(() => {
         if (!user) {
@@ -229,6 +235,7 @@ export function useFinance(): FinanceContextType {
             despesas,
             receitas,
             balance,
+            sync,
             ...actions,
         }),
         [
@@ -249,6 +256,7 @@ export function useFinance(): FinanceContextType {
             profileVersion,
             receitas,
             sharedWishlists,
+            sync,
             tags,
             transactions,
             user,

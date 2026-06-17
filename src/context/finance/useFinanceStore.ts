@@ -89,6 +89,7 @@ import { saveLocalFinanceBackup } from "../../lib/financeBackup";
 import { parseAppDate } from "../../lib/localDate";
 import { buildUserProfileData, type UserProfileData } from "../../lib/userProfile";
 import { loadSupabaseFinanceData, saveSupabaseFinanceData } from "../../supabase/finance";
+import { toSupabaseFinanceData, useFinanceSyncQueue } from "./useFinanceSyncQueue";
 
 function resolveFavoriteWalletId(candidate: unknown, wallets: Wallet[]): string {
     const normalizedCandidate = typeof candidate === "string" ? normalizeWalletId(candidate.trim()) : DEFAULT_WALLET_ID;
@@ -809,6 +810,12 @@ export function useFinanceStore(): FinanceStoreValue {
         );
     }, []);
 
+    const financeSync = useFinanceSyncQueue({
+        userId: user?.uid ?? null,
+        saveFinanceData: saveSupabaseFinanceData,
+    });
+    const { enqueueSync: enqueueFinanceSync, getPendingSyncData } = financeSync;
+
     const syncCurrentUserFamilyBeneficiary = useCallback(
         async (familyId: string, snapshotOverride?: FinanceSnapshot, profileOverride?: UserProfileData | null) => {
             void familyId;
@@ -866,9 +873,11 @@ export function useFinanceStore(): FinanceStoreValue {
                 if (isActive) {
                     setProfile(profile);
                 }
-                const supabaseFinance = await loadSupabaseFinanceData(user.uid);
-                const rawFavoriteWalletId = supabaseFinance?.favoriteWalletId;
-                const normalizedFinance = normalizeFinanceSnapshot(supabaseFinance, user.uid, {
+                const pendingSyncFinance = getPendingSyncData();
+                const supabaseFinance = pendingSyncFinance ? null : await loadSupabaseFinanceData(user.uid);
+                const financeSource = pendingSyncFinance ?? supabaseFinance;
+                const rawFavoriteWalletId = financeSource?.favoriteWalletId;
+                const normalizedFinance = normalizeFinanceSnapshot(financeSource, user.uid, {
                     defaultBeneficiaryName: profile.displayName,
                     defaultBeneficiaryAvatarImage: profile.photoURL,
                     sharedBeneficiaries: [],
@@ -915,11 +924,8 @@ export function useFinanceStore(): FinanceStoreValue {
                 setFamilyState(null, []);
                 saveLocalSnapshotBackup(snapshot, "load-success", normalizedFavoriteWalletId);
 
-                if (!supabaseFinance || normalizedFinance.changed || recurringHydration.changed || syncedInvoices.changed || favoriteChanged) {
-                    await saveSupabaseFinanceData(user.uid, {
-                        ...snapshot,
-                        favoriteWalletId: normalizedFavoriteWalletId,
-                    });
+                if (!pendingSyncFinance && (!supabaseFinance || normalizedFinance.changed || recurringHydration.changed || syncedInvoices.changed || favoriteChanged)) {
+                    enqueueFinanceSync(toSupabaseFinanceData(snapshot, normalizedFavoriteWalletId));
                 }
             } catch (error) {
                 console.error("Failed to load finance data:", error);
@@ -946,7 +952,7 @@ export function useFinanceStore(): FinanceStoreValue {
         return () => {
             isActive = false;
         };
-    }, [profileVersion, refreshFamilyState, saveLocalSnapshotBackup, setFamilyState, setSnapshotState, syncCurrentUserFamilyBeneficiary, user]);
+    }, [enqueueFinanceSync, getPendingSyncData, profileVersion, refreshFamilyState, saveLocalSnapshotBackup, setFamilyState, setSnapshotState, syncCurrentUserFamilyBeneficiary, user]);
 
     const persistFinanceFields = useCallback(
         async (fields: PersistFields) => {
@@ -970,13 +976,11 @@ export function useFinanceStore(): FinanceStoreValue {
                 planning: fields.planning,
             });
 
-            await saveSupabaseFinanceData(user.uid, {
-                ...snapshot,
-                favoriteWalletId: fields.favoriteWalletId ?? favoriteWalletIdRef.current,
-            });
-            saveLocalSnapshotBackup(buildSnapshot(), "persist-fields", fields.favoriteWalletId);
+            const resolvedFavoriteWalletId = fields.favoriteWalletId ?? favoriteWalletIdRef.current;
+            saveLocalSnapshotBackup(snapshot, "persist-fields", resolvedFavoriteWalletId);
+            enqueueFinanceSync(toSupabaseFinanceData(snapshot, resolvedFavoriteWalletId));
         },
-        [buildSnapshot, saveLocalSnapshotBackup, user],
+        [buildSnapshot, enqueueFinanceSync, saveLocalSnapshotBackup, user],
     );
 
     const persistFullSnapshot = useCallback(
@@ -2738,6 +2742,7 @@ export function useFinanceStore(): FinanceStoreValue {
             despesas: summary.despesas,
             receitas: summary.receitas,
             balance,
+            sync: financeSync,
             setStartBalance,
             setFavoriteWallet,
             setWalletActive,
@@ -2802,6 +2807,7 @@ export function useFinanceStore(): FinanceStoreValue {
             family,
             favoriteCreditCardId,
             favoriteWalletId,
+            financeSync,
             generateFamilyInvite,
             joinFamilyByCode,
             ledgerEntries,

@@ -14,6 +14,7 @@ import {
     FinanceSessionContext,
     FinanceStoredTransactionsContext,
     FinanceSummaryContext,
+    FinanceSyncContext,
     FinanceSharedWishlistsContext,
     FinanceTagsContext,
     FinanceWishItemsContext,
@@ -155,7 +156,9 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
                                                                         <FinanceTransactionsContext.Provider value={store.transactions}>
                                                                             <FinancePlanningContext.Provider value={store.planning}>
                                                                                 <FinanceSummaryContext.Provider value={summaryValue}>
-                                                                                    <FinanceActionsContext.Provider value={actionsValue}>{children}</FinanceActionsContext.Provider>
+                                                                                    <FinanceActionsContext.Provider value={actionsValue}>
+                                                                                        <FinanceSyncContext.Provider value={store.sync}>{children}</FinanceSyncContext.Provider>
+                                                                                    </FinanceActionsContext.Provider>
                                                                                 </FinanceSummaryContext.Provider>
                                                                             </FinancePlanningContext.Provider>
                                                                         </FinanceTransactionsContext.Provider>

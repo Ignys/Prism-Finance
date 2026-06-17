@@ -160,9 +160,7 @@ export function TransactionsPage() {
                 return false;
             }
 
-            const matchesSelectedWallet =
-                transaction.inWallet === selectedWalletId ||
-                (transaction.type === "transfer" && transaction.destinationWalletId === selectedWalletId);
+            const matchesSelectedWallet = transaction.inWallet === selectedWalletId || (transaction.type === "transfer" && transaction.destinationWalletId === selectedWalletId);
 
             if (selectedWalletId !== "all" && !matchesSelectedWallet) {
                 return false;
@@ -355,24 +353,24 @@ export function TransactionsPage() {
                             onCreateFromActiveTab={handleCreateFromActiveTab}
                         />
 
-                    <div className="flex flex-col 2xl:flex-row-reverse w-full gap-2 shrink-0">
-                                            <div className="w-full 2xl:w-[230px]">
-                        <TransactionsSummaryCards activeTab={activeTab} summary={summary} />
-                    </div>
-                        <TransactionsListPanel
-                            activeTab={activeTab}
-                            incomeTransactions={incomeTransactions}
-                            spendingTransactions={spendingTransactions}
-                            transferTransactions={transferTransactions}
-                            wallets={wallets}
-                            sortMode={sortMode}
-                            onSortModeChange={(value) => setFilter("sortMode", value)}
-                            onEdit={handleEditTransaction}
-                            onConfirmPayment={handleConfirmPayment}
-                            onDelete={handleDeleteTransaction}
-                            selectedMonth={selectedMonth}
-                        />
-                    </div>
+                        <div className="flex flex-col 2xl:flex-row-reverse w-full gap-2 shrink-0">
+                            <div className="w-full 2xl:w-[230px]">
+                                <TransactionsSummaryCards activeTab={activeTab} summary={summary} />
+                            </div>
+                            <TransactionsListPanel
+                                activeTab={activeTab}
+                                incomeTransactions={incomeTransactions}
+                                spendingTransactions={spendingTransactions}
+                                transferTransactions={transferTransactions}
+                                wallets={wallets}
+                                sortMode={sortMode}
+                                onSortModeChange={(value) => setFilter("sortMode", value)}
+                                onEdit={handleEditTransaction}
+                                onConfirmPayment={handleConfirmPayment}
+                                onDelete={handleDeleteTransaction}
+                                selectedMonth={selectedMonth}
+                            />
+                        </div>
                     </div>
                 </div>
             </div>

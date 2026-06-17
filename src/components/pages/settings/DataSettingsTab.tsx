@@ -2,7 +2,8 @@ import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Download, FileUp, HardDriveDownload, History, ShieldAlert } from "lucide-react";
 import { useFinance } from "../../../context/FinanceContext";
 import type { FinanceSnapshot } from "../../../context/FinanceContext";
-import { buildFinanceBackupFile, listLocalFinanceBackups, parseFinanceBackupFile, type FinanceBackupFile, type LocalFinanceBackupRecord } from "../../../lib/financeBackup";
+import { buildFinanceBackupFile, downloadFinanceBackupFile, listLocalFinanceBackups, parseFinanceBackupFile, type FinanceBackupFile, type LocalFinanceBackupRecord } from "../../../lib/financeBackup";
+import { CsvTransactionImportCard } from "./CsvTransactionImportCard";
 
 const IMPORT_CONFIRMATION_TEXT = "IMPORTAR";
 
@@ -19,18 +20,6 @@ function formatDateTime(value: string): string {
         hour: "2-digit",
         minute: "2-digit",
     });
-}
-
-function downloadBackupFile(backup: FinanceBackupFile, label: string) {
-    const safeLabel = label.replace(/[^a-z0-9-_]+/gi, "-").replace(/^-+|-+$/g, "").toLowerCase() || "backup";
-    const filename = `${safeLabel}-${backup.exportedAt.slice(0, 19).replace(/[:T]/g, "-")}.json`;
-    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
-    const objectUrl = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = objectUrl;
-    anchor.download = filename;
-    anchor.click();
-    URL.revokeObjectURL(objectUrl);
 }
 
 function SnapshotStats({ finance }: { finance: FinanceSnapshot }) {
@@ -107,7 +96,7 @@ export function DataSettingsTab() {
             finance,
         });
 
-        downloadBackupFile(backup, "prism-backup");
+        downloadFinanceBackupFile(backup, "prism-backup");
         setFeedback({
             type: "success",
             message: "Backup exportado com sucesso.",
@@ -173,7 +162,7 @@ export function DataSettingsTab() {
                 favoriteWalletId,
                 finance,
             });
-            downloadBackupFile(rollbackBackup, "prism-backup-pre-import");
+            downloadFinanceBackupFile(rollbackBackup, "prism-backup-pre-import");
 
             await updateFinance(pendingImport.finance);
             if (pendingImport.preferences.favoriteWalletId) {
@@ -242,6 +231,8 @@ export function DataSettingsTab() {
                     </div>
                 ) : null}
             </article>
+
+            <CsvTransactionImportCard />
 
             <section className="grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
                 <article className="rounded-lg border border-white/[0.08] bg-[#101010] p-4">
@@ -351,7 +342,7 @@ export function DataSettingsTab() {
                                             </button>
                                             <button
                                                 type="button"
-                                                onClick={() => downloadBackupFile(backup, "prism-backup-local")}
+                                                onClick={() => downloadFinanceBackupFile(backup, "prism-backup-local")}
                                                 className="inline-flex items-center gap-2 rounded-lg border border-white/[0.12] bg-white/[0.03] px-3 py-1.5 text-xs text-white transition-colors hover:border-white/[0.18] hover:bg-white/[0.06]"
                                             >
                                                 Baixar

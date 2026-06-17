@@ -61,6 +61,7 @@ export {
     useFinanceSharedWishlists,
     useFinanceStoredTransactions,
     useFinanceSummary,
+    useFinanceSync,
     useFinanceTags,
     useFinanceTransactionGroups,
     useFinanceTransactions,

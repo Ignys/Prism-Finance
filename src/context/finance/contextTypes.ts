@@ -59,6 +59,16 @@ export interface FinanceSummaryValue {
     balance: number;
 }
 
+export type FinanceSyncStatus = "syncing" | "synced" | "error";
+
+export interface FinanceSyncValue {
+    status: FinanceSyncStatus;
+    pendingCount: number;
+    lastSyncedAt: string | null;
+    lastError: string | null;
+    retrySync: () => void;
+}
+
 export interface FinanceActionsValue {
     setStartBalance: (walletId: string, balance: number) => Promise<void>;
     setFavoriteWallet: (walletId: string) => Promise<void>;
@@ -124,6 +134,7 @@ export interface FinanceContextType extends FinanceActionsValue {
     despesas: number;
     receitas: number;
     balance: number;
+    sync: FinanceSyncValue;
 }
 
 export interface PersistFields {
@@ -169,4 +180,5 @@ export interface FinanceStoreValue extends FinanceActionsValue {
     despesas: number;
     receitas: number;
     balance: number;
+    sync: FinanceSyncValue;
 }

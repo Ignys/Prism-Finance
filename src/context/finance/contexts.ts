@@ -15,7 +15,7 @@ import type {
     WishItem,
     Wallet,
 } from "../financeTypes";
-import type { FinanceActionsValue, FinanceSessionValue, FinanceSummaryValue } from "./contextTypes";
+import type { FinanceActionsValue, FinanceSessionValue, FinanceSummaryValue, FinanceSyncValue } from "./contextTypes";
 
 export const FinanceSessionContext = createContext<FinanceSessionValue | undefined>(undefined);
 export const FinanceFamilyContext = createContext<FamilySummary | null | undefined>(undefined);
@@ -37,6 +37,7 @@ export const FinanceTransactionsContext = createContext<Transaction[] | undefine
 export const FinancePlanningContext = createContext<PlanningState | undefined>(undefined);
 export const FinanceSummaryContext = createContext<FinanceSummaryValue | undefined>(undefined);
 export const FinanceActionsContext = createContext<FinanceActionsValue | undefined>(undefined);
+export const FinanceSyncContext = createContext<FinanceSyncValue | undefined>(undefined);
 
 export function useRequiredContext<T>(context: Context<T | undefined>, hookName: string): T {
     const value = useContext(context);

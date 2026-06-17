@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { Hexagon, X } from "lucide-react";
+import { FinanceSyncStatus } from "./FinanceSyncStatus";
 import { NavSection } from "./NavSection";
 
 interface AppSidebarProps {
@@ -64,21 +65,27 @@ export function AppSidebar({ isMobileOpen, onCloseMobile }: AppSidebarProps) {
                         </div>
                         <Divider />
                         <NavSection />
+                        <FinanceSyncStatus />
                     </div>
                 </section>
             </aside>
         );
     } else if (!isMobileOpen) {
         return (
-            <aside className="hidden lg:block">
+            <aside>
                 <section className="p-2 w-[240px] h-full min-h-[calc(100vh)] bg-zinc-950/70">
-                    <div className="sticky top-4 flex flex-col gap-1 ">
-                        <div className="pt-1.5 pb-2 px-2.5 flex gap-2 items-center transition duration-75 ease-in-out  text-white font-medium">
-                            <Hexagon size={25} />
-                            <h1 className="uppercase">Prism</h1>
+                    <div className="sticky top-4 flex flex-col justify-between gap-1 h-full">
+                        <div className="lex flex-col gap-1 mt-2">
+                            <div className="pt-1.5 pb-2 px-2.5 flex gap-2 items-center transition duration-75 ease-in-out  text-white font-medium">
+                                <Hexagon size={25} />
+                                <h1 className="uppercase">Prism</h1>
+                            </div>
+                            <Divider />
+                            <NavSection />
                         </div>
-                        <Divider />
-                        <NavSection />
+                        <div>
+                            <FinanceSyncStatus />
+                        </div>
                     </div>
                 </section>
             </aside>
