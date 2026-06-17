@@ -235,6 +235,10 @@ export function TransactionForm({ type, transaction, mode = "default", prefill, 
         try {
             const success = await action();
             if (success) {
+                if (action === form.saveAndContinue) {
+                    setSubmitting(false);
+                    return;
+                }
                 closeModal();
                 return;
             }
@@ -450,11 +454,19 @@ export function TransactionForm({ type, transaction, mode = "default", prefill, 
                         </button>
                         <button
                             type="button"
+                            onClick={() => void runAction(form.saveAndContinue)}
+                            disabled={submitting}
+                            className="inline-flex items-center justify-center rounded-xl border border-emerald-400/45 bg-emerald-500/15 px-3 py-2 text-sm font-semibold text-emerald-100 transition-colors hover:border-emerald-400/55 hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                            Salvar e continuar
+                        </button>
+                        <button
+                            type="button"
                             onClick={() => void runAction(form.submit)}
                             disabled={submitting}
-                            className="inline-flex items-center justify-center rounded-xl border border-emerald-400/35 bg-emerald-500/15 px-3 py-2 text-sm font-semibold text-emerald-100 transition-colors hover:border-emerald-400/55 hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+                            className="disabled:bg-white/10 disabled:text-white/60 disabled:border-white inline-flex items-center justify-center rounded-xl border border-emerald-400/35 bg-emerald-500/15 px-3 py-2 text-sm font-semibold text-emerald-100 transition-colors hover:border-emerald-400/55 hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-60"
                         >
-                            {submitting ? "Carregando..." : "Concluir"}
+                            {submitting ? "Carregando..." : "Salvar"}
                         </button>
                     </div>
                 </div>

@@ -375,7 +375,7 @@ export function TransactionsListPanel({
     );
 
     return (
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-3 w-full">
             <TransactionsTable
                 tabs={tabs}
                 activeTab={activeTab}

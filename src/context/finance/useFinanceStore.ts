@@ -85,6 +85,7 @@ import {
     permanentlyDeleteWalletData,
 } from "./permanentDeletion";
 import { getDefaultCategoryIconName } from "../../lib/categoryIcons";
+import { saveLocalFinanceBackup } from "../../lib/financeBackup";
 import { parseAppDate } from "../../lib/localDate";
 import { buildUserProfileData, type UserProfileData } from "../../lib/userProfile";
 import { loadSupabaseFinanceData, saveSupabaseFinanceData } from "../../supabase/finance";
@@ -771,6 +772,25 @@ export function useFinanceStore(): FinanceStoreValue {
         setSharedWishlists(nextSharedWishlists);
     }, []);
 
+    const saveLocalSnapshotBackup = useCallback(
+        (snapshot: FinanceSnapshot, trigger: string, favoriteWalletIdOverride?: string | null) => {
+            if (!user) {
+                return;
+            }
+
+            const resolvedProfile = profileRef.current ?? buildUserProfileData(user);
+            saveLocalFinanceBackup({
+                uid: user.uid,
+                email: user.email ?? null,
+                displayName: resolvedProfile.displayName,
+                favoriteWalletId: favoriteWalletIdOverride ?? favoriteWalletIdRef.current,
+                finance: snapshot,
+                trigger,
+            });
+        },
+        [user],
+    );
+
     const buildSnapshot = useCallback((overrides: Partial<FinanceSnapshot> = {}): FinanceSnapshot => {
         return createFinanceSnapshot(
             overrides.wallets ?? walletsRef.current,
@@ -893,6 +913,7 @@ export function useFinanceStore(): FinanceStoreValue {
                 setSnapshotState(snapshot);
                 setFavoriteWalletId(normalizedFavoriteWalletId);
                 setFamilyState(null, []);
+                saveLocalSnapshotBackup(snapshot, "load-success", normalizedFavoriteWalletId);
 
                 if (!supabaseFinance || normalizedFinance.changed || recurringHydration.changed || syncedInvoices.changed || favoriteChanged) {
                     await saveSupabaseFinanceData(user.uid, {
@@ -925,7 +946,7 @@ export function useFinanceStore(): FinanceStoreValue {
         return () => {
             isActive = false;
         };
-    }, [profileVersion, setFamilyState, setSnapshotState, user]);
+    }, [profileVersion, refreshFamilyState, saveLocalSnapshotBackup, setFamilyState, setSnapshotState, syncCurrentUserFamilyBeneficiary, user]);
 
     const persistFinanceFields = useCallback(
         async (fields: PersistFields) => {
@@ -953,8 +974,9 @@ export function useFinanceStore(): FinanceStoreValue {
                 ...snapshot,
                 favoriteWalletId: fields.favoriteWalletId ?? favoriteWalletIdRef.current,
             });
+            saveLocalSnapshotBackup(buildSnapshot(), "persist-fields", fields.favoriteWalletId);
         },
-        [buildSnapshot, user],
+        [buildSnapshot, saveLocalSnapshotBackup, user],
     );
 
     const persistFullSnapshot = useCallback(

@@ -73,6 +73,7 @@ export interface TransactionFormState {
     setEditScope: (value: TransactionSeriesScope) => void;
     toggleTag: (tagId: string) => void;
     submit: () => Promise<boolean>;
+    saveAndContinue: () => Promise<boolean>;
     remove: () => Promise<boolean>;
     duplicate: () => Promise<boolean>;
     ignore: () => Promise<boolean>;
@@ -416,6 +417,16 @@ export function useTransactionForm({ type, transaction, mode = "default", prefil
         };
     };
 
+    const saveAndContinue = async () => {
+        const draft = buildDraft();
+        if (!draft) {
+            return false;
+        }
+
+        await addTransaction(draft);
+        return true;
+    }
+
     const submit = async () => {
         if (transaction) {
             if (isInvoicePaymentEdit) {
@@ -549,6 +560,7 @@ export function useTransactionForm({ type, transaction, mode = "default", prefil
         setTransactionMode,
         setEditScope,
         toggleTag,
+        saveAndContinue,
         submit,
         remove,
         duplicate,
