@@ -1,6 +1,6 @@
 # Migracao para Supabase Free
 
-Este projeto deve migrar para Supabase sem usar recursos pagos no primeiro corte. A estrategia recomendada e manter o Firebase ativo ate validar que os dados carregados no Supabase batem com os dados atuais.
+Este projeto usa Supabase como fonte principal dos dados financeiros e de autenticacao. Firebase foi removido do frontend; referencias a Firebase neste documento existem apenas como historico da migracao.
 
 ## Escopo do plano Free
 
@@ -18,14 +18,15 @@ VITE_SUPABASE_URL=https://seu-projeto.supabase.co
 VITE_SUPABASE_ANON_KEY=sua-chave-anon
 ```
 
-Mantenha as variaveis do Firebase durante a fase de migracao. Elas ainda serao usadas enquanto a tela de login e a carga inicial nao forem trocadas para Supabase Auth.
+Variaveis Firebase nao sao mais necessarias no frontend.
 
 ## Aplicar schema
 
-No painel do Supabase, abra `SQL Editor` e execute:
+No painel do Supabase, abra `SQL Editor` e execute as migrations em ordem:
 
 ```text
 supabase/migrations/001_initial_finance_schema.sql
+supabase/migrations/002_transaction_overrides.sql
 ```
 
 O schema ativa RLS e libera cada tabela financeira apenas para `auth.uid() = user_id`.
@@ -34,16 +35,16 @@ O schema ativa RLS e libera cada tabela financeira apenas para `auth.uid() = use
 
 1. Criar o projeto Supabase no plano Free.
 2. Aplicar o schema SQL.
-3. Migrar usuarios do Firebase Auth para Supabase Auth.
-4. Gerar uma tabela de equivalencia entre `firebase_uid` e `auth.users.id`.
-5. Exportar os documentos `users/{uid}` do Firestore.
+3. Migrar usuarios legados para Supabase Auth, se ainda houver contas antigas fora do Supabase.
+4. Gerar uma tabela de equivalencia entre `firebase_uid` e `auth.users.id`, apenas quando importar dados legados.
+5. Exportar os documentos legados do Firestore, se a importacao ainda for necessaria.
 6. Normalizar cada objeto `finance` usando a logica atual do app.
 7. Gravar o resultado com `saveSupabaseFinanceData`.
 8. Comparar totais antes de trocar a leitura do app.
 
 ## Validacoes minimas
 
-Antes de desligar Firestore, confira por usuario:
+Ao importar dados legados, confira por usuario:
 
 - quantidade de carteiras
 - quantidade de cartoes

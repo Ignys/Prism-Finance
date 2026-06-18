@@ -378,7 +378,7 @@ export function useTransactionForm({ type, transaction, mode = "default", prefil
 
         const selectedCategoryId = subCategoryId || rootCategoryId || null;
         const resolvedTransactionMode: TransactionMode =
-            isTransfer || (isEditing && isSeriesTransaction && editScope === "single")
+            isTransfer
                 ? "single"
                 : transactionMode === "recurring"
                     ? "recurring"

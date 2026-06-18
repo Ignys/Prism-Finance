@@ -33,6 +33,7 @@ export type {
     Transaction,
     TransactionEntity,
     TransactionDraft,
+    TransactionGroup,
     TransactionListItem,
     TransactionMode,
     TransactionSeriesScope,
@@ -43,6 +44,7 @@ export type {
     Wallet,
 } from "./financeTypes";
 export { DEFAULT_WALLET_ID, SYSTEM_EXPENSE_CARD_INVOICE_CATEGORY_ID } from "./financeTypes";
+export type { BulkUpdateTransactionsDraft } from "./finance/contextTypes";
 
 export { FinanceProvider } from "./finance/provider";
 export {

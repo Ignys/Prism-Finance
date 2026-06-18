@@ -881,8 +881,7 @@ export function CardSpendingForm({ transaction = null, prefill, onAdvancedOpenCh
             return null;
         }
 
-        const resolvedMode: TransactionMode =
-            isEditing && isSeriesTransaction && editScope === "single" ? "single" : spendingMode === "installment" ? "installment" : spendingMode === "recurring" ? "recurring" : "single";
+        const resolvedMode: TransactionMode = spendingMode === "installment" ? "installment" : spendingMode === "recurring" ? "recurring" : "single";
         const requiresInvoiceSelection = resolvedMode === "single" || resolvedMode === "installment";
         const selectedInvoiceOption = selectedResolvedInvoiceOption;
         if (requiresInvoiceSelection && (!resolvedInvoiceSelectionId || !selectedInvoiceOption)) {

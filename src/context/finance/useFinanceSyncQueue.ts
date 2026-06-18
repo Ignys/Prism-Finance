@@ -33,6 +33,7 @@ interface UseFinanceSyncQueueValue extends FinanceSyncValue {
 }
 
 const RETRY_DELAYS_MS = [2000, 5000, 10000, 30000];
+let lastPendingSyncQueuedAtMs = 0;
 
 function getPendingSyncStorageKey(userId: string): string {
     return `prism.finance.pending-sync.${userId}`;
@@ -49,7 +50,7 @@ function parsePendingSyncRecord(raw: unknown, userId: string): PendingFinanceSyn
 
     return {
         queuedAt: raw.queuedAt,
-        data: raw.data as SupabaseFinanceData,
+        data: raw.data as unknown as SupabaseFinanceData,
     };
 }
 
@@ -89,12 +90,27 @@ function writePendingSyncToStorage(userId: string, pendingSync: PendingFinanceSy
     }
 }
 
-function removePendingSyncFromStorage(userId: string): void {
+function comparePendingSyncQueuedAt(a: string, b: string): number {
+    if (a === b) {
+        return 0;
+    }
+
+    return a < b ? -1 : 1;
+}
+
+function removePendingSyncFromStorage(userId: string, queuedAt?: string): void {
     if (typeof window === "undefined" || !window.localStorage) {
         return;
     }
 
     try {
+        if (queuedAt) {
+            const storedPendingSync = readPendingSyncFromStorage(userId);
+            if (storedPendingSync && storedPendingSync.queuedAt !== queuedAt) {
+                return;
+            }
+        }
+
         window.localStorage.removeItem(getPendingSyncStorageKey(userId));
     } catch (error) {
         console.error("Failed to clear pending finance sync:", error);
@@ -102,14 +118,43 @@ function removePendingSyncFromStorage(userId: string): void {
 }
 
 function createPendingSync(financeData: SupabaseFinanceData): PendingFinanceSync {
+    const nowMs = Date.now();
+    lastPendingSyncQueuedAtMs = Math.max(nowMs, lastPendingSyncQueuedAtMs + 1);
+
     return {
-        queuedAt: new Date().toISOString(),
+        queuedAt: new Date(lastPendingSyncQueuedAtMs).toISOString(),
         data: financeData,
     };
 }
 
 function resolveErrorMessage(error: unknown): string {
     return error instanceof Error ? error.message : "Nao foi possivel sincronizar com o banco de dados.";
+}
+
+function summarizeFinanceSyncData(financeData: SupabaseFinanceData): Record<string, number> {
+    return {
+        wallets: financeData.wallets.length,
+        creditCards: financeData.creditCards.length,
+        creditCardInvoices: financeData.creditCardInvoices.length,
+        beneficiaries: financeData.beneficiaries.length,
+        categories: financeData.categories.length,
+        tags: financeData.tags.length,
+        wishItems: financeData.wishItems.length,
+        transactionGroups: financeData.transactionGroups.length,
+        transactions: financeData.transactions.length,
+        ledgerEntries: financeData.ledgerEntries.length,
+        transactionTags: financeData.transactionTags.length,
+    };
+}
+
+function logFinanceSyncError(params: { error: unknown; pendingSync: PendingFinanceSync; retryAttempt: number; userId: string }): void {
+    console.log("[FinanceSync] Erro ao sincronizar dados financeiros", {
+        error: params.error,
+        queuedAt: params.pendingSync.queuedAt,
+        retryAttempt: params.retryAttempt,
+        userId: params.userId,
+        dataSummary: summarizeFinanceSyncData(params.pendingSync.data),
+    });
 }
 
 export function useFinanceSyncQueue({ userId, saveFinanceData }: UseFinanceSyncQueueParams): UseFinanceSyncQueueValue {
@@ -190,7 +235,7 @@ export function useFinanceSyncQueue({ userId, saveFinanceData }: UseFinanceSyncQ
                 const currentPendingSync = pendingSyncRef.current;
                 if (currentPendingSync?.queuedAt === pendingSync.queuedAt) {
                     pendingSyncRef.current = null;
-                    removePendingSyncFromStorage(activeUserId);
+                    removePendingSyncFromStorage(activeUserId, pendingSync.queuedAt);
                     retryAttemptRef.current = 0;
                     setStatus("synced");
                     setPendingCount(0);
@@ -204,6 +249,12 @@ export function useFinanceSyncQueue({ userId, saveFinanceData }: UseFinanceSyncQ
                 }
 
                 if (pendingSyncRef.current?.queuedAt === pendingSync.queuedAt) {
+                    logFinanceSyncError({
+                        error,
+                        pendingSync,
+                        retryAttempt: retryAttemptRef.current,
+                        userId: activeUserId,
+                    });
                     setStatus("error");
                     setPendingCount(1);
                     setLastError(resolveErrorMessage(error));
@@ -262,6 +313,57 @@ export function useFinanceSyncQueue({ userId, saveFinanceData }: UseFinanceSyncQ
         setPendingCount(0);
         setLastError(null);
     }, [clearRetryTimer, userId]);
+
+    useEffect(() => {
+        if (typeof window === "undefined") {
+            return;
+        }
+
+        const handleStorage = (event: StorageEvent) => {
+            const activeUserId = userIdRef.current;
+            if (!activeUserId || event.key !== getPendingSyncStorageKey(activeUserId)) {
+                return;
+            }
+
+            if (!event.newValue) {
+                if (!inFlightRef.current) {
+                    pendingSyncRef.current = null;
+                    setStatus("synced");
+                    setPendingCount(0);
+                    setLastError(null);
+                }
+                return;
+            }
+
+            let storedPendingSync: PendingFinanceSync | null = null;
+            try {
+                storedPendingSync = parsePendingSyncRecord(JSON.parse(event.newValue), activeUserId);
+            } catch {
+                return;
+            }
+
+            if (!storedPendingSync) {
+                return;
+            }
+
+            const currentPendingSync = pendingSyncRef.current;
+            if (currentPendingSync && comparePendingSyncQueuedAt(storedPendingSync.queuedAt, currentPendingSync.queuedAt) <= 0) {
+                return;
+            }
+
+            pendingSyncRef.current = storedPendingSync;
+            setStatus("syncing");
+            setPendingCount(1);
+            setLastError(null);
+
+            if (!inFlightRef.current) {
+                flushSyncRef.current();
+            }
+        };
+
+        window.addEventListener("storage", handleStorage);
+        return () => window.removeEventListener("storage", handleStorage);
+    }, []);
 
     useEffect(() => {
         const handleOnline = () => {

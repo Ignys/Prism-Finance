@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect } from "react";
+import { Suspense, lazy, useEffect, useRef } from "react";
 import { LoadingPage } from "./components/pages/Loading";
 import { FinanceProvider, useFinanceSession } from "./context/FinanceContext";
 import { ModalProvider } from "./context/ModalContext";
@@ -29,12 +29,18 @@ function App() {
 function MainApp() {
     const { user, loading } = useFinanceSession();
     const { currentPage, setCurrentPage } = usePage();
+    const previousUserIdRef = useRef<string | null>(null);
 
     useEffect(() => {
-        if (user) {
+        const currentUserId = user?.uid ?? null;
+        const previousUserId = previousUserIdRef.current;
+
+        if (currentUserId && currentUserId !== previousUserId) {
             setCurrentPage("home");
         }
-    }, [user, setCurrentPage]);
+
+        previousUserIdRef.current = currentUserId;
+    }, [user?.uid, setCurrentPage]);
 
     if (loading) return <LoadingPage />;
 

@@ -69,6 +69,12 @@ export interface StoredTransaction {
     paidAt: string | null;
     invoiceId: string | null;
     notes: string | null;
+    title: string | null;
+    categoryId: string | null;
+    beneficiaryId: string | null;
+    sourceWalletId: string | null;
+    destinationWalletId: string | null;
+    creditCardId: string | null;
     createdAt: string;
 }
 
@@ -829,7 +835,7 @@ export interface CreditCardInvoiceAssignmentIssue {
 }
 
 export function findCreditCardInvoiceAssignmentIssues(params: {
-    transactions: Pick<StoredTransaction, "id" | "groupId" | "scheduledDate" | "invoiceId" | "status">[];
+    transactions: Pick<StoredTransaction, "id" | "groupId" | "scheduledDate" | "invoiceId" | "status" | "creditCardId">[];
     transactionGroups: Pick<TransactionGroup, "id" | "type" | "creditCardId">[];
     creditCards: Pick<CreditCard, "id" | "closingDay" | "dueDay">[];
 }): CreditCardInvoiceAssignmentIssue[] {
@@ -843,11 +849,12 @@ export function findCreditCardInvoiceAssignmentIssues(params: {
         }
 
         const group = groupById.get(transaction.groupId);
-        if (!group || group.type !== "expense" || !group.creditCardId) {
+        const creditCardId = resolveTransactionCreditCardId(transaction, group);
+        if (!group || group.type !== "expense" || !creditCardId) {
             return;
         }
 
-        const creditCard = cardById.get(group.creditCardId);
+        const creditCard = cardById.get(creditCardId);
         if (!creditCard) {
             return;
         }
@@ -1107,8 +1114,53 @@ export function normalizeStoredTransaction(transaction: Partial<StoredTransactio
         paidAt,
         invoiceId: asNullableString(transaction.invoiceId, null),
         notes: asNullableString(transaction.notes, null),
+        title: asNullableString(transaction.title, null),
+        categoryId: asNullableString(transaction.categoryId, null),
+        beneficiaryId: asNullableString(transaction.beneficiaryId, null),
+        sourceWalletId: asNullableString(transaction.sourceWalletId, null),
+        destinationWalletId: asNullableString(transaction.destinationWalletId, null),
+        creditCardId: asNullableString(transaction.creditCardId, null),
         createdAt: asDateTimeString(transaction.createdAt, now),
     };
+}
+
+export function resolveTransactionTitle(transaction: Pick<StoredTransaction, "title">, group: Pick<TransactionGroup, "title"> | null | undefined): string {
+    return transaction.title?.trim() || group?.title || "Transacao";
+}
+
+export function resolveTransactionCategoryId(
+    transaction: Pick<StoredTransaction, "categoryId">,
+    group: Pick<TransactionGroup, "categoryId"> | null | undefined,
+): string | null {
+    return transaction.categoryId ?? group?.categoryId ?? null;
+}
+
+export function resolveTransactionBeneficiaryId(
+    transaction: Pick<StoredTransaction, "beneficiaryId">,
+    group: Pick<TransactionGroup, "beneficiaryId"> | null | undefined,
+): string | null {
+    return transaction.beneficiaryId ?? group?.beneficiaryId ?? null;
+}
+
+export function resolveTransactionSourceWalletId(
+    transaction: Pick<StoredTransaction, "sourceWalletId">,
+    group: Pick<TransactionGroup, "sourceWalletId"> | null | undefined,
+): string | null {
+    return transaction.sourceWalletId ?? group?.sourceWalletId ?? null;
+}
+
+export function resolveTransactionDestinationWalletId(
+    transaction: Pick<StoredTransaction, "destinationWalletId">,
+    group: Pick<TransactionGroup, "destinationWalletId"> | null | undefined,
+): string | null {
+    return transaction.destinationWalletId ?? group?.destinationWalletId ?? null;
+}
+
+export function resolveTransactionCreditCardId(
+    transaction: Pick<StoredTransaction, "creditCardId">,
+    group: Pick<TransactionGroup, "creditCardId"> | null | undefined,
+): string | null {
+    return transaction.creditCardId ?? group?.creditCardId ?? null;
 }
 
 export function normalizeLedgerEntry(entry: Partial<LedgerEntry> & { id: string; walletId: string }): LedgerEntry {
@@ -1399,10 +1451,10 @@ export function createLedgerEntriesForPaidTransaction(transaction: StoredTransac
     }
 
     const createdAt = getTransactionLedgerEntryDateIso(transaction);
-    const descriptionBase = group.title || "Transacao";
+    const descriptionBase = resolveTransactionTitle(transaction, group);
 
     if (group.type === "income") {
-        const walletId = group.sourceWalletId ?? DEFAULT_WALLET_ID;
+        const walletId = resolveTransactionSourceWalletId(transaction, group) ?? DEFAULT_WALLET_ID;
         return [
             {
                 id: createLedgerEntryId(transaction.id),
@@ -1418,10 +1470,10 @@ export function createLedgerEntriesForPaidTransaction(transaction: StoredTransac
     }
 
     if (group.type === "expense") {
-        if (group.creditCardId) {
+        if (resolveTransactionCreditCardId(transaction, group)) {
             return [];
         }
-        const walletId = group.sourceWalletId ?? DEFAULT_WALLET_ID;
+        const walletId = resolveTransactionSourceWalletId(transaction, group) ?? DEFAULT_WALLET_ID;
         return [
             {
                 id: createLedgerEntryId(transaction.id),
@@ -1437,8 +1489,8 @@ export function createLedgerEntriesForPaidTransaction(transaction: StoredTransac
     }
 
     const entries: LedgerEntry[] = [];
-    const sourceWalletId = group.sourceWalletId ?? DEFAULT_WALLET_ID;
-    const destinationWalletId = group.destinationWalletId ?? null;
+    const sourceWalletId = resolveTransactionSourceWalletId(transaction, group) ?? DEFAULT_WALLET_ID;
+    const destinationWalletId = resolveTransactionDestinationWalletId(transaction, group) ?? null;
 
     entries.push({
         id: createLedgerEntryId(transaction.id, "source"),
@@ -1539,14 +1591,14 @@ export function calculateFinanceSummary(wallets: Wallet[], transactionGroups: Tr
                 return acc;
             }
 
-            if (!shouldIncludeWalletInMainTotals(walletById, group.sourceWalletId)) {
+            if (!shouldIncludeWalletInMainTotals(walletById, resolveTransactionSourceWalletId(transaction, group))) {
                 return acc;
             }
 
             if (group.type === "income") {
                 acc.receitas += Math.abs(transaction.amount);
             } else if (group.type === "expense") {
-                if (group.creditCardId || transaction.invoiceId) {
+                if (resolveTransactionCreditCardId(transaction, group) || transaction.invoiceId) {
                     return acc;
                 }
                 acc.despesas += Math.abs(transaction.amount);
@@ -1594,9 +1646,12 @@ export function toTransactionList(
         const group = groupsById.get(transaction.groupId);
         const groupType = group?.type ?? "expense";
         const fallbackCategoryType = toCategoryTypeFromGroupType(groupType);
-        const category = group?.categoryId ? categoriesById.get(group.categoryId) : null;
+        const resolvedCategoryId = resolveTransactionCategoryId(transaction, group);
+        const resolvedBeneficiaryId = resolveTransactionBeneficiaryId(transaction, group);
+        const resolvedCreditCardId = resolveTransactionCreditCardId(transaction, group);
+        const category = resolvedCategoryId ? categoriesById.get(resolvedCategoryId) : null;
         const parentCategory = category?.parentId ? categoriesById.get(category.parentId) : null;
-        const beneficiary = group?.beneficiaryId ? beneficiariesById.get(group.beneficiaryId) : null;
+        const beneficiary = resolvedBeneficiaryId ? beneficiariesById.get(resolvedBeneficiaryId) : null;
 
         const tagIds = Array.from(new Set(tagIdsByTransactionId.get(transaction.id) ?? [])).filter((tagId) => tagsById.has(tagId));
         const resolvedTags = tagIds
@@ -1633,17 +1688,17 @@ export function toTransactionList(
             type: toTransactionType(groupType),
             value: roundToCents(transaction.amount),
             date: transaction.scheduledDate,
-            inWallet: group?.sourceWalletId ?? DEFAULT_WALLET_ID,
-            destinationWalletId: group?.destinationWalletId ?? null,
+            inWallet: resolveTransactionSourceWalletId(transaction, group) ?? DEFAULT_WALLET_ID,
+            destinationWalletId: resolveTransactionDestinationWalletId(transaction, group) ?? null,
             categoryId: resolvedCategory.id,
-            beneficiaryId: group?.beneficiaryId ?? null,
+            beneficiaryId: resolvedBeneficiaryId,
             tagIds,
-            description: group?.title ?? "Transacao",
+            description: resolveTransactionTitle(transaction, group),
             status: transaction.status,
             installmentNumber: transaction.installmentNumber,
             invoiceId: transaction.invoiceId,
-            paymentMethod: group?.creditCardId ? "credit_card" : "wallet",
-            creditCardId: group?.creditCardId ?? null,
+            paymentMethod: resolvedCreditCardId ? "credit_card" : "wallet",
+            creditCardId: resolvedCreditCardId,
             systemKind,
             invoicePaymentMeta,
             meta: {
@@ -2767,7 +2822,7 @@ export function normalizeFinanceSnapshot(rawFinance: unknown, userId: string | n
 
     const transactionsWithResolvedInvoices = sortedTransactions.map((transaction) => {
         const group = groupsByIdForInvoices.get(transaction.groupId);
-        const creditCardId = group?.creditCardId ?? null;
+        const creditCardId = resolveTransactionCreditCardId(transaction, group);
 
         if (!creditCardId) {
             if (!transaction.invoiceId) {

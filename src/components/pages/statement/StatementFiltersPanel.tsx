@@ -1,3 +1,4 @@
+import { CreditCard as Cartao } from "lucide-react";
 import type { CreditCard } from "../../../context/FinanceContext";
 import { usePage } from "../../../context/PageContext";
 import { StatementMonthSelector } from "../../common/StatementMonthSelector";
@@ -11,13 +12,7 @@ interface StatementFiltersPanelProps {
     onCardChange: (value: string) => void;
 }
 
-export function StatementFiltersPanel({
-    selectedMonth,
-    selectedCardId,
-    creditCards,
-    onMonthChange,
-    onCardChange,
-}: StatementFiltersPanelProps) {
+export function StatementFiltersPanel({ selectedMonth, selectedCardId, creditCards, onMonthChange, onCardChange }: StatementFiltersPanelProps) {
     const { goToPage } = usePage();
 
     return (
@@ -49,20 +44,20 @@ export function StatementFiltersPanel({
                                 </button>
                             );
                         })}
+                        {creditCards.length < 1 && (
+                            <button
+                                type="button"
+                                onClick={() => goToPage("creditCards")}
+                                className="inline-flex items-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.02] px-3 py-3 text-left text-sm text-white/55 transition-colors hover:border-white/[0.16] hover:bg-white/[0.05] hover:text-white"
+                            >
+                                <Cartao size={18} />
+                                Crie um cartão agora!
+                            </button>
+                        )}
                     </div>
 
                     <StatementMonthSelector selectedMonth={selectedMonth} onMonthChange={onMonthChange} ariaLabel="Selecionar mês e ano de vencimento da fatura" />
                 </div>
-
-                {creditCards.length < 1 && (
-                    <button
-                        type="button"
-                        onClick={() => goToPage("creditCards")}
-                        className="rounded-xl border border-white/[0.08] bg-white/[0.02] px-3 py-2 text-left text-sm text-white/55 transition-colors hover:border-white/[0.16] hover:bg-white/[0.05] hover:text-white"
-                    >
-                        Crie um cartão agora!
-                    </button>
-                )}
             </div>
         </section>
     );

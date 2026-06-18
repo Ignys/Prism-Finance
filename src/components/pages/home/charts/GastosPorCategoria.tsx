@@ -2,12 +2,10 @@ import { useMemo, useState } from "react";
 import { ChartOptions, TooltipItem } from "chart.js";
 import { Doughnut } from "react-chartjs-2";
 
-
 import { motion } from "framer-motion";
 import { useFinanceCategories, useFinanceTransactions } from "../../../../context/FinanceContext";
 import { parseAppDate } from "../../../../lib/localDate";
 import { getCategoryIconComponent } from "../../../../lib/categoryIcons";
-
 
 type BreakdownMode = "category" | "category-with-subcategories";
 
@@ -135,12 +133,18 @@ export function GastosPorCategoria() {
         },
     };
 
-    const biggestCategoryValue = finalCategories[0]
+    const biggestCategoryValue = finalCategories[0];
 
     return (
         <div className="relative w-full overflow-hidden rounded-2xl border border-white/[0.08] bg-[#111111] p-4 shadow-[0_24px_60px_-32px_rgba(0,0,0,0.9)]">
-            <div className={`pointer-events-none absolute -left-20 -top-24 h-40 w-40 rounded-full ${!biggestCategoryValue && "bg-neutral-500"} opacity-15 blur-3xl`} style={{ backgroundColor: biggestCategoryValue?.color }} />
-            <div className={`pointer-events-none absolute -bottom-24 -right-20 h-40 w-40 rounded-full ${!biggestCategoryValue && "bg-neutral-500"} opacity-15 blur-3xl`} style={{ backgroundColor: biggestCategoryValue?.color }} />
+            <div
+                className={`pointer-events-none absolute -left-20 -top-24 h-40 w-40 rounded-full ${!biggestCategoryValue && "bg-neutral-500"} opacity-15 blur-3xl`}
+                style={{ backgroundColor: biggestCategoryValue?.color }}
+            />
+            <div
+                className={`pointer-events-none absolute -bottom-24 -right-20 h-40 w-40 rounded-full ${!biggestCategoryValue && "bg-neutral-500"} opacity-15 blur-3xl`}
+                style={{ backgroundColor: biggestCategoryValue?.color }}
+            />
 
             <div className="relative mb-4 flex items-center justify-between gap-3">
                 <p className="text-lg font-medium text-white">Gastos por categoria</p>
@@ -172,34 +176,43 @@ export function GastosPorCategoria() {
                     )}
                 </div>
 
-                <div className="flex-1 space-y-2">
+                <div className="flex-1">
                     {finalCategories.length > 0 ? (
                         finalCategories.map((cat) => {
                             const CategoryIcon = getCategoryIconComponent(cat.icon, cat.type);
 
                             return (
-                                <div key={cat.key} className="flex items-center justify-between rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-2">
-                                    <div className="flex min-w-0 items-center gap-2">
-                                        <span
-                                            className="inline-flex h-6 w-6 items-center justify-center rounded-md border border-white/[0.1]"
-                                            style={{ color: cat.color, backgroundColor: "rgba(255, 255, 255, 0.04)" }}
-                                        >
-                                            <CategoryIcon size={13} />
-                                        </span>
-                                        <span className="truncate text-sm text-neutral-200">{cat.label}</span>
+                                <>
+                                    <div key={cat.key} className="flex items-center justify-between rounded-lg p-1.5">
+                                        <div className="flex min-w-0 items-center gap-2">
+                                            <span
+                                                className="inline-flex h-7 w-7 items-center justify-center rounded-md text-white"
+                                                style={{
+                                                    color: cat.color,
+                                                    backgroundColor: `${cat.color}10`,
+                                                    border: `1px solid ${cat.color}20`,
+                                                }}
+                                            >
+                                                <CategoryIcon size={16} />
+                                            </span>
+                                            <span className="truncate text-sm text-neutral-200">{cat.label}</span>
+                                        </div>
+                                        <div className="flex grow max-w-full justify-end h-1">
+                                            <div className="h-0.5 rounded-full bg-white/20" style={{ width: `${cat.value / 15}%`, backgroundColor: cat.color }}></div>
+                                        </div>
+                                        <div className="ml-3 flex items-center gap-3 text-sm w-29 justify-end">
+                                            <span className="text-neutral-400 text-xs">{formatPercent(cat.value)}%</span>
+                                            <span className="font-semibold text-white">R$ {formatCurrency(cat.value)}</span>
+                                        </div>
                                     </div>
-                                    <div className="ml-3 flex items-center gap-3 text-sm">
-                                        <span className="text-neutral-400">{formatPercent(cat.value)}%</span>
-                                        <span className="font-semibold text-white">R$ {formatCurrency(cat.value)}</span>
-                                    </div>
-                                </div>
+                                </>
                             );
                         })
                     ) : (
                         <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-4 text-sm text-neutral-400">Nenhuma despesa registrada neste mes.</div>
                     )}
 
-                    <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] p-3">
+                    <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] p-3 mt-1">
                         <div className="flex items-center justify-between">
                             <span className="text-base font-medium text-neutral-200">Total</span>
                             <span className="text-base font-bold text-white">R$ {formatCurrency(totalGastos)}</span>

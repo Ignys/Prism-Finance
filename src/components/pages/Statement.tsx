@@ -10,8 +10,8 @@ import { usePage } from "../../context/PageContext";
 import { AuthShell } from "../layout/AuthShell";
 import { AddCardSpending } from "../modal/AddCardSpending";
 import { ConfirmActionModal } from "../modal/ConfirmActionModal";
-import { EditTransaction } from "../modal/EditTransaction";
 import { PayCreditCardInvoiceModal } from "../modal/PayCreditCardInvoiceModal";
+import { useTransactionContextActionHandler } from "../transactions/useTransactionContextActionHandler";
 import { StatementContentPanel } from "./statement/StatementContentPanel";
 import { StatementFiltersPanel } from "./statement/StatementFiltersPanel";
 import {
@@ -29,8 +29,9 @@ export function StatementPage() {
     const creditCardInvoices = useFinanceCreditCardInvoices();
     const favoriteCreditCardId = useFinanceFavoriteCreditCard();
     const { loading: sessionLoading } = useFinanceSession();
-    const { deleteTransaction, setCreditCardInvoicesPaidState } = useFinanceActions();
+    const { setCreditCardInvoicesPaidState } = useFinanceActions();
     const { openModal } = useModal();
+    const handleTransactionContextAction = useTransactionContextActionHandler();
     const { consumePendingNavigation } = usePage();
     const [filters, setFilters] = useState<StatementFilterState>(INITIAL_STATEMENT_FILTER_STATE);
     const hasResolvedEntryFiltersRef = useRef(false);
@@ -172,24 +173,6 @@ export function StatementPage() {
         openModal(<PayCreditCardInvoiceModal invoice={invoice} creditCard={creditCard} />);
     };
 
-    const handleEditTransaction = (transaction: (typeof transactions)[number]) => {
-        openModal(<EditTransaction transaction={transaction} />);
-    };
-
-    const handleDeleteTransaction = (transaction: (typeof transactions)[number]) => {
-        const transactionLabel = transaction.description.trim() || transaction.category.label;
-
-        openModal(
-            <ConfirmActionModal
-                title="Excluir transacao?"
-                description={`Essa acao remove "${transactionLabel}" em definitivo.`}
-                confirmLabel="Excluir"
-                tone="danger"
-                onConfirm={() => deleteTransaction(transaction)}
-            />,
-        );
-    };
-
     const handleInvoiceStateAdjustment = (targetInvoices: CreditCardInvoice[], action: "close" | "reopen") => {
         if (targetInvoices.length < 1) {
             return;
@@ -271,8 +254,7 @@ export function StatementPage() {
                             onPayInvoice={handlePayInvoice}
                             onInvoiceStateAdjustment={handleInvoiceStateAdjustment}
                             onCreateCardSpending={handleCreateCardSpendingFromStatement}
-                            onEdit={handleEditTransaction}
-                            onDelete={handleDeleteTransaction}
+                            onAction={handleTransactionContextAction}
                         />
                     </div>
 

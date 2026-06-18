@@ -466,7 +466,7 @@ export function TransactionForm({ type, transaction, mode = "default", prefill, 
                             disabled={submitting}
                             className="disabled:bg-white/10 disabled:text-white/60 disabled:border-white inline-flex items-center justify-center rounded-xl border border-emerald-400/35 bg-emerald-500/15 px-3 py-2 text-sm font-semibold text-emerald-100 transition-colors hover:border-emerald-400/55 hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-60"
                         >
-                            {submitting ? "Carregando..." : "Salvar"}
+                            {submitting ? "Carregando..." : "Salvar e fechar"}
                         </button>
                     </div>
                 </div>

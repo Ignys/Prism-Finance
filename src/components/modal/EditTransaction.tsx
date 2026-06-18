@@ -17,7 +17,7 @@ export function EditTransaction({ transaction }: EditTransactionProps) {
     const isInvoicePayment = transaction.systemKind === "invoice_payment";
 
     return (
-        <ModalStructure height="auto" width={advancedOpen ? "900px" : "600px"} closeOnEscape={!installmentPreviewOpen}>
+        <ModalStructure height="auto" width={advancedOpen ? "1000px" : "700px"} closeOnEscape={!installmentPreviewOpen}>
             {isTransfer ? (
                 <TransferForm transaction={transaction} />
             ) : isCreditCardSpending ? (

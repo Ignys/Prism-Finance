@@ -15,6 +15,7 @@ import type {
     TransactionDraft,
     TransactionGroup,
     TransactionSeriesScope,
+    TransactionStatus,
     TransactionTag,
     WishItem,
     Wallet,
@@ -43,6 +44,14 @@ export interface UpdateTransactionDraft {
     transaction: Transaction;
     draft: TransactionDraft;
     scope?: TransactionSeriesScope;
+}
+
+export interface BulkUpdateTransactionsDraft {
+    transactionIds: string[];
+    categoryId?: string | null;
+    beneficiaryId?: string | null;
+    status?: TransactionStatus | null;
+    tagIdsToAdd?: string[];
 }
 
 export interface FinanceSessionValue {
@@ -78,7 +87,9 @@ export interface FinanceActionsValue {
     updateFinance: (newFinance: FinanceSnapshot) => Promise<void>;
     addTransaction: (newTransaction: TransactionDraft) => Promise<void>;
     updateTransaction: (draft: UpdateTransactionDraft) => Promise<void>;
+    updateTransactionsBulk: (draft: BulkUpdateTransactionsDraft) => Promise<void>;
     markTransactionAsPaid: (transaction: Transaction) => Promise<void>;
+    setTransactionStatus: (transaction: Transaction, status: TransactionStatus) => Promise<void>;
     deleteTransaction: (transaction: Transaction) => Promise<void>;
     deleteTransactionWithScope: (transaction: Transaction, scope?: TransactionSeriesScope) => Promise<void>;
     updateInvoicePaymentTransaction: (draft: UpdateInvoicePaymentTransactionDraft) => Promise<void>;

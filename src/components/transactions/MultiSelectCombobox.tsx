@@ -15,6 +15,7 @@ interface MultiSelectComboboxProps<T extends ComboboxOptionBase> {
     labelClassName?: string;
     triggerClassName?: string;
     renderSelectedSummary?: (selectedOptions: T[]) => ReactNode;
+    disabled?: boolean;
 }
 
 const DEFAULT_LABEL_CLASS = "text-[11px] uppercase tracking-[0.12em] text-white/50";
@@ -32,6 +33,7 @@ export function MultiSelectCombobox<T extends ComboboxOptionBase>({
     labelClassName = DEFAULT_LABEL_CLASS,
     triggerClassName = DEFAULT_TRIGGER_CLASS,
     renderSelectedSummary,
+    disabled = false,
 }: MultiSelectComboboxProps<T>) {
     const [isOpen, setIsOpen] = useState(false);
     const [query, setQuery] = useState("");
@@ -70,6 +72,15 @@ export function MultiSelectCombobox<T extends ComboboxOptionBase>({
             document.removeEventListener("mousedown", handleOutsideClick, true);
         };
     }, [isOpen]);
+
+    useEffect(() => {
+        if (!disabled) {
+            return;
+        }
+
+        setIsOpen(false);
+        setQuery("");
+    }, [disabled]);
 
     useEffect(() => {
         if (!isOpen) {
@@ -117,14 +128,20 @@ export function MultiSelectCombobox<T extends ComboboxOptionBase>({
             <span className={labelClassName}>{label}</span>
             <button
                 type="button"
-                onClick={() => setIsOpen((current) => !current)}
-                className={triggerClassName}
+                onClick={() => {
+                    if (disabled) {
+                        return;
+                    }
+                    setIsOpen((current) => !current);
+                }}
+                disabled={disabled}
+                className={`${triggerClassName} ${disabled ? "cursor-not-allowed opacity-60" : ""}`}
             >
                 <span className={` min-w-0 flex-1 truncate ${selectedOptions.length < 1 ? "text-white/40" : ""}`}>{selectedSummary}</span>
                 <ChevronsUpDown size={15} className="ml-2 shrink-0 text-white/55" />
             </button>
 
-            {isOpen && (
+            {isOpen && !disabled && (
                 <div className="absolute left-0 top-full z-30 mt-1 w-full rounded-xl border border-white/[0.1] bg-[#101010] p-2 shadow-[0_24px_60px_-30px_rgba(0,0,0,0.95)]">
                     <div className="relative mb-2">
                         <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-white/40" />

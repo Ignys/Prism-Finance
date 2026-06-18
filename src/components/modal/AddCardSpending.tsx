@@ -11,7 +11,7 @@ export function AddCardSpending({ prefill }: AddCardSpendingProps) {
     const [installmentPreviewOpen, setInstallmentPreviewOpen] = useState(false);
 
     return (
-        <ModalStructure height="auto" width={advancedOpen ? "900px" : "600px"} closeOnEscape={!installmentPreviewOpen}>
+        <ModalStructure height="auto" width={advancedOpen ? "1000px" : "700px"} closeOnEscape={!installmentPreviewOpen}>
             <CardSpendingForm prefill={prefill} onAdvancedOpenChange={setAdvancedOpen} onInstallmentPreviewOpenChange={setInstallmentPreviewOpen} />
         </ModalStructure>
     );

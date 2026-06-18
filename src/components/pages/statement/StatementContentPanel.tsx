@@ -1,12 +1,19 @@
-import { useMemo, useState } from "react";
-import { ArrowDown, ArrowUp, Circle, CreditCard as CreditCardIcon, Pencil, Plus, Repeat2, Search, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useState, type MouseEvent } from "react";
+import { ArrowDown, ArrowUp, Circle, CreditCard as CreditCardIcon, Plus, Repeat2, Search } from "lucide-react";
 import { type Beneficiary, type CreditCard, type CreditCardInvoice, type Transaction, useFinanceBeneficiaries, useFinanceTransactionGroups } from "../../../context/FinanceContext";
+import { useModal } from "../../../context/ModalContext";
 import { normalizeComparisonText } from "../../../context/finance/helpers";
 import { getCategoryIconComponent } from "../../../lib/categoryIcons";
 import { getTransactionCategoryDisplayLabel } from "../../../lib/transactionCategory";
 import { BeneficiaryAvatar } from "../../common/BeneficiaryAvatar";
+import { TableColumnToggleButton } from "../../common/TableColumnToggleButton";
 import { WalletAvatar } from "../../common/WalletAvatar";
+import { BulkTransactionEditModal } from "../../modal/BulkTransactionEditModal";
+import { BulkHeaderCheckbox, BulkRowCheckbox, TransactionBulkActionsBar } from "../../transactions/TransactionBulkSelectionControls";
+import { TransactionContextMenu, type TransactionContextMenuState } from "../../transactions/TransactionContextMenu";
+import { buildTransactionContextActions, type TransactionContextAction } from "../../transactions/transactionContextActions";
 import { formatTransactionDate } from "../../transactions/transactionView";
+import { isTransactionEligibleForBulkEdit, useTransactionBulkSelection } from "../../transactions/useTransactionBulkSelection";
 import {
     compareInvoicesByDueDate,
     formatCurrency,
@@ -27,8 +34,7 @@ interface StatementContentPanelProps {
     onPayInvoice: (invoice: CreditCardInvoice, creditCard: CreditCard) => void;
     onInvoiceStateAdjustment: (invoices: CreditCardInvoice[], action: "close" | "reopen") => void;
     onCreateCardSpending: () => void;
-    onEdit: (transaction: Transaction) => void;
-    onDelete: (transaction: Transaction) => void;
+    onAction: (transaction: Transaction, action: TransactionContextAction) => void;
 }
 
 type StatementSortField = "status" | "date" | "description" | "category" | "beneficiary" | "value";
@@ -161,13 +167,16 @@ function SortableHeader({ label, field, sortMode, align = "left", onSortModeChan
     const Icon = !active ? Circle : direction === "asc" ? ArrowUp : ArrowDown;
 
     return (
-        <th aria-sort={ariaSort} className={`border-b border-white/[0.08] px-3 py-2 text-[11px] uppercase tracking-[0.08em] text-white/45 ${align === "right" ? "text-right" : "text-left"}`}>
+        <th
+            aria-sort={ariaSort}
+            className={`overflow-hidden whitespace-nowrap border-b border-white/[0.08] px-3 py-2 text-[11px] uppercase tracking-[0.08em] text-white/45 ${align === "right" ? "text-right" : "text-left"}`}
+        >
             <button
                 type="button"
                 onClick={handleClick}
-                className={`inline-flex w-full items-center gap-1.5 transition-colors hover:text-white/80 ${align === "right" ? "justify-end" : "justify-start"}`}
+                className={`inline-flex w-full min-w-0 items-center gap-1.5 transition-colors hover:text-white/80 ${align === "right" ? "justify-end" : "justify-start"}`}
             >
-                <span className="uppercase">{label}</span>
+                <span className="truncate uppercase">{label}</span>
                 <Icon size={12} className={active ? "text-white/80" : "text-white/35"} />
             </button>
         </th>
@@ -203,14 +212,23 @@ export function StatementContentPanel({
     onPayInvoice,
     onInvoiceStateAdjustment,
     onCreateCardSpending,
-    onEdit,
-    onDelete,
+    onAction,
 }: StatementContentPanelProps) {
     const beneficiaries = useFinanceBeneficiaries();
     const transactionGroups = useFinanceTransactionGroups();
+    const { openModal } = useModal();
     const sortedInvoices = [...invoices].sort(compareInvoicesByDueDate);
     const [sortMode, setSortMode] = useState<StatementSortMode>("date-desc");
     const [searchQuery, setSearchQuery] = useState("");
+    const [contextMenu, setContextMenu] = useState<TransactionContextMenuState | null>(null);
+    const [selectionMode, setSelectionMode] = useState(false);
+    const [showStatus, setShowStatus] = useState(true);
+    const [showDate, setShowDate] = useState(true);
+    const [showDescription, setShowDescription] = useState(true);
+    const [showCategory, setShowCategory] = useState(true);
+    const [showTags, setShowTags] = useState(true);
+    const [showBeneficiary, setShowBeneficiary] = useState(true);
+    const [showValue, setShowValue] = useState(true);
 
     const beneficiariesById = useMemo(() => {
         const map = new Map<string, Beneficiary>();
@@ -310,6 +328,83 @@ export function StatementContentPanel({
 
         return sorted;
     }, [filteredTransactionSnapshots, sortMode]);
+    const displayedTransactions = useMemo(() => sortedTransactionSnapshots.map((snapshot) => snapshot.transaction), [sortedTransactionSnapshots]);
+    const bulkSelection = useTransactionBulkSelection(displayedTransactions);
+
+    const contextTransaction = useMemo(
+        () => sortedTransactionSnapshots.find((snapshot) => snapshot.transaction.id === contextMenu?.transactionId)?.transaction ?? null,
+        [contextMenu?.transactionId, sortedTransactionSnapshots],
+    );
+    const contextActions = useMemo(
+        () =>
+            contextTransaction
+                ? buildTransactionContextActions({
+                      transaction: contextTransaction,
+                      group: transactionGroupsById.get(contextTransaction.groupId),
+                      isSelected: bulkSelection.selectedIdSet.has(contextTransaction.id),
+                  })
+                : [],
+        [bulkSelection.selectedIdSet, contextTransaction, transactionGroupsById],
+    );
+
+    useEffect(() => {
+        if (contextMenu && !contextTransaction) {
+            setContextMenu(null);
+        }
+    }, [contextMenu, contextTransaction]);
+
+    useEffect(() => {
+        if (selectionMode && bulkSelection.selectedCount < 1) {
+            setSelectionMode(false);
+        }
+    }, [bulkSelection.selectedCount, selectionMode]);
+
+    const handleRowContextMenu = (event: MouseEvent<HTMLTableRowElement>, transaction: Transaction) => {
+        event.preventDefault();
+        setContextMenu({
+            transactionId: transaction.id,
+            x: event.clientX,
+            y: event.clientY,
+        });
+    };
+
+    const handleSelectAction = (action: TransactionContextAction) => {
+        if (!contextTransaction) {
+            return;
+        }
+
+        setContextMenu(null);
+        if (action.id === "select") {
+            setSelectionMode(true);
+            bulkSelection.toggleTransaction(contextTransaction.id);
+            return;
+        }
+
+        onAction(contextTransaction, action);
+    };
+
+    const selectedTransactions = useMemo(() => displayedTransactions.filter((transaction) => bulkSelection.selectedIdSet.has(transaction.id)), [bulkSelection.selectedIdSet, displayedTransactions]);
+
+    const handleClearBulkSelection = () => {
+        bulkSelection.clearSelection();
+        setSelectionMode(false);
+    };
+
+    const handleOpenBulkEdit = () => {
+        if (selectedTransactions.length < 1) {
+            return;
+        }
+
+        openModal(<BulkTransactionEditModal transactions={selectedTransactions} context="invoice" onApplied={handleClearBulkSelection} />);
+    };
+
+    const handleRowClick = (transaction: Transaction) => {
+        if (!selectionMode || !isTransactionEligibleForBulkEdit(transaction)) {
+            return;
+        }
+
+        bulkSelection.toggleTransaction(transaction.id);
+    };
 
     const invoiceSnapshots = useMemo<InvoiceSnapshot[]>(
         () =>
@@ -436,10 +531,28 @@ export function StatementContentPanel({
                 </div>
             </div>
 
-            <section className="rounded-2xl border border-white/[0.08] bg-[#111111] p-3 shadow-[0_24px_60px_-32px_rgba(0,0,0,0.9)]">
-                <div className="mb-3 px-1 flex items-center justify-between gap-3">
-                    <p className="text-sm uppercase text-white/60">FATURA DE {invoiceMonthLabel}</p>
-                    <span className="rounded-full border border-white/[0.12] bg-white/[0.03] px-2.5 py-1 text-xs text-white/60">{sortedTransactionSnapshots.length} itens</span>
+            <section className="rounded-2xl border border-white/[0.08] bg-[#111111] shadow-[0_24px_60px_-32px_rgba(0,0,0,0.9)]">
+                <div className="flex flex-wrap items-center justify-between gap-3 p-3">
+                    <div className="flex flex-wrap items-center gap-3 ">
+                        <p className="text-sm uppercase text-white/60">FATURA DE {invoiceMonthLabel}</p>
+                        {!selectionMode && (
+                            <span className="rounded-full border border-white/[0.05] bg-[#111111] px-2 py-0.5 text-xs text-white/40">
+                                {sortedTransactionSnapshots.length} {sortedTransactionSnapshots.length === 1 ? "item encontrado" : "itens encontrados"}
+                            </span>
+                        )}
+                        {selectionMode ? <TransactionBulkActionsBar selectedCount={bulkSelection.selectedCount} onEdit={handleOpenBulkEdit} onClear={handleClearBulkSelection} /> : null}
+                    </div>
+                    <div className="flex flex-wrap items-center justify-end gap-2">
+                        <div className="hidden flex-wrap items-center gap-1 sm:flex">
+                            <TableColumnToggleButton label="STATUS" active={showStatus} onClick={() => setShowStatus(!showStatus)} />
+                            <TableColumnToggleButton label="DATA" active={showDate} onClick={() => setShowDate(!showDate)} />
+                            <TableColumnToggleButton label="DESCRICAO" active={showDescription} onClick={() => setShowDescription(!showDescription)} />
+                            <TableColumnToggleButton label="CATEGORIA" active={showCategory} onClick={() => setShowCategory(!showCategory)} />
+                            <TableColumnToggleButton label="TAGS" active={showTags} onClick={() => setShowTags(!showTags)} />
+                            <TableColumnToggleButton label="BENEFICIARIO" active={showBeneficiary} onClick={() => setShowBeneficiary(!showBeneficiary)} />
+                            <TableColumnToggleButton label="VALOR" active={showValue} onClick={() => setShowValue(!showValue)} />
+                        </div>
+                    </div>
                 </div>
 
                 {sortedTransactionSnapshots.length < 1 ? (
@@ -448,20 +561,41 @@ export function StatementContentPanel({
                         {!canCreateCardSpending && <p className="mt-3 text-xs text-white/40">Cadastre um cartão para lançar gastos em fatura.</p>}
                     </div>
                 ) : (
-                    <div className="elegant-scrollbar overflow-x-auto">
-                        <table className="min-w-[980px] w-full border-separate border-spacing-0 text-sm text-white/85">
-                        <thead>
-                            <tr>
-                                <SortableHeader label="Status" field="status" sortMode={sortMode} onSortModeChange={setSortMode} />
-                                <SortableHeader label="Data" field="date" sortMode={sortMode} onSortModeChange={setSortMode} />
-                                <SortableHeader label="Descrição" field="description" sortMode={sortMode} onSortModeChange={setSortMode} />
-                                <SortableHeader label="Categoria" field="category" sortMode={sortMode} onSortModeChange={setSortMode} />
-                                <th className="border-b border-white/[0.08] px-3 py-2 text-left text-[11px] uppercase tracking-[0.08em] text-white/45">Tags</th>
-                                <SortableHeader label="Beneficiário" field="beneficiary" sortMode={sortMode} onSortModeChange={setSortMode} />
-                                <SortableHeader label="Valor" field="value" sortMode={sortMode} align="right" onSortModeChange={setSortMode} />
-                                <th className="border-b border-white/[0.08] px-3 py-2 text-right text-[11px] uppercase tracking-[0.08em] text-white/45">Ações</th>
-                            </tr>
-                        </thead>
+                    <div className="elegant-scrollbar overflow-x-auto rounded-2xl pb-4">
+                        <table className={`${selectionMode ? "min-w-[1200px]" : "min-w-[1150px]"} w-full table-fixed border-separate border-spacing-0 text-sm text-white/85`}>
+                            <colgroup>
+                                {selectionMode && <col className="w-[40px]" />}
+                                {showStatus && <col className="w-[172px]" />}
+                                {showDate && <col className="w-[116px]" />}
+                                {showDescription && <col />}
+                                {showCategory && <col className="w-[180px]" />}
+                                {showTags && <col className="w-[130px]" />}
+                                {showBeneficiary && <col className="w-[160px]" />}
+                                {showValue && <col className="w-[120px]" />}
+                            </colgroup>
+                            <thead>
+                                <tr>
+                                    {selectionMode && (
+                                        <th className="border-b border-white/[0.08] px-3 py-2 text-left">
+                                            <BulkHeaderCheckbox
+                                                checked={bulkSelection.allVisibleSelected}
+                                                indeterminate={bulkSelection.someVisibleSelected && !bulkSelection.allVisibleSelected}
+                                                disabled={bulkSelection.eligibleCount < 1}
+                                                onChange={bulkSelection.toggleAllVisible}
+                                            />
+                                        </th>
+                                    )}
+                                    {showStatus && <SortableHeader label="Status" field="status" sortMode={sortMode} onSortModeChange={setSortMode} />}
+                                    {showDate && <SortableHeader label="Data" field="date" sortMode={sortMode} onSortModeChange={setSortMode} />}
+                                    {showDescription && <SortableHeader label="Descrição" field="description" sortMode={sortMode} onSortModeChange={setSortMode} />}
+                                    {showCategory && <SortableHeader label="Categoria" field="category" sortMode={sortMode} onSortModeChange={setSortMode} />}
+                                    {showTags && (
+                                        <th className="overflow-hidden whitespace-nowrap border-b border-white/[0.08] px-3 py-2 text-left text-[11px] uppercase tracking-[0.08em] text-white/45">Tags</th>
+                                    )}
+                                    {showBeneficiary && <SortableHeader label="Beneficiário" field="beneficiary" sortMode={sortMode} onSortModeChange={setSortMode} />}
+                                    {showValue && <SortableHeader label="Valor" field="value" sortMode={sortMode} align="right" onSortModeChange={setSortMode} />}
+                                </tr>
+                            </thead>
                         <tbody>
                             {sortedTransactionSnapshots.map(({ transaction, transactionStatus, categoryLabel }) => {
                                 const group = transactionGroupsById.get(transaction.groupId);
@@ -473,108 +607,122 @@ export function StatementContentPanel({
                                 const beneficiary = transaction.beneficiaryId ? beneficiariesById.get(transaction.beneficiaryId) : null;
                                 const visibleTags = transaction.tags.slice(0, 2);
                                 const hiddenTagsCount = Math.max(transaction.tags.length - visibleTags.length, 0);
+                                const canBulkEdit = isTransactionEligibleForBulkEdit(transaction);
+                                const isSelected = bulkSelection.selectedIdSet.has(transaction.id);
 
                                 return (
-                                    <tr key={transaction.id} className="odd:bg-white/[0.01]">
-                                        <td className="flex items-center gap-2 border-b border-white/[0.04] px-3 py-2.5 text-white/70">
-                                            <span className="inline-flex h-8 w-8 items-center justify-center">
-                                                {creditCard ? (
-                                                    <WalletAvatar wallet={creditCard} className="h-8 w-8 rounded-md border border-white/[0.12]" iconSize={16} iconStrokeWidth={1.7} />
-                                                ) : (
-                                                    <span className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-white/[0.12] bg-white/[0.03] text-white/45">
-                                                        <CreditCardIcon size={14} />
+                                    <tr
+                                        key={transaction.id}
+                                        onClick={() => handleRowClick(transaction)}
+                                        onContextMenu={(event) => handleRowContextMenu(event, transaction)}
+                                        className={`${selectionMode && canBulkEdit ? "cursor-pointer" : "cursor-context-menu"} transition-colors odd:bg-white/[0.01] hover:bg-white/[0.04] ${
+                                            isSelected
+                                                ? "bg-emerald-500/[0.07] shadow-[inset_3px_0_0_rgba(110,231,183,0.65)]"
+                                                : contextMenu?.transactionId === transaction.id
+                                                  ? "bg-white/[0.06]"
+                                                  : ""
+                                        }`}
+                                    >
+                                        {selectionMode && (
+                                            <td className="border-b border-white/[0.04] px-3 py-2.5">
+                                                <BulkRowCheckbox
+                                                    checked={isSelected}
+                                                    disabled={!canBulkEdit}
+                                                    title={canBulkEdit ? "Selecionar transacao" : "Pagamentos de fatura nao podem ser editados em massa"}
+                                                    onChange={() => bulkSelection.toggleTransaction(transaction.id)}
+                                                />
+                                            </td>
+                                        )}
+                                        {showStatus && (
+                                            <td className="overflow-hidden whitespace-nowrap border-b border-white/[0.04] px-3 py-2.5 text-white/70">
+                                                <div className="flex min-w-0 items-center gap-2 overflow-hidden whitespace-nowrap">
+                                                    <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center">
+                                                        {creditCard ? (
+                                                            <WalletAvatar wallet={creditCard} className="h-8 w-8 rounded-md border border-white/[0.12]" iconSize={16} iconStrokeWidth={1.7} />
+                                                        ) : (
+                                                            <span className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-white/[0.12] bg-white/[0.03] text-white/45">
+                                                                <CreditCardIcon size={14} />
+                                                            </span>
+                                                        )}
                                                     </span>
-                                                )}
-                                            </span>
-                                            {transactionStatus ? (
-                                                <span
-                                                    className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] uppercase tracking-[0.08em] ${TRANSACTION_STATUS_BADGE_CLASS[transactionStatus]}`}
-                                                >
-                                                    {TRANSACTION_STATUS_LABELS[transactionStatus]}
-                                                </span>
-                                            ) : (
-                                                "--"
-                                            )}
-                                        </td>
-                                        <td className="border-b border-white/[0.04] px-3 py-2.5 text-white/70">{formatTransactionDate(transaction.date, "dd/MM/yyyy")}</td>
-                                        <td className="border-b border-white/[0.04] px-3 py-2.5 text-[14px] font-medium text-white">
-                                            <div className="inline-flex items-center gap-1.5">
-                                                <span>{transaction.description || "Sem descricao"}</span>
-                                                {seriesIndicator?.kind === "installment" && <span className="text-xs text-white/55">{seriesIndicator.label}</span>}
-                                                {seriesIndicator?.kind === "recurring" && (
-                                                    <span className="inline-flex text-white/55" role="img" title="Transacao recorrente" aria-label="Transacao recorrente">
-                                                        <Repeat2 size={13} />
-                                                    </span>
-                                                )}
-                                            </div>
-                                        </td>
-                                        <td className="border-b border-white/[0.04] px-3 py-2.5 text-white/70">
-                                            <div className="flex items-center gap-2">
-                                                <span
-                                                    className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-white/[0.1]"
-                                                    style={{ color: categoryColor, backgroundColor: categoryBackground }}
-                                                >
-                                                    <CategoryIcon size={16} />
-                                                </span>
-                                                <span>{categoryLabel}</span>
-                                            </div>
-                                        </td>
-                                        <td className="border-b border-white/[0.04] px-3 py-2.5 text-white/70">
-                                            {visibleTags.length < 1 ? (
-                                                <span className="text-white/35">Sem tags</span>
-                                            ) : (
-                                                <div className="flex flex-wrap items-center gap-1.5">
-                                                    {visibleTags.map((tag) => (
+                                                    {transactionStatus ? (
                                                         <span
-                                                            key={tag.id}
-                                                            className="rounded-full border border-white/12 px-2 py-0.5 text-[11px]/4 font-medium uppercase text-white/75"
-                                                            style={{ backgroundColor: `${tag.color ?? "#64748B"}26` }}
+                                                            className={`inline-flex shrink-0 rounded-full border px-2 py-0.5 text-[11px] uppercase tracking-[0.08em] ${TRANSACTION_STATUS_BADGE_CLASS[transactionStatus]}`}
                                                         >
-                                                            {tag.name}
+                                                            {TRANSACTION_STATUS_LABELS[transactionStatus]}
                                                         </span>
-                                                    ))}
-                                                    {hiddenTagsCount > 0 && (
-                                                        <span className="rounded-full border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[10px] font-medium text-white/55">
-                                                            +{hiddenTagsCount}
+                                                    ) : (
+                                                        "--"
+                                                    )}
+                                                </div>
+                                            </td>
+                                        )}
+                                        {showDate && <td className="overflow-hidden whitespace-nowrap border-b border-white/[0.04] px-3 py-2.5 text-white/70">{formatTransactionDate(transaction.date, "dd/MM/yyyy")}</td>}
+                                        {showDescription && (
+                                            <td className="truncate border-b border-white/[0.04] px-3 py-2.5 text-[14px] font-medium text-white">
+                                                <div className="flex min-w-0 max-w-full items-center gap-1.5">
+                                                    <span className="truncate">{transaction.description || "Sem descricao"}</span>
+                                                    {seriesIndicator?.kind === "installment" && <span className="shrink-0 text-xs text-white/55">{seriesIndicator.label}</span>}
+                                                    {seriesIndicator?.kind === "recurring" && (
+                                                        <span className="inline-flex shrink-0 text-white/55" role="img" title="Transacao recorrente" aria-label="Transacao recorrente">
+                                                            <Repeat2 size={13} />
                                                         </span>
                                                     )}
                                                 </div>
-                                            )}
-                                        </td>
-                                        <td className="border-b border-white/[0.04] px-3 py-2.5">
-                                            <div className="flex items-center gap-2 text-white/70">
-                                                <BeneficiaryAvatar beneficiary={{ name: beneficiary?.name ?? transaction.beneficiary, avatarImage: beneficiary?.avatarImage ?? null, avatarColor: beneficiary?.avatarColor ?? "#374151" }} />
-                                                <span>{beneficiary?.name ?? transaction.beneficiary}</span>
-                                            </div>
-                                        </td>
-                                        <td className="border-b border-white/[0.04] px-3 py-2.5 text-right font-semibold text-red-400">{formatCurrency(transaction.value)}</td>
-                                        <td className="border-b border-white/[0.04] px-3 py-2.5">
-                                            <div className="flex justify-end gap-1">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => onEdit(transaction)}
-                                                    className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-white/[0.12] bg-white/[0.03] text-white/70 transition-colors hover:border-white/[0.22] hover:text-white"
-                                                    aria-label="Editar transacao"
-                                                    title="Editar transacao"
-                                                >
-                                                    <Pencil size={14} />
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => onDelete(transaction)}
-                                                    className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-red-400/25 bg-red-500/10 text-red-200 transition-colors hover:border-red-400/45 hover:text-red-100"
-                                                    aria-label="Excluir transacao"
-                                                    title="Excluir transacao"
-                                                >
-                                                    <Trash2 size={14} />
-                                                </button>
-                                            </div>
-                                        </td>
+                                            </td>
+                                        )}
+                                        {showCategory && (
+                                            <td className="overflow-hidden whitespace-nowrap border-b border-white/[0.04] px-3 py-2.5 text-white/70">
+                                                <div className="flex min-w-0 max-w-full items-center gap-2">
+                                                    <span
+                                                        className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-white/[0.1]"
+                                                        style={{ color: categoryColor, backgroundColor: categoryBackground }}
+                                                    >
+                                                        <CategoryIcon size={16} />
+                                                    </span>
+                                                    <span className="truncate">{categoryLabel}</span>
+                                                </div>
+                                            </td>
+                                        )}
+                                        {showTags && (
+                                            <td className="overflow-hidden whitespace-nowrap border-b border-white/[0.04] px-3 py-2.5 text-white/70">
+                                                {visibleTags.length < 1 ? (
+                                                    <span className="text-white/35">Sem tags</span>
+                                                ) : (
+                                                    <div className="flex min-w-0 max-w-full flex-nowrap items-center gap-1.5 overflow-hidden">
+                                                        {visibleTags.map((tag) => (
+                                                            <span
+                                                                key={tag.id}
+                                                                className="min-w-0 max-w-[96px] truncate rounded-full border border-white/12 px-2 py-0.5 text-[11px]/4 font-medium uppercase text-white/75"
+                                                                style={{ backgroundColor: `${tag.color ?? "#64748B"}26` }}
+                                                            >
+                                                                {tag.name}
+                                                            </span>
+                                                        ))}
+                                                        {hiddenTagsCount > 0 && (
+                                                            <span className="shrink-0 rounded-full border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[10px] font-medium text-white/55">
+                                                                +{hiddenTagsCount}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </td>
+                                        )}
+                                        {showBeneficiary && (
+                                            <td className="overflow-hidden whitespace-nowrap border-b border-white/[0.04] px-3 py-2.5">
+                                                <div className="flex min-w-0 max-w-full items-center gap-2 text-white/70">
+                                                    <BeneficiaryAvatar beneficiary={{ name: beneficiary?.name ?? transaction.beneficiary, avatarImage: beneficiary?.avatarImage ?? null, avatarColor: beneficiary?.avatarColor ?? "#374151" }} />
+                                                    <span className="truncate">{beneficiary?.name ?? transaction.beneficiary}</span>
+                                                </div>
+                                            </td>
+                                        )}
+                                        {showValue && <td className="overflow-hidden whitespace-nowrap border-b border-white/[0.04] px-3 py-2.5 text-right font-semibold text-red-400">{formatCurrency(transaction.value)}</td>}
                                     </tr>
                                 );
                             })}
                         </tbody>
                         </table>
+                        <TransactionContextMenu state={contextMenu} actions={contextActions} onSelect={handleSelectAction} onClose={() => setContextMenu(null)} />
                     </div>
                 )}
             </section>

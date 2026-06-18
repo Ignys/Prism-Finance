@@ -27,22 +27,22 @@ export function TransactionsSummaryCards({ activeTab, summary }: TransactionsSum
     const copy = SUMMARY_COPY[activeTab];
     return (
         <section className="grid gap-2 sm:grid-cols-3 2xl:grid-cols-1">
-            <SummaryCard title={copy.paid} count={summary.paid.count} amount={summary.paid.amount}  glowColor="bg-emerald-400/20" text="text-emerald-200" />
-            <SummaryCard title={copy.pending} count={summary.pending.count} amount={summary.pending.amount} glowColor="bg-amber-400/20" text="text-yellow-200" />
-            <SummaryCard title={copy.total} count={summary.total.count} amount={summary.total.amount}  glowColor="bg-neutral-300/10" text="text-white" />
+            <SummaryCard title={copy.paid} count={summary.paid.count} amount={summary.paid.amount} borderColor="border-emerald-200/[0.10]" glowColor="bg-emerald-400/20" text="text-emerald-200" />
+            <SummaryCard title={copy.pending} count={summary.pending.count} amount={summary.pending.amount} borderColor="border-amber-300/[0.10]" glowColor="bg-amber-400/20" text="text-yellow-200" />
+            <SummaryCard title={copy.total} count={summary.total.count} amount={summary.total.amount} borderColor="border-neutral-300/[0.10]" glowColor="bg-neutral-300/10" text="text-white" />
         </section>
     );
 }
 
-function SummaryCard({ title, count, amount, glowColor, text }: { title: string; count: number; amount: number; glowColor: string; text?: string }) {
+function SummaryCard({ title, count, amount, borderColor, glowColor, text }: { title: string; count: number; amount: number; borderColor: string; glowColor: string; text?: string }) {
     return (
-        <div className="relative overflow-hidden rounded-2xl border border-white/[0.08] bg-[#111111] p-4 text-left">
-            <div className={`pointer-events-none absolute -bottom-30 -right-20 h-40 w-40 rounded-full ${glowColor} blur-3xl`} />
-            <p className="flex justify-between text-[10px] uppercase tracking-[0.14em] text-white/38">
+        <div className={`relative overflow-hidden rounded-xl border ${borderColor} bg-[#111111] p-2 px-3 text-left`}>
+            <div className={`pointer-events-none absolute -bottom-30 -right-20 h-40 w-20 rounded-full ${glowColor} blur-3xl`} />
+            <p className="flex justify-between text-[9px] uppercase tracking-[0.14em] text-white/60">
                 {title}
                 <span className={`rounded-full`}>{count}</span>
             </p>
-            <p className={`mt-1 text-xl font-semibold ${text || `text-white`}`}>{currencyFormatter.format(amount)}</p>
+            <p className={` text-lg font-medium tracking-wider ${text || `text-white`}`}>{currencyFormatter.format(amount)}</p>
         </div>
     );
 }

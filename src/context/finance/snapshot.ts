@@ -12,6 +12,12 @@ export {
     resolveCreditCardInvoiceCycleFromCycleKey,
     resolveCreditCardInvoiceStatus,
     resolveExpectedCreditCardInvoiceId,
+    resolveTransactionBeneficiaryId,
+    resolveTransactionCategoryId,
+    resolveTransactionCreditCardId,
+    resolveTransactionDestinationWalletId,
+    resolveTransactionSourceWalletId,
+    resolveTransactionTitle,
     resolveOpenCreditCardInvoiceCycle,
     toTransactionList,
 } from "./financeCore";

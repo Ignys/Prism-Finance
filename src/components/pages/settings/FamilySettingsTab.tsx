@@ -1,65 +1,10 @@
-import { doc, onSnapshot } from "firebase/firestore";
 import { Copy, Info, Link2, ShieldUser, UserPlus, Users, X } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
-import { useFinanceActions, useFinanceFamily, useFinanceSession, type FamilyMember } from "../../../context/FinanceContext";
-import { db } from "../../../firebase/firebaseClient";
+import { useMemo, useState } from "react";
+import { useFinanceActions, useFinanceFamily, useFinanceSession } from "../../../context/FinanceContext";
 import { resolveUserDisplayName } from "../../../lib/userProfile";
 import { BeneficiaryAvatar } from "../../common/BeneficiaryAvatar";
 
 type FamilyMemberPhotoMap = Record<string, string | null>;
-
-function asOptionalTrimmedString(value: unknown): string | null {
-    return typeof value === "string" && value.trim() ? value.trim() : null;
-}
-
-function resolveMemberPhotoUrl(value: unknown): string | null {
-    if (typeof value !== "object" || value === null) {
-        return null;
-    }
-
-    const profile = "profile" in value && typeof value.profile === "object" && value.profile !== null ? (value.profile as Record<string, unknown>) : null;
-    return asOptionalTrimmedString(profile?.photoURL);
-}
-
-function useFamilyMemberPhotoUrls(members: FamilyMember[]): FamilyMemberPhotoMap {
-    const [memberPhotoUrls, setMemberPhotoUrls] = useState<FamilyMemberPhotoMap>({});
-
-    useEffect(() => {
-        if (members.length === 0) {
-            setMemberPhotoUrls({});
-            return;
-        }
-
-        const memberUids = members.map((member) => member.uid);
-        setMemberPhotoUrls((current) => {
-            const nextState = Object.fromEntries(memberUids.map((uid) => [uid, current[uid] ?? null] as const));
-            const hasSameEntries =
-                Object.keys(current).length === memberUids.length &&
-                memberUids.every((uid) => Object.prototype.hasOwnProperty.call(current, uid) && current[uid] === nextState[uid]);
-
-            return hasSameEntries ? current : nextState;
-        });
-
-        const unsubscribers = members.map((member) =>
-            onSnapshot(
-                doc(db, "users", member.uid),
-                (snapshot) => {
-                    const nextPhotoUrl = snapshot.exists() ? resolveMemberPhotoUrl(snapshot.data()) : null;
-                    setMemberPhotoUrls((current) => (current[member.uid] === nextPhotoUrl ? current : { ...current, [member.uid]: nextPhotoUrl }));
-                },
-                () => {
-                    setMemberPhotoUrls((current) => (current[member.uid] === null ? current : { ...current, [member.uid]: null }));
-                },
-            ),
-        );
-
-        return () => {
-            unsubscribers.forEach((unsubscribe) => unsubscribe());
-        };
-    }, [members]);
-
-    return memberPhotoUrls;
-}
 
 function resolveFamilyErrorMessage(error: unknown): string {
     if (error instanceof Error && error.message.trim()) {
@@ -85,7 +30,7 @@ export function FamilySettingsTab() {
     const isAdmin = family?.currentUserRole === "admin";
     const activeMembers = useMemo(() => family?.members.filter((member) => member.status === "active") ?? [], [family?.members]);
     const pendingInvites = useMemo(() => family?.invites.filter((invite) => invite.status === "pending") ?? [], [family?.invites]);
-    const memberPhotoUrls = useFamilyMemberPhotoUrls(activeMembers);
+    const memberPhotoUrls = useMemo<FamilyMemberPhotoMap>(() => Object.fromEntries(activeMembers.map((member) => [member.uid, null])), [activeMembers]);
     const userName = resolveUserDisplayName(user);
     const canCreateOrJoin = !family;
 

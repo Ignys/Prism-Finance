@@ -4,7 +4,7 @@ import { useFinanceSync } from "../../context/FinanceContext";
 export function FinanceSyncStatus() {
     const sync = useFinanceSync();
     const isSynced = sync.status === "synced" && sync.pendingCount === 0;
-    const label = isSynced ? "Dados sincronizados" : sync.status === "error" ? "Sincronizacao pendente" : "Sincronizando com banco de dados";
+    const label = isSynced ? "Dados sincronizados" : sync.status === "error" ? "Sincronização pendente" : "Sincronizando dados...";
     const dotClassName = isSynced ? "bg-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.45)]" : "bg-orange-400 shadow-[0_0_12px_rgba(251,146,60,0.45)]";
 
     return (

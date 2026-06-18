@@ -150,6 +150,12 @@ export interface TransactionRow {
     paid_at: string | null;
     invoice_id: string | null;
     notes: string | null;
+    title: string | null;
+    category_id: string | null;
+    beneficiary_id: string | null;
+    source_wallet_id: string | null;
+    destination_wallet_id: string | null;
+    credit_card_id: string | null;
     created_at: string;
 }
 

@@ -1,4 +1,5 @@
 import type { TransactionDraft, TransactionType } from "../context/financeTypes";
+import { normalizeCsvHeader, parseCsvRows } from "./csv";
 
 const REQUIRED_HEADERS = ["Data Lancamento", "Data Contabil", "Titulo", "Descricao", "Entrada(R$)", "Saida(R$)"] as const;
 
@@ -30,65 +31,15 @@ interface CsvRow {
 
 type HeaderIndexes = Record<RequiredHeader, number>;
 
-function normalizeHeader(value: string): string {
-    return value.trim().normalize("NFC");
-}
-
 function normalizeText(value: string): string {
     return value.replace(/\s+/g, " ").trim();
 }
 
-function parseCsvRows(input: string): string[][] {
-    const rows: string[][] = [];
-    let currentRow: string[] = [];
-    let currentValue = "";
-    let insideQuotes = false;
-
-    for (let index = 0; index < input.length; index += 1) {
-        const char = input[index];
-        const nextChar = input[index + 1];
-
-        if (char === '"') {
-            if (insideQuotes && nextChar === '"') {
-                currentValue += '"';
-                index += 1;
-            } else {
-                insideQuotes = !insideQuotes;
-            }
-            continue;
-        }
-
-        if (char === "," && !insideQuotes) {
-            currentRow.push(currentValue);
-            currentValue = "";
-            continue;
-        }
-
-        if ((char === "\n" || char === "\r") && !insideQuotes) {
-            if (char === "\r" && nextChar === "\n") {
-                index += 1;
-            }
-            currentRow.push(currentValue);
-            rows.push(currentRow);
-            currentRow = [];
-            currentValue = "";
-            continue;
-        }
-
-        currentValue += char;
-    }
-
-    currentRow.push(currentValue);
-    rows.push(currentRow);
-
-    return rows.filter((row) => row.some((value) => value.trim()));
-}
-
 function getHeaderIndexes(headerRow: string[]): HeaderIndexes {
-    const normalizedHeaders = headerRow.map(normalizeHeader);
+    const normalizedHeaders = headerRow.map(normalizeCsvHeader);
 
     return REQUIRED_HEADERS.reduce((indexes, header) => {
-        const index = normalizedHeaders.indexOf(header);
+        const index = normalizedHeaders.indexOf(normalizeCsvHeader(header));
         if (index < 0) {
             throw new Error(`Coluna obrigatoria nao encontrada: ${header}.`);
         }

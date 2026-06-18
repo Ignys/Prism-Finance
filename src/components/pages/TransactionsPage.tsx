@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { type Transaction, useFinanceActions, useFinanceTransactions, useFinanceWallets } from "../../context/FinanceContext";
+import { useFinanceTransactions, useFinanceWallets } from "../../context/FinanceContext";
 import { normalizeComparisonText } from "../../context/finance/helpers";
 import { useModal } from "../../context/ModalContext";
 import { usePage } from "../../context/PageContext";
@@ -7,8 +7,7 @@ import { getLocalTodayDate } from "../../lib/localDate";
 import { AuthShell } from "../layout/AuthShell";
 import { AddTransactionModal } from "../modal/AddTransaction";
 import { AddTransferModal } from "../modal/AddTransferModal";
-import { ConfirmActionModal } from "../modal/ConfirmActionModal";
-import { EditTransaction } from "../modal/EditTransaction";
+import { useTransactionContextActionHandler } from "../transactions/useTransactionContextActionHandler";
 import { TransactionsFiltersPanel } from "./transactions/TransactionsFiltersPanel";
 import { TransactionsListPanel } from "./transactions/TransactionsListPanel";
 import { TransactionsSummaryCards } from "./transactions/TransactionsSummaryCards";
@@ -45,8 +44,8 @@ function resolveMonthStartDate(monthKey: string): string {
 export function TransactionsPage() {
     const transactions = useFinanceTransactions();
     const wallets = useFinanceWallets();
-    const { deleteTransaction, markTransactionAsPaid } = useFinanceActions();
     const { openModal } = useModal();
+    const handleTransactionContextAction = useTransactionContextActionHandler();
     const { consumePendingNavigation } = usePage();
     const [filters, setFilters] = useState<TransactionsFilterState>(INITIAL_FILTER_STATE);
     const [activeTab, setActiveTab] = useState<TransactionsTabKey>("income");
@@ -253,43 +252,6 @@ export function TransactionsPage() {
         );
     }, [activeTabTransactions]);
 
-    const handleEditTransaction = (transaction: Transaction) => {
-        openModal(<EditTransaction transaction={transaction} />);
-    };
-
-    const getTransactionDisplayLabel = (transaction: Transaction) => {
-        return transaction.description.trim() || getTransactionCategoryLabel(transaction);
-    };
-
-    const handleDeleteTransaction = (transaction: Transaction) => {
-        const transactionLabel = getTransactionDisplayLabel(transaction);
-        const isInvoicePayment = transaction.systemKind === "invoice_payment";
-
-        openModal(
-            <ConfirmActionModal
-                title="Excluir transação?"
-                description={isInvoicePayment ? `Essa ação remove \"${transactionLabel}\" e reverte o pagamento vinculado na fatura.` : `Essa ação remove \"${transactionLabel}\" em definitivo.`}
-                confirmLabel="Excluir"
-                tone="danger"
-                onConfirm={() => deleteTransaction(transaction)}
-            />,
-        );
-    };
-
-    const handleConfirmPayment = (transaction: Transaction) => {
-        const transactionLabel = getTransactionDisplayLabel(transaction);
-
-        openModal(
-            <ConfirmActionModal
-                title="Confirmar pagamento?"
-                description={`Essa ação marca "${transactionLabel}" como paga e atualiza os saldos.`}
-                confirmLabel="Marcar como pago"
-                tone="success"
-                onConfirm={() => markTransactionAsPaid(transaction)}
-            />,
-        );
-    };
-
     const handleCreateFromActiveTab = () => {
         if (activeTab === "transfer") {
             openModal(
@@ -354,7 +316,7 @@ export function TransactionsPage() {
                         />
 
                         <div className="flex flex-col 2xl:flex-row-reverse w-full gap-2 shrink-0">
-                            <div className="w-full 2xl:w-[230px]">
+                            <div className="w-full 2xl:w-[200px]">
                                 <TransactionsSummaryCards activeTab={activeTab} summary={summary} />
                             </div>
                             <TransactionsListPanel
@@ -365,9 +327,7 @@ export function TransactionsPage() {
                                 wallets={wallets}
                                 sortMode={sortMode}
                                 onSortModeChange={(value) => setFilter("sortMode", value)}
-                                onEdit={handleEditTransaction}
-                                onConfirmPayment={handleConfirmPayment}
-                                onDelete={handleDeleteTransaction}
+                                onAction={handleTransactionContextAction}
                                 selectedMonth={selectedMonth}
                             />
                         </div>

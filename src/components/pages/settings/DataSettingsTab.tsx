@@ -3,6 +3,7 @@ import { Download, FileUp, HardDriveDownload, History, ShieldAlert } from "lucid
 import { useFinance } from "../../../context/FinanceContext";
 import type { FinanceSnapshot } from "../../../context/FinanceContext";
 import { buildFinanceBackupFile, downloadFinanceBackupFile, listLocalFinanceBackups, parseFinanceBackupFile, type FinanceBackupFile, type LocalFinanceBackupRecord } from "../../../lib/financeBackup";
+import { CreditCardInvoiceCsvImportCard } from "./CreditCardInvoiceCsvImportCard";
 import { CsvTransactionImportCard } from "./CsvTransactionImportCard";
 
 const IMPORT_CONFIRMATION_TEXT = "IMPORTAR";
@@ -233,6 +234,8 @@ export function DataSettingsTab() {
             </article>
 
             <CsvTransactionImportCard />
+
+            <CreditCardInvoiceCsvImportCard />
 
             <section className="grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
                 <article className="rounded-lg border border-white/[0.08] bg-[#101010] p-4">

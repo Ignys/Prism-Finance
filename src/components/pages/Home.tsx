@@ -12,15 +12,17 @@ export function HomePage() {
 
     return (
         <AuthShell mainClassName="text-center text-white">
-            <div className="grid w-full gap-3 xl:grid-cols-[minmax(280px,380px)_minmax(0,1fr)] 2xl:grid-cols-[minmax(320px,420px)_minmax(0,760px)]">
+            <div className="grid w-full gap-3 xl:grid-cols-[minmax(280px,400px)_minmax(0,1fr)] 2xl:grid-cols-[minmax(320px,420px)_minmax(0,700px)_minmax(0,1fr)]">
                 <section className="min-w-0 space-y-2">
                     <SpendingBillsAlertCard transactions={transactions} />
                     <RecentTransactionsPanel transactions={transactions} />
                 </section>
                 <section className="min-w-0 space-y-2">
+                    <GastosPorCategoria />
+                </section>
+                <section className="min-w-0 space-y-2">
                     <Suspense fallback={<div className="rounded-2xl border border-white/[0.08] bg-[#111111] p-4 text-sm text-neutral-400">Carregando graficos...</div>}>
                         <BalancoMensal />
-                        <GastosPorCategoria />
                     </Suspense>
                 </section>
             </div>

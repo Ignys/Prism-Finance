@@ -337,6 +337,12 @@ export function toTransactionRow(userId: string, transaction: StoredTransaction)
         paid_at: transaction.paidAt,
         invoice_id: transaction.invoiceId,
         notes: transaction.notes,
+        title: transaction.title,
+        category_id: transaction.categoryId,
+        beneficiary_id: transaction.beneficiaryId,
+        source_wallet_id: transaction.sourceWalletId,
+        destination_wallet_id: transaction.destinationWalletId,
+        credit_card_id: transaction.creditCardId,
         created_at: transaction.createdAt,
     };
 }
@@ -352,6 +358,12 @@ export function fromTransactionRow(row: TransactionRow): StoredTransaction {
         paidAt: row.paid_at,
         invoiceId: row.invoice_id,
         notes: row.notes,
+        title: row.title,
+        categoryId: row.category_id,
+        beneficiaryId: row.beneficiary_id,
+        sourceWalletId: row.source_wallet_id,
+        destinationWalletId: row.destination_wallet_id,
+        creditCardId: row.credit_card_id,
         createdAt: row.created_at,
     };
 }
