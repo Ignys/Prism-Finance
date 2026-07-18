@@ -1,6 +1,6 @@
 import type { Transaction, TransactionDraft, TransactionGroup, TransactionSeriesScope, TransactionStatus } from "../../context/FinanceContext";
 
-export type TransactionContextActionId = "open" | "select" | "toggle_status" | "ignore" | "duplicate" | "delete_single" | "delete_this_and_next" | "delete_all";
+export type TransactionContextActionId = "open" | "select" | "toggle_status" | "pay_today" | "ignore" | "duplicate" | "delete_single" | "delete_this_and_next" | "delete_all";
 
 export interface TransactionContextAction {
     id: TransactionContextActionId;
@@ -48,56 +48,60 @@ function getPaidLabel(transaction: Transaction): string {
     return "Marcar como paga";
 }
 
+function canShowPayTodayAction(transaction: Transaction): boolean {
+    return transaction.type === "spending" && transaction.status === "pending" && !isInvoicePayment(transaction) && !isCreditCardSpending(transaction);
+}
+
 function getIgnoreLabel(transaction: Transaction): string {
     if (isCreditCardSpending(transaction)) {
-        return "Ignorar na fatura";
+        return "Ignorar";
     }
 
     if (transaction.type === "income") {
-        return "Ignorar receita";
+        return "Ignorar";
     }
 
     if (transaction.type === "transfer") {
-        return "Ignorar transferência";
+        return "Ignorar";
     }
 
-    return "Ignorar despesa";
+    return "Ignorar";
 }
 
 function getDuplicateLabel(transaction: Transaction): string {
     if (isCreditCardSpending(transaction)) {
-        return "Duplicar compra";
+        return "Duplicar";
     }
 
     if (transaction.type === "income") {
-        return "Duplicar receita";
+        return "Duplicar";
     }
 
     if (transaction.type === "transfer") {
-        return "Duplicar transferência";
+        return "Duplicar";
     }
 
-    return "Duplicar despesa";
+    return "Duplicar";
 }
 
 function getSingleDeleteLabel(transaction: Transaction, group: TransactionGroup | undefined): string {
     if (group?.transactionMode === "installment") {
-        return "Excluir esta parcela";
+        return "Excluir essa parcela";
     }
 
     if (group?.transactionMode === "recurring") {
-        return "Excluir esta fixa";
+        return "Excluir apenas essa";
     }
 
     if (isCreditCardSpending(transaction)) {
-        return "Excluir compra";
+        return "Excluir";
     }
 
     if (transaction.type === "transfer") {
-        return "Excluir transferência";
+        return "Excluir";
     }
 
-    return "Excluir transação";
+    return "Excluir";
 }
 
 export function buildTransactionContextActions({ transaction, group, isSelected = false }: BuildTransactionContextActionsParams): TransactionContextAction[] {
@@ -112,6 +116,14 @@ export function buildTransactionContextActions({ transaction, group, isSelected 
         actions.push({
             id: "select",
             label: isSelected ? "Desselecionar" : "Selecionar",
+        });
+    }
+
+    if (canShowPayTodayAction(transaction)) {
+        actions.push({
+            id: "pay_today",
+            label: "Pagar hoje",
+            nextStatus: "paid",
         });
     }
 
@@ -161,7 +173,7 @@ export function buildTransactionContextActions({ transaction, group, isSelected 
             },
             {
                 id: "delete_all",
-                label: "Excluir parcelamento",
+                label: "Excluir todas as parcelas",
                 scope: "all",
                 tone: "danger",
             },
@@ -172,13 +184,13 @@ export function buildTransactionContextActions({ transaction, group, isSelected 
         actions.push(
             {
                 id: "delete_this_and_next",
-                label: "Excluir esta e futuras",
+                label: "Excluir essa e próximas",
                 scope: "this_and_next",
                 tone: "danger",
             },
             {
                 id: "delete_all",
-                label: "Excluir série fixa",
+                label: "Excluir todas",
                 scope: "all",
                 tone: "danger",
             },

@@ -1,6 +1,5 @@
 import { ChevronRight, Database, UserRound, Users } from "lucide-react";
 import { useMemo, useState } from "react";
-import { AuthShell } from "../layout/AuthShell";
 import { usePage } from "../../context/PageContext";
 import { signOutSupabase } from "../../supabase/auth/authService";
 import { AccountSettingsTab } from "./settings/AccountSettingsTab";
@@ -50,7 +49,7 @@ export function SettingsPage() {
     }
 
     return (
-        <AuthShell mainClassName="text-white">
+        <>
             <div className="mx-auto flex min-h-[calc(100vh-8rem)] flex-col gap-5">
                 <header className="flex flex-wrap items-end justify-between gap-3 text-left px-3">
                     <div>
@@ -104,6 +103,6 @@ export function SettingsPage() {
                     </div>
                 </section>
             </div>
-        </AuthShell>
+        </>
     );
 }

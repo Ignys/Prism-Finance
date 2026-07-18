@@ -1,7 +1,8 @@
 import { motion } from "framer-motion";
-import { ArrowLeftRight, ChartNoAxesCombined, FileText, Gift, Home, WalletCards, type LucideIcon } from "lucide-react";
-import { useState } from "react"
-import { AppPage, usePage } from "../../context/PageContext";
+import { ArrowLeftRight, ChartNoAxesCombined, FileText, Gift, Home, WalletCards } from "lucide-react";
+import { Link } from "react-router-dom";
+import { useState } from "react";
+import { AppPage, getPathForPage, usePage } from "../../context/PageContext";
 
 export function NavSection() {
 
@@ -17,12 +18,12 @@ export function NavSection() {
     ];
 
     const [hoveredNav, setHoveredNav] = useState<string | null>(null);
-    const { goToPage, currentPage } = usePage();
+    const { currentPage } = usePage();
 
     const normalizedPage: AppPage =
             currentPage === "wallets" || currentPage === "creditCards" || currentPage === "beneficiaries" || currentPage === "categories" || currentPage === "tags"
                 ? "registry"
-                : currentPage === "spending" || currentPage === "income"
+                : currentPage === "spending" || currentPage === "income" || currentPage === "transfer"
                   ? "transactions"
                   : currentPage;
         const indicatorTarget = hoveredNav ?? NAV_ITEMS.find((item) => item.page === normalizedPage)?.label ?? null;
@@ -35,10 +36,9 @@ export function NavSection() {
                 const isLit = hoveredNav ? hoveredNav === label : isActive;
 
                 return (
-                    <button
+                    <Link
                         key={page + label}
-                        type="button"
-                        onClick={() => goToPage(page)}
+                        to={getPathForPage(page)}
                         onMouseEnter={() => setHoveredNav(label)}
                         className={[
                             "relative w-full z-10 flex items-center gap-1.5 whitespace-nowrap rounded-lg px-2 py-[7px]",
@@ -54,7 +54,7 @@ export function NavSection() {
                             {icon}
                             <span className="overflow-hidden whitespace-nowrap text-xs uppercase">{label}</span>
                         </span>
-                    </button>
+                    </Link>
                 );
             })}
         </nav>

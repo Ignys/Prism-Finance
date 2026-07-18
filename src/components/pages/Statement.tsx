@@ -3,11 +3,12 @@ import { type CreditCard, type CreditCardInvoice, useFinanceFavoriteCreditCard, 
 import {
     buildCreditCardInvoiceId,
     getMonthKeyFromDateValue,
+    resolveCreditCardInvoiceCycle,
     resolveCreditCardInvoiceCycleFromCycleKey,
 } from "../../context/financeTypes";
 import { useModal } from "../../context/ModalContext";
 import { usePage } from "../../context/PageContext";
-import { AuthShell } from "../layout/AuthShell";
+import { getLocalTodayDate } from "../../lib/localDate";
 import { AddCardSpending } from "../modal/AddCardSpending";
 import { ConfirmActionModal } from "../modal/ConfirmActionModal";
 import { PayCreditCardInvoiceModal } from "../modal/PayCreditCardInvoiceModal";
@@ -216,9 +217,14 @@ export function StatementPage() {
             return;
         }
 
+        const today = getLocalTodayDate();
+        const openCycle = resolveCreditCardInvoiceCycle(today, selectedCard.closingDay, selectedCard.dueDay);
         const prefillCycleKey = selectedDueMonth;
         const prefillInvoiceId = buildCreditCardInvoiceId(selectedCard.id, prefillCycleKey);
-        const prefillDate = resolveCreditCardInvoiceCycleFromCycleKey(prefillCycleKey, selectedCard.closingDay, selectedCard.dueDay).dueDate;
+        const prefillDate =
+            prefillCycleKey === openCycle.cycleKey
+                ? today
+                : resolveCreditCardInvoiceCycleFromCycleKey(prefillCycleKey, selectedCard.closingDay, selectedCard.dueDay).dueDate;
 
         openModal(
             <AddCardSpending
@@ -233,36 +239,34 @@ export function StatementPage() {
     };
 
     return (
-        <AuthShell mainClassName="text-white">
-            <div className="flex">
-                <div className="flex flex-col gap-3 2xl:flex-row w-full">
-                    <div className="min-w-0 flex-1 space-y-3">
-                        <StatementFiltersPanel
-                            selectedMonth={selectedDueMonth}
-                            selectedCardId={selectedCardId}
-                            creditCards={creditCards}
-                            onMonthChange={(value) => setFilter("selectedMonth", value)}
-                            onCardChange={(value) => setFilter("selectedCardId", value)}
-                        />
+        <div className="flex">
+            <div className="flex flex-col gap-3 2xl:flex-row w-full">
+                <div className="min-w-0 flex-1 space-y-3">
+                    <StatementFiltersPanel
+                        selectedMonth={selectedDueMonth}
+                        selectedCardId={selectedCardId}
+                        creditCards={creditCards}
+                        onMonthChange={(value) => setFilter("selectedMonth", value)}
+                        onCardChange={(value) => setFilter("selectedCardId", value)}
+                    />
 
-                        <StatementContentPanel
-                            selectedMonth={selectedDueMonth}
-                            invoices={monthInvoices}
-                            transactions={monthTransactions}
-                            cardById={cardById}
-                            invoiceById={invoiceById}
-                            onPayInvoice={handlePayInvoice}
-                            onInvoiceStateAdjustment={handleInvoiceStateAdjustment}
-                            onCreateCardSpending={handleCreateCardSpendingFromStatement}
-                            onAction={handleTransactionContextAction}
-                        />
-                    </div>
+                    <StatementContentPanel
+                        selectedMonth={selectedDueMonth}
+                        invoices={monthInvoices}
+                        transactions={monthTransactions}
+                        cardById={cardById}
+                        invoiceById={invoiceById}
+                        onPayInvoice={handlePayInvoice}
+                        onInvoiceStateAdjustment={handleInvoiceStateAdjustment}
+                        onCreateCardSpending={handleCreateCardSpendingFromStatement}
+                        onAction={handleTransactionContextAction}
+                    />
+                </div>
 
-                    <div className="w-full 2xl:w-[230px]">
-                        <StatementSummaryCards summary={summary} />
-                    </div>
+                <div className="w-full 2xl:w-[230px]">
+                    <StatementSummaryCards summary={summary} />
                 </div>
             </div>
-        </AuthShell>
+        </div>
     );
 }

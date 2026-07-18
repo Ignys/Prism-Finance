@@ -1,8 +1,10 @@
 import type { Transaction } from "../../context/FinanceContext";
 import { useFinanceActions } from "../../context/FinanceContext";
+import { getTodayDate } from "../../context/finance/helpers";
 import { useModal } from "../../context/ModalContext";
 import { ConfirmActionModal } from "../modal/ConfirmActionModal";
 import { EditTransaction } from "../modal/EditTransaction";
+import { buildDeleteTransactionImpactPreview, useDeleteTransactionImpactData } from "./deleteTransactionImpact";
 import { buildDuplicateTransactionDraft, type TransactionContextAction } from "./transactionContextActions";
 
 function getTransactionDisplayLabel(transaction: Transaction): string {
@@ -42,6 +44,10 @@ function getDeleteDescription(transaction: Transaction, action: TransactionConte
 function getStatusDescription(transaction: Transaction, action: TransactionContextAction): string {
     const label = getTransactionDisplayLabel(transaction);
 
+    if (action.id === "pay_today") {
+        return `Essa ação marca "${label}" como paga e move a data da transação para hoje.`;
+    }
+
     if (action.nextStatus === "skipped") {
         return `Essa ação ignora "${label}" nos cálculos e atualiza os saldos ou faturas vinculadas.`;
     }
@@ -54,8 +60,9 @@ function getStatusDescription(transaction: Transaction, action: TransactionConte
 }
 
 export function useTransactionContextActionHandler() {
-    const { addTransaction, deleteTransactionWithScope, setTransactionStatus } = useFinanceActions();
+    const { addTransaction, deleteTransactionWithScope, setTransactionStatus, updateTransaction } = useFinanceActions();
     const { openModal } = useModal();
+    const deleteImpactData = useDeleteTransactionImpactData();
 
     return (transaction: Transaction, action: TransactionContextAction) => {
         if (action.id === "open") {
@@ -65,6 +72,30 @@ export function useTransactionContextActionHandler() {
 
         if (action.id === "duplicate") {
             void addTransaction(buildDuplicateTransactionDraft(transaction));
+            return;
+        }
+
+        if (action.id === "pay_today") {
+            const today = getTodayDate();
+            openModal(
+                <ConfirmActionModal
+                    title={`${action.label}?`}
+                    description={getStatusDescription(transaction, action)}
+                    confirmLabel={action.label}
+                    tone="success"
+                    onConfirm={() =>
+                        updateTransaction({
+                            transaction,
+                            draft: {
+                                ...buildDuplicateTransactionDraft(transaction),
+                                date: today,
+                                scheduledDate: today,
+                                status: "paid",
+                            },
+                        })
+                    }
+                />,
+            );
             return;
         }
 
@@ -82,10 +113,18 @@ export function useTransactionContextActionHandler() {
         }
 
         if (action.id === "delete_single" || action.id === "delete_this_and_next" || action.id === "delete_all") {
+            const deleteImpactPreview = buildDeleteTransactionImpactPreview({
+                transaction,
+                scope: action.scope,
+                storedTransactions: deleteImpactData.storedTransactions,
+                transactionGroups: deleteImpactData.transactionGroups,
+                wallets: deleteImpactData.wallets,
+            });
             openModal(
                 <ConfirmActionModal
                     title={getDeleteTitle(action)}
                     description={getDeleteDescription(transaction, action)}
+                    consequences={deleteImpactPreview.consequences}
                     confirmLabel={action.label}
                     tone="danger"
                     onConfirm={() => deleteTransactionWithScope(transaction, action.scope)}

@@ -1,56 +1,42 @@
 import { useEffect, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
-import { CheckCheck, CircleCheckBig, Clock, Copy, Eye, ListChecks, SquareArrowOutUpRight, SquareSlash, Trash2, TriangleAlert } from "lucide-react";
-import type { TransactionContextAction, TransactionContextActionId } from "./transactionContextActions";
+import { ExternalLink, Pencil, ShoppingCart, Trash2 } from "lucide-react";
+import type { WishlistContextAction, WishlistContextActionId } from "./wishlistContextActions";
 
-export interface TransactionContextMenuState {
-    transactionId: string;
+export interface WishlistContextMenuState {
+    wishItemId: string;
     x: number;
     y: number;
 }
 
-interface TransactionContextMenuProps {
-    state: TransactionContextMenuState | null;
-    actions: TransactionContextAction[];
-    onSelect: (action: TransactionContextAction) => void;
+interface WishlistContextMenuProps {
+    state: WishlistContextMenuState | null;
+    actions: WishlistContextAction[];
+    onSelect: (action: WishlistContextAction) => void;
     onClose: () => void;
 }
 
-const MENU_WIDTH = 260;
+const MENU_WIDTH = 240;
 const MENU_PADDING = 12;
 const MENU_VERTICAL_PADDING = 16;
 const MENU_ITEM_HEIGHT = 40;
 const MENU_DIVIDER_HEIGHT = 13;
 
-const ACTION_ICONS: Record<TransactionContextActionId, typeof Eye> = {
-    open: SquareArrowOutUpRight,
-    select: ListChecks,
-    toggle_status: CircleCheckBig,
-    pay_today: CheckCheck,
-    ignore: SquareSlash,
-    duplicate: Copy,
-    delete_single: Trash2,
-    delete_this_and_next: Trash2,
-    delete_all: TriangleAlert,
+const ACTION_ICONS: Record<WishlistContextActionId, typeof Pencil> = {
+    create_expense: ShoppingCart,
+    edit: Pencil,
+    open_link: ExternalLink,
+    remove: Trash2,
 };
 
-function resolveActionIcon(action: TransactionContextAction): typeof Eye {
-    if (action.id === "toggle_status" && action.nextStatus === "pending") {
-        return Clock;
-    }
-
-    return ACTION_ICONS[action.id];
-}
-
-function buildActionSections(actions: TransactionContextAction[]): TransactionContextAction[][] {
-    const primary = actions.filter((action) => action.id === "open");
+function buildActionSections(actions: WishlistContextAction[]): WishlistContextAction[][] {
     const destructive = actions.filter((action) => action.tone === "danger");
-    const secondary = actions.filter((action) => action.id !== "open" && action.tone !== "danger");
+    const primary = actions.filter((action) => action.tone !== "danger");
 
-    return [primary, secondary, destructive].filter((section) => section.length > 0);
+    return [primary, destructive].filter((section) => section.length > 0);
 }
 
-function resolveMenuPosition(state: TransactionContextMenuState, actions: TransactionContextAction[]): { left: number; top: number } {
+function resolveMenuPosition(state: WishlistContextMenuState, actions: WishlistContextAction[]): { left: number; top: number } {
     if (typeof window === "undefined") {
         return { left: state.x, top: state.y };
     }
@@ -68,7 +54,7 @@ function resolveMenuPosition(state: TransactionContextMenuState, actions: Transa
     };
 }
 
-export function TransactionContextMenu({ state, actions, onSelect, onClose }: TransactionContextMenuProps) {
+export function WishlistContextMenu({ state, actions, onSelect, onClose }: WishlistContextMenuProps) {
     const menuRef = useRef<HTMLDivElement | null>(null);
     const sections = useMemo(() => buildActionSections(actions), [actions]);
     const position = useMemo(() => (state ? resolveMenuPosition(state, actions) : null), [actions, state]);
@@ -107,15 +93,15 @@ export function TransactionContextMenu({ state, actions, onSelect, onClose }: Tr
         <div
             ref={menuRef}
             role="menu"
-            aria-label="Ações da transação"
-            className="fixed z-[220] w-[260px] overflow-hidden rounded-2xl border border-white/[0.1] bg-[#101113]/95 p-2 text-white shadow-2xl backdrop-blur-xl"
+            aria-label="Acoes do item da lista de desejos"
+            className="fixed z-[220] w-[240px] overflow-hidden rounded-2xl border border-white/[0.1] bg-[#101113]/95 p-2 text-white shadow-2xl backdrop-blur-xl"
             style={{ left: position.left, top: position.top }}
         >
             {sections.map((section, sectionIndex) => (
                 <div key={`section-${sectionIndex}`}>
                     {sectionIndex > 0 ? <div className="my-1.5 h-px bg-white/[0.08]" aria-hidden="true" /> : null}
                     {section.map((action) => {
-                        const Icon = resolveActionIcon(action);
+                        const Icon = ACTION_ICONS[action.id];
                         const danger = action.tone === "danger";
 
                         return (
@@ -123,8 +109,13 @@ export function TransactionContextMenu({ state, actions, onSelect, onClose }: Tr
                                 key={action.id}
                                 type="button"
                                 role="menuitem"
-                                onClick={() => onSelect(action)}
-                                className={`flex h-10 w-full items-center gap-3 rounded-xl px-3 text-left text-[13px] font-medium transition-colors ${
+                                onClick={() => {
+                                    if (!action.disabled) {
+                                        onSelect(action);
+                                    }
+                                }}
+                                disabled={action.disabled}
+                                className={`flex h-10 w-full items-center gap-3 rounded-xl px-3 text-left text-[13px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-45 ${
                                     danger ? "text-red-300 hover:bg-red-500/10 hover:text-red-200" : "text-white/86 hover:bg-white/[0.06] hover:text-white"
                                 }`}
                             >

@@ -11,6 +11,8 @@ export interface IncomeItem {
     label: string;
     amount: number;
     iconName: string | null;
+    iconColor: string | null;
+    iconAlt: string;
     isDisabled: boolean;
 }
 
@@ -20,6 +22,7 @@ export interface SimulatedIncomeItem {
     amount: number;
     iconName: string | null;
     source: SimulatedIncomeSource;
+    isDisabled: boolean;
     overrideMonthKey?: string;
 }
 
@@ -29,6 +32,8 @@ export interface InheritedExpenseItem {
     label: string;
     amount: number;
     iconName: string | null;
+    iconColor: string | null;
+    iconAlt: string;
     isDisabled: boolean;
 }
 
@@ -55,6 +60,10 @@ export interface WishlistProjectionItem {
     createdAt: string;
 }
 
+export interface SimulatedExpenseItem extends PlanningSimulatedExpense {
+    isDisabled: boolean;
+}
+
 export interface MonthProjection extends MonthReality {
     monthKey: string;
     monthLabel: string;
@@ -66,7 +75,7 @@ export interface MonthProjection extends MonthReality {
     simulatedIncomeItems: SimulatedIncomeItem[];
     currentIncome: number;
     simulatedExpenses: number;
-    simulatedExpenseItems: PlanningSimulatedExpense[];
+    simulatedExpenseItems: SimulatedExpenseItem[];
     wishlistExpenseItems: WishlistProjectionItem[];
     originalMonthBalance: number;
     currentMonthBalance: number;

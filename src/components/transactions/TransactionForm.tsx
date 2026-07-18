@@ -111,6 +111,9 @@ function EditScopeSelectedContent({ option }: { option: EditScopeOption }) {
 
 export interface TransactionFormPrefill {
     initialDate?: string;
+    initialAmount?: number;
+    initialCategoryId?: string;
+    initialDescription?: string;
 }
 
 interface TransactionFormProps {

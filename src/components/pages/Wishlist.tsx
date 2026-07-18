@@ -1,13 +1,15 @@
 import { ExternalLink, Flag, Gift, Plus, Search, UserRound } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
-import type { SharedWishlistSnapshot } from "../../context/FinanceContext";
+import { useEffect, useMemo, useState, type MouseEvent } from "react";
+import type { SharedWishlistSnapshot, WishItem } from "../../context/FinanceContext";
 import { useFinanceCategories, useFinanceFamily, useFinanceSession, useFinanceSharedWishlists, useFinanceWishItems } from "../../context/FinanceContext";
 import { useModal } from "../../context/ModalContext";
 import { getCategoryIconComponent } from "../../lib/categoryIcons";
 import { getWishItemPriorityMeta } from "../../lib/wishlistPriority";
 import { resolveUserDisplayName } from "../../lib/userProfile";
-import { AuthShell } from "../layout/AuthShell";
 import { AddWishItem } from "../modal/AddWishItem";
+import { WishlistContextMenu, type WishlistContextMenuState } from "./wishlist/WishlistContextMenu";
+import { buildWishlistContextActions, type WishlistContextAction } from "./wishlist/wishlistContextActions";
+import { useWishlistContextActionHandler } from "./wishlist/useWishlistContextActionHandler";
 
 const currencyFormatter = new Intl.NumberFormat("pt-BR", {
     style: "currency",
@@ -66,9 +68,11 @@ export function WishlistPage() {
     const sharedWishlists = useFinanceSharedWishlists();
     const categories = useFinanceCategories();
     const { openModal } = useModal();
+    const handleWishlistContextAction = useWishlistContextActionHandler();
     const [activeOwnerUid, setActiveOwnerUid] = useState("");
     const [sortOption, setSortOption] = useState<WishlistSortOption>("price");
     const [searchTerm, setSearchTerm] = useState("");
+    const [contextMenuState, setContextMenuState] = useState<WishlistContextMenuState | null>(null);
 
     const categoryNameById = useMemo(() => {
         const next = new Map<string, string>();
@@ -93,6 +97,14 @@ export function WishlistPage() {
         });
         return next;
     }, [categories]);
+
+    const wishItemById = useMemo(() => {
+        const next = new Map<string, WishItem>();
+        wishItems.forEach((item) => {
+            next.set(item.id, item);
+        });
+        return next;
+    }, [wishItems]);
 
     const ownWishlistSnapshot = useMemo<SharedWishlistSnapshot>(() => {
         const ownerUid = user?.uid ?? "self";
@@ -190,8 +202,47 @@ export function WishlistPage() {
         });
     }, [activeWishlist.items, normalizedSearchTerm, sortOption]);
 
+    const contextMenuActions = useMemo(() => {
+        if (!contextMenuState) {
+            return [];
+        }
+
+        const wishItem = wishItemById.get(contextMenuState.wishItemId);
+        return wishItem ? buildWishlistContextActions(wishItem) : [];
+    }, [contextMenuState, wishItemById]);
+
+    useEffect(() => {
+        setContextMenuState(null);
+    }, [activeWishlist.owner.uid]);
+
+    const handleWishItemContextMenu = (event: MouseEvent, wishItemId: string) => {
+        if (!isOwnWishlist || !wishItemById.has(wishItemId)) {
+            return;
+        }
+
+        event.preventDefault();
+        setContextMenuState({
+            wishItemId,
+            x: event.clientX,
+            y: event.clientY,
+        });
+    };
+
+    const handleContextActionSelect = (action: WishlistContextAction) => {
+        if (!contextMenuState) {
+            return;
+        }
+
+        const wishItem = wishItemById.get(contextMenuState.wishItemId);
+        setContextMenuState(null);
+
+        if (wishItem) {
+            handleWishlistContextAction(wishItem, action);
+        }
+    };
+
     return (
-        <AuthShell mainClassName="text-white">
+        <>
             <div className="flex min-h-[calc(100vh-8rem)] w-full flex-col">
                 <header className="flex flex-wrap items-end justify-between gap-2 text-left mb-3">
                     {hasFamilyTabs ? (
@@ -305,6 +356,7 @@ export function WishlistPage() {
                                         role={isOwnWishlist ? "button" : undefined}
                                         tabIndex={isOwnWishlist ? 0 : -1}
                                         onClick={isOwnWishlist ? () => openModal(<AddWishItem mode="edit" wishItemId={wishItem.id} />) : undefined}
+                                        onContextMenu={(event) => handleWishItemContextMenu(event, wishItem.id)}
                                         onKeyDown={
                                             isOwnWishlist
                                                 ? (event) => {
@@ -379,6 +431,7 @@ export function WishlistPage() {
                     )}
                 </section>
             </div>
-        </AuthShell>
+            <WishlistContextMenu state={contextMenuState} actions={contextMenuActions} onSelect={handleContextActionSelect} onClose={() => setContextMenuState(null)} />
+        </>
     );
 }

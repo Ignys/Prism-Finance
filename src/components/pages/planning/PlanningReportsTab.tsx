@@ -1,10 +1,9 @@
 import { useMemo } from "react";
-import type { CreditCardInvoice, ReportPeriod, Transaction } from "../../../context/FinanceContext";
+import { type CreditCardInvoice, type ReportPeriod, type Transaction, useFinanceBeneficiaries } from "../../../context/FinanceContext";
 import { PlanningReportsCategoriesSection } from "./PlanningReportsCategoriesSection";
 import { PlanningReportsEmptyState } from "./PlanningReportsEmptyState";
 import { PlanningReportsFlowSection } from "./PlanningReportsFlowSection";
 import { PlanningReportsMetricsSection } from "./PlanningReportsMetricsSection";
-import { PlanningReportsPulseSection } from "./PlanningReportsPulseSection";
 import { PlanningReportsRankingSection } from "./PlanningReportsRankingSection";
 import { buildReportsDataset } from "./planningReportsUtils";
 
@@ -16,9 +15,10 @@ interface PlanningReportsTabProps {
 }
 
 export function PlanningReportsTab({ period, transactions, allTransactions, creditCardInvoices }: PlanningReportsTabProps) {
-    const { monthReports, categoryReports, summary } = useMemo(
-        () => buildReportsDataset(period, transactions, creditCardInvoices, allTransactions),
-        [allTransactions, creditCardInvoices, period, transactions],
+    const beneficiaries = useFinanceBeneficiaries();
+    const { monthReports, categoryReports, incomeCategoryReports, beneficiaryReports, summary } = useMemo(
+        () => buildReportsDataset(period, transactions, creditCardInvoices, allTransactions, beneficiaries),
+        [allTransactions, beneficiaries, creditCardInvoices, period, transactions],
     );
 
     return (
@@ -29,13 +29,13 @@ export function PlanningReportsTab({ period, transactions, allTransactions, cred
                 <>
                     <PlanningReportsMetricsSection summary={summary} />
                     <div className="grid min-h-0 gap-3 xl:grid-cols-[minmax(0,1.35fr)_minmax(340px,0.85fr)]">
-                        <PlanningReportsCategoriesSection categoryReports={categoryReports} totalSpending={summary.spending} />
+                        <PlanningReportsCategoriesSection categoryReports={categoryReports} totalAmount={summary.spending} />
+
                         <PlanningReportsFlowSection monthReports={monthReports} />
-                        
                     </div>
                     <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_360px]">
-                        <PlanningReportsRankingSection categoryReports={categoryReports} />
-                        <PlanningReportsPulseSection summary={summary} />
+                        <PlanningReportsCategoriesSection categoryReports={incomeCategoryReports} totalAmount={summary.income} kind="income" />
+                        <PlanningReportsRankingSection beneficiaryReports={beneficiaryReports} />
                     </div>
                 </>
             )}

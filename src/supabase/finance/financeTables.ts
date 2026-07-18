@@ -11,6 +11,7 @@ export const FINANCE_TABLES = {
     transactions: "transactions",
     ledgerEntries: "ledger_entries",
     transactionTags: "transaction_tags",
+    syncState: "finance_sync_state",
 } as const;
 
 export interface FinancePreferenceRow {
@@ -19,6 +20,13 @@ export interface FinancePreferenceRow {
     favorite_credit_card_id: string | null;
     planning: unknown;
     updated_at?: string;
+}
+
+export interface FinanceSyncStateRow {
+    user_id: string;
+    revision: number | string;
+    updated_at: string;
+    updated_by: string | null;
 }
 
 export interface WalletRow {

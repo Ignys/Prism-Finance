@@ -4,7 +4,6 @@ import { normalizeComparisonText } from "../../context/finance/helpers";
 import { useModal } from "../../context/ModalContext";
 import { usePage } from "../../context/PageContext";
 import { getLocalTodayDate } from "../../lib/localDate";
-import { AuthShell } from "../layout/AuthShell";
 import { AddTransactionModal } from "../modal/AddTransaction";
 import { AddTransferModal } from "../modal/AddTransferModal";
 import { useTransactionContextActionHandler } from "../transactions/useTransactionContextActionHandler";
@@ -14,6 +13,7 @@ import { TransactionsSummaryCards } from "./transactions/TransactionsSummaryCard
 import {
     INITIAL_FILTER_STATE,
     compareTransactions,
+    getCurrentMonthKey,
     getTransactionCategoryKey,
     getTransactionCategoryLabel,
     getTransactionMonthKey,
@@ -33,6 +33,10 @@ function resolveMonthStartDate(monthKey: string): string {
         return getLocalTodayDate();
     }
 
+    if (monthKey === getCurrentMonthKey()) {
+        return getLocalTodayDate();
+    }
+
     const month = Number(match[2]);
     if (!Number.isInteger(month) || month < 1 || month > 12) {
         return getLocalTodayDate();
@@ -41,21 +45,30 @@ function resolveMonthStartDate(monthKey: string): string {
     return `${match[1]}-${match[2]}-01`;
 }
 
+function resolveTransactionsTabFromPage(page: ReturnType<typeof usePage>["currentPage"]): TransactionsTabKey {
+    if (page === "spending") return "spending";
+    if (page === "transfer") return "transfer";
+    return "income";
+}
+
 export function TransactionsPage() {
     const transactions = useFinanceTransactions();
     const wallets = useFinanceWallets();
     const { openModal } = useModal();
     const handleTransactionContextAction = useTransactionContextActionHandler();
-    const { consumePendingNavigation } = usePage();
+    const { consumePendingNavigation, currentPage, goToPage } = usePage();
     const [filters, setFilters] = useState<TransactionsFilterState>(INITIAL_FILTER_STATE);
-    const [activeTab, setActiveTab] = useState<TransactionsTabKey>("income");
+    const [activeTab, setActiveTab] = useState<TransactionsTabKey>(() => resolveTransactionsTabFromPage(currentPage));
 
     useEffect(() => {
         const pendingNavigation = consumePendingNavigation();
         if (pendingNavigation?.page === "transactions") {
             setActiveTab(pendingNavigation.tab);
+            return;
         }
-    }, [consumePendingNavigation]);
+
+        setActiveTab(resolveTransactionsTabFromPage(currentPage));
+    }, [consumePendingNavigation, currentPage]);
 
     const {
         selectedMonth,
@@ -274,66 +287,69 @@ export function TransactionsPage() {
         );
     };
 
-    return (
-        <AuthShell mainClassName="text-white">
-            <div className="w-full flex">
-                <div className="flex flex-col gap-3 2xl:flex-row w-full">
-                    <div className="min-w-0 flex-1 space-y-3">
-                        <TransactionsFiltersPanel
-                            activeTab={activeTab}
-                            selectedMonth={selectedMonth}
-                            showAdvancedFilters={showAdvancedFilters}
-                            searchQuery={searchQuery}
-                            selectedCategoryKey={selectedCategoryKey}
-                            selectedWalletId={selectedWalletId}
-                            selectedBeneficiary={selectedBeneficiary}
-                            selectedStatus={selectedStatus}
-                            selectedTagIds={selectedTagIds}
-                            dateFrom={dateFrom}
-                            dateTo={dateTo}
-                            minAmount={minAmount}
-                            maxAmount={maxAmount}
-                            categoryOptions={categoryOptions}
-                            beneficiaryOptions={beneficiaryOptions}
-                            tagOptions={tagOptions}
-                            wallets={wallets}
-                            hasAdvancedFilters={hasAdvancedFilters}
-                            onTabChange={setActiveTab}
-                            onToggleAdvancedFilters={toggleAdvancedFilters}
-                            onClearAdvancedFilters={clearAdvancedFilters}
-                            onMonthChange={(value) => setFilter("selectedMonth", value)}
-                            onSearchQueryChange={(value) => setFilter("searchQuery", value)}
-                            onCategoryChange={(value) => setFilter("selectedCategoryKey", value)}
-                            onWalletChange={(value) => setFilter("selectedWalletId", value)}
-                            onBeneficiaryChange={(value) => setFilter("selectedBeneficiary", value)}
-                            onStatusChange={(value) => setFilter("selectedStatus", value)}
-                            onDateFromChange={(value) => setFilter("dateFrom", value)}
-                            onDateToChange={(value) => setFilter("dateTo", value)}
-                            onMinAmountChange={(value) => setFilter("minAmount", value)}
-                            onMaxAmountChange={(value) => setFilter("maxAmount", value)}
-                            onTagToggle={toggleTagFilter}
-                            onCreateFromActiveTab={handleCreateFromActiveTab}
-                        />
+    const handleTabChange = (tab: TransactionsTabKey) => {
+        setActiveTab(tab);
+        goToPage(tab);
+    };
 
-                        <div className="flex flex-col 2xl:flex-row-reverse w-full gap-2 shrink-0">
-                            <div className="w-full 2xl:w-[200px]">
-                                <TransactionsSummaryCards activeTab={activeTab} summary={summary} />
-                            </div>
-                            <TransactionsListPanel
-                                activeTab={activeTab}
-                                incomeTransactions={incomeTransactions}
-                                spendingTransactions={spendingTransactions}
-                                transferTransactions={transferTransactions}
-                                wallets={wallets}
-                                sortMode={sortMode}
-                                onSortModeChange={(value) => setFilter("sortMode", value)}
-                                onAction={handleTransactionContextAction}
-                                selectedMonth={selectedMonth}
-                            />
+    return (
+        <div className="w-full flex">
+            <div className="flex flex-col gap-3 2xl:flex-row w-full">
+                <div className="min-w-0 flex-1 space-y-1.5">
+                    <TransactionsFiltersPanel
+                        activeTab={activeTab}
+                        selectedMonth={selectedMonth}
+                        showAdvancedFilters={showAdvancedFilters}
+                        searchQuery={searchQuery}
+                        selectedCategoryKey={selectedCategoryKey}
+                        selectedWalletId={selectedWalletId}
+                        selectedBeneficiary={selectedBeneficiary}
+                        selectedStatus={selectedStatus}
+                        selectedTagIds={selectedTagIds}
+                        dateFrom={dateFrom}
+                        dateTo={dateTo}
+                        minAmount={minAmount}
+                        maxAmount={maxAmount}
+                        categoryOptions={categoryOptions}
+                        beneficiaryOptions={beneficiaryOptions}
+                        tagOptions={tagOptions}
+                        wallets={wallets}
+                        hasAdvancedFilters={hasAdvancedFilters}
+                        onTabChange={handleTabChange}
+                        onToggleAdvancedFilters={toggleAdvancedFilters}
+                        onClearAdvancedFilters={clearAdvancedFilters}
+                        onMonthChange={(value) => setFilter("selectedMonth", value)}
+                        onSearchQueryChange={(value) => setFilter("searchQuery", value)}
+                        onCategoryChange={(value) => setFilter("selectedCategoryKey", value)}
+                        onWalletChange={(value) => setFilter("selectedWalletId", value)}
+                        onBeneficiaryChange={(value) => setFilter("selectedBeneficiary", value)}
+                        onStatusChange={(value) => setFilter("selectedStatus", value)}
+                        onDateFromChange={(value) => setFilter("dateFrom", value)}
+                        onDateToChange={(value) => setFilter("dateTo", value)}
+                        onMinAmountChange={(value) => setFilter("minAmount", value)}
+                        onMaxAmountChange={(value) => setFilter("maxAmount", value)}
+                        onTagToggle={toggleTagFilter}
+                        onCreateFromActiveTab={handleCreateFromActiveTab}
+                    />
+
+                    <div className="flex flex-row w-full gap-2 shrink-0">
+                        <TransactionsListPanel
+                            activeTab={activeTab}
+                            incomeTransactions={incomeTransactions}
+                            spendingTransactions={spendingTransactions}
+                            transferTransactions={transferTransactions}
+                            wallets={wallets}
+                            sortMode={sortMode}
+                            onSortModeChange={(value) => setFilter("sortMode", value)}
+                            onAction={handleTransactionContextAction}
+                            selectedMonth={selectedMonth}
+                        />
+                        <div className="w-1/7">
+                            <TransactionsSummaryCards activeTab={activeTab} summary={summary} />
                         </div>
                     </div>
                 </div>
             </div>
-        </AuthShell>
+        </div>
     );
 }

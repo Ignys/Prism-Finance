@@ -26,6 +26,9 @@ interface UseTransactionFormOptions {
     mode?: "default" | "invoice_payment_edit";
     prefill?: {
         initialDate?: string;
+        initialAmount?: number;
+        initialCategoryId?: string;
+        initialDescription?: string;
     };
 }
 
@@ -148,6 +151,25 @@ function findCategorySelectionFromTransaction(transaction: Transaction, availabl
     };
 }
 
+function findCategorySelectionById(categoryId: string, availableCategories: ReturnType<typeof useFinanceCategories>): CategorySelection | null {
+    const matchingCategory = availableCategories.find((item) => item.id === categoryId);
+    if (!matchingCategory) {
+        return null;
+    }
+
+    if (matchingCategory.parentId) {
+        return {
+            rootCategoryId: matchingCategory.parentId,
+            subCategoryId: matchingCategory.id,
+        };
+    }
+
+    return {
+        rootCategoryId: matchingCategory.id,
+        subCategoryId: "",
+    };
+}
+
 function resolveInitialDate(prefillDate?: string): string {
     const normalizedPrefillDate = prefillDate?.trim() ?? "";
     if (!normalizedPrefillDate) {
@@ -174,9 +196,11 @@ export function useTransactionForm({ type, transaction, mode = "default", prefil
     );
     const isSeriesTransaction = Boolean(sourceGroup && sourceGroup.transactionMode !== "single");
 
-    const [amountInput, setAmountInputState] = useState(() => (transaction ? formatAmountInputFromValue(transaction.value) : "R$ 0,00"));
+    const [amountInput, setAmountInputState] = useState(() =>
+        transaction ? formatAmountInputFromValue(transaction.value) : typeof prefill?.initialAmount === "number" ? formatAmountInputFromValue(prefill.initialAmount) : "R$ 0,00",
+    );
     const [status, setStatus] = useState<TransactionStatus>(transaction?.status ?? "paid");
-    const [description, setDescription] = useState(transaction?.description ?? "");
+    const [description, setDescription] = useState(transaction?.description ?? prefill?.initialDescription ?? "");
     const [walletId, setWalletId] = useState(transaction?.inWallet ?? favoriteWalletId);
     const [rootCategoryId, setRootCategoryId] = useState("");
     const [subCategoryId, setSubCategoryId] = useState("");
@@ -186,6 +210,7 @@ export function useTransactionForm({ type, transaction, mode = "default", prefil
     const [transactionMode, setTransactionModeState] = useState<TransactionMode>(() => (sourceGroup?.transactionMode === "recurring" ? "recurring" : "single"));
     const [editScope, setEditScopeState] = useState<TransactionSeriesScope>("single");
     const [hydratedTransactionId, setHydratedTransactionId] = useState<string | null>(null);
+    const [hydratedPrefillCategoryId, setHydratedPrefillCategoryId] = useState<string | null>(null);
     const activeWallets = useMemo(() => wallets.filter((wallet) => wallet.isActive), [wallets]);
     const selectableWallets = useMemo(
         () => wallets.filter((wallet) => wallet.isActive || (isEditing && wallet.id === walletId)),
@@ -290,6 +315,25 @@ export function useTransactionForm({ type, transaction, mode = "default", prefil
     }, [availableCategories, hydratedTransactionId, transaction]);
 
     useEffect(() => {
+        if (transaction) {
+            return;
+        }
+
+        const initialCategoryId = prefill?.initialCategoryId?.trim() ?? "";
+        if (!initialCategoryId || hydratedPrefillCategoryId === initialCategoryId || availableCategories.length < 1) {
+            return;
+        }
+
+        const categorySelection = findCategorySelectionById(initialCategoryId, availableCategories);
+        if (categorySelection) {
+            setRootCategoryId(categorySelection.rootCategoryId);
+            setSubCategoryId(categorySelection.subCategoryId);
+        }
+
+        setHydratedPrefillCategoryId(initialCategoryId);
+    }, [availableCategories, hydratedPrefillCategoryId, prefill?.initialCategoryId, transaction]);
+
+    useEffect(() => {
         const fallbackWalletId =
             activeWallets.find((wallet) => wallet.id === favoriteWalletId)?.id ??
             activeWallets[0]?.id ??
@@ -312,6 +356,11 @@ export function useTransactionForm({ type, transaction, mode = "default", prefil
             return;
         }
 
+        const initialCategoryId = prefill?.initialCategoryId?.trim() ?? "";
+        if (!transaction && initialCategoryId && hydratedPrefillCategoryId !== initialCategoryId) {
+            return;
+        }
+
         const fallback = rootCategories.find((item) => normalizeComparisonText(item.name) === (categoryType === "expense" ? "sem categoria" : "outras receitas")) ?? rootCategories[0];
         if (!fallback) {
             setRootCategoryId("");
@@ -322,7 +371,7 @@ export function useTransactionForm({ type, transaction, mode = "default", prefil
         if (!rootCategories.some((item) => item.id === rootCategoryId)) {
             setRootCategoryId(fallback.id);
         }
-    }, [categoryType, hydratedTransactionId, rootCategories, rootCategoryId, transaction]);
+    }, [categoryType, hydratedPrefillCategoryId, hydratedTransactionId, prefill?.initialCategoryId, rootCategories, rootCategoryId, transaction]);
 
     useEffect(() => {
         if (subCategoryId && !subCategories.some((item) => item.id === subCategoryId)) {

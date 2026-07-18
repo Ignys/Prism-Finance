@@ -1,5 +1,6 @@
 import { lazy, Suspense } from "react";
 import { useModal } from "../../../context/ModalContext";
+import { ModalSkeleton } from "../../loading/CompactSkeletons";
 
 const AddIncome = lazy(() => import("../../modal/AddIncome").then((module) => ({ default: module.AddIncome })));
 const AddSpending = lazy(() => import("../../modal/AddSpending").then((module) => ({ default: module.AddSpending })));
@@ -32,7 +33,7 @@ const METRIC_ITEMS: {
 
 function renderLazyModal(modalType: ModalType) {
     return (
-        <Suspense fallback={<div className="rounded-lg bg-neutral-900 p-6 text-sm">Carregando...</div>}>
+        <Suspense fallback={<ModalSkeleton />}>
             {modalType === "income" ? <AddIncome /> : modalType === "spending" ? <AddSpending /> : <AddCardSpending />}
         </Suspense>
     );

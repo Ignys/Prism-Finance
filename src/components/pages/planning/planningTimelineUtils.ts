@@ -13,7 +13,16 @@ import type {
 } from "../../../context/FinanceContext";
 import { getMonthKeyFromDateValue } from "../../../context/financeTypes";
 import { parseAppDate } from "../../../lib/localDate";
-import { DEFAULT_TIMELINE_MONTHS, TIMELINE_MONTH_OPTIONS, type BalanceTone, type MonthReality, type SimulatedIncomeItem, type TimelineProjection, type WishlistProjectionItem } from "./planningTimelineTypes";
+import {
+    DEFAULT_TIMELINE_MONTHS,
+    TIMELINE_MONTH_OPTIONS,
+    type BalanceTone,
+    type MonthReality,
+    type SimulatedExpenseItem,
+    type SimulatedIncomeItem,
+    type TimelineProjection,
+    type WishlistProjectionItem,
+} from "./planningTimelineTypes";
 
 const MONTH_KEY_FORMAT = "yyyy-MM";
 
@@ -160,6 +169,7 @@ function getMonthReality(params: {
 }): MonthReality {
     const { monthKey, wallets, creditCards, creditCardInvoices, transactions, disabledInheritedExpenseIds, disabledIncomeIds } = params;
     const activeWalletIds = new Set(wallets.filter((wallet) => wallet.isActive).map((wallet) => wallet.id));
+    const walletById = new Map(wallets.map((wallet) => [wallet.id, wallet]));
     const activeCardIds = new Set(creditCards.filter((card) => card.isActive).map((card) => card.id));
     const cardNameById = new Map(creditCards.map((card) => [card.id, card.name]));
 
@@ -175,12 +185,15 @@ function getMonthReality(params: {
 
         if (transaction.type === "income") {
             if (activeWalletIds.has(transaction.inWallet)) {
+                const wallet = walletById.get(transaction.inWallet);
                 income += transaction.value;
                 incomeItems.push({
                     id: `income-transaction:${transaction.id}`,
-                    label: transaction.description.trim() || transaction.category.label,
+                    label: transaction.category.label,
                     amount: roundToCents(transaction.value),
-                    iconName: transaction.category.icon,
+                    iconName: wallet?.icon ?? null,
+                    iconColor: wallet?.color ?? null,
+                    iconAlt: wallet?.name ?? "Carteira",
                     isDisabled: disabledIncomeIds.has(`income-transaction:${transaction.id}`),
                 });
             }
@@ -188,13 +201,16 @@ function getMonthReality(params: {
         }
 
         if (transaction.type === "spending" && transaction.paymentMethod !== "credit_card" && activeWalletIds.has(transaction.inWallet)) {
+            const wallet = walletById.get(transaction.inWallet);
             walletSpendings += transaction.value;
             inheritedItems.push({
                 id: `transaction:${transaction.id}`,
                 source: "transaction",
-                label: transaction.description.trim() || transaction.category.label,
+                label: transaction.category.label,
                 amount: roundToCents(transaction.value),
-                iconName: transaction.category.icon,
+                iconName: wallet?.icon ?? null,
+                iconColor: wallet?.color ?? null,
+                iconAlt: wallet?.name ?? "Carteira",
                 isDisabled: disabledInheritedExpenseIds.has(`transaction:${transaction.id}`),
             });
         }
@@ -218,6 +234,8 @@ function getMonthReality(params: {
             label: `Fatura ${cardNameById.get(invoice.creditCardId) ?? "cartao"}`,
             amount: openAmount,
             iconName: null,
+            iconColor: null,
+            iconAlt: "Cartao",
             isDisabled: disabledInheritedExpenseIds.has(`invoice:${invoice.id}`),
         });
     }
@@ -277,6 +295,8 @@ export function buildTimelineProjection(params: {
     const openingBalance = getOpeningBalance(currentMonth, params.wallets, params.ledgerEntries);
     const disabledInheritedExpenseIds = new Set(params.planning.disabledInheritedExpenseIds ?? []);
     const disabledIncomeIds = new Set(params.planning.disabledIncomeIds ?? []);
+    const disabledSimulatedExpenseIds = new Set(params.planning.disabledSimulatedExpenseIds ?? []);
+    const disabledSimulatedIncomeIds = new Set(params.planning.disabledSimulatedIncomeIds ?? []);
     const revenueOverridesByMonth = new Map(params.planning.revenueOverrides.map((override) => [override.monthKey, override]));
     const simulatedExpensesByMonth = new Map<string, PlanningSimulatedExpense[]>();
     const simulatedIncomesByMonth = new Map<string, PlanningSimulatedIncome[]>();
@@ -323,7 +343,10 @@ export function buildTimelineProjection(params: {
                 disabledInheritedExpenseIds,
                 disabledIncomeIds,
             });
-            const simulatedExpenseItems = simulatedExpensesByMonth.get(monthKey) ?? [];
+            const simulatedExpenseItems: SimulatedExpenseItem[] = (simulatedExpensesByMonth.get(monthKey) ?? []).map((expense) => ({
+                ...expense,
+                isDisabled: disabledSimulatedExpenseIds.has(expense.id),
+            }));
             const wishlistExpenseItems = wishlistSelectionsByMonth.get(monthKey) ?? [];
             const simulatedIncomeItems: SimulatedIncomeItem[] = (simulatedIncomesByMonth.get(monthKey) ?? []).map((income) => ({
                 id: income.id,
@@ -331,6 +354,7 @@ export function buildTimelineProjection(params: {
                 amount: income.amount,
                 iconName: null,
                 source: "simulated_income",
+                isDisabled: disabledSimulatedIncomeIds.has(income.id),
             }));
             const legacyRevenueOverride = revenueOverridesByMonth.get(monthKey);
 
@@ -343,13 +367,14 @@ export function buildTimelineProjection(params: {
                         amount: legacyDelta,
                         iconName: null,
                         source: "legacy_override",
+                        isDisabled: false,
                         overrideMonthKey: monthKey,
                     });
                 }
             }
 
-            const simulatedIncome = roundToCents(sumAmounts(simulatedIncomeItems));
-            const simulatedExpenses = roundToCents(sumAmounts(simulatedExpenseItems) + sumAmounts(wishlistExpenseItems));
+            const simulatedIncome = roundToCents(sumAmounts(simulatedIncomeItems.filter((item) => !item.isDisabled)));
+            const simulatedExpenses = roundToCents(sumAmounts(simulatedExpenseItems.filter((item) => !item.isDisabled)) + sumAmounts(wishlistExpenseItems));
             const currentIncome = roundToCents(reality.activeIncome + simulatedIncome);
             const originalMonthBalance = roundToCents(reality.originalIncome - reality.inheritedExpenses);
             const currentMonthBalance = roundToCents(currentIncome - reality.activeInheritedExpenses - simulatedExpenses);
@@ -388,6 +413,8 @@ export function mergePlanningUpdate(planning: PlanningState, update: Partial<Pla
         revenueOverrides: update.revenueOverrides ?? planning.revenueOverrides,
         disabledInheritedExpenseIds: update.disabledInheritedExpenseIds ?? planning.disabledInheritedExpenseIds ?? [],
         disabledIncomeIds: update.disabledIncomeIds ?? planning.disabledIncomeIds ?? [],
+        disabledSimulatedExpenseIds: update.disabledSimulatedExpenseIds ?? planning.disabledSimulatedExpenseIds ?? [],
+        disabledSimulatedIncomeIds: update.disabledSimulatedIncomeIds ?? planning.disabledSimulatedIncomeIds ?? [],
         timelineSelectedWalletIds: update.timelineSelectedWalletIds ?? planning.timelineSelectedWalletIds ?? [],
         timelineCompareMode: update.timelineCompareMode ?? planning.timelineCompareMode ?? true,
         timelineHorizontalMode: update.timelineHorizontalMode ?? planning.timelineHorizontalMode ?? false,

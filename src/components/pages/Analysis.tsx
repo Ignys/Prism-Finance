@@ -5,7 +5,6 @@ import {
     type PlanningWishlistSelection,
     type ReportPeriod,
     useFinanceActions,
-    useFinanceCategories,
     useFinanceCreditCardInvoices,
     useFinanceCreditCards,
     useFinanceLedgerEntries,
@@ -15,13 +14,14 @@ import {
     useFinanceWishItems,
 } from "../../context/FinanceContext";
 import { useModal } from "../../context/ModalContext";
-import { AuthShell } from "../layout/AuthShell";
-import { PlanningSimulationModal } from "../modal/PlanningSimulationModal";
+import { usePage } from "../../context/PageContext";
+import { AddWishItem } from "../modal/AddWishItem";
+import { PlanningSimulationModal, type PlanningSimulationModalDraft } from "../modal/PlanningSimulationModal";
 import { PlanningDetailsAside } from "./planning/PlanningDetailsAside";
 import { DEFAULT_PLANNING_TAB, PlanningPageHeader } from "./planning/PlanningPageHeader";
 import { PlanningReportsTab } from "./planning/PlanningReportsTab";
 import { PlanningTimelinePanel } from "./planning/PlanningTimelinePanel";
-import { DEFAULT_TIMELINE_MONTHS, type MonthProjection, type PlanningPanel, type PlanningTab, type SimulatedIncomeItem } from "./planning/planningTimelineTypes";
+import { DEFAULT_TIMELINE_MONTHS, type MonthProjection, type PlanningPanel, type PlanningTab, type SimulatedExpenseItem, type SimulatedIncomeItem } from "./planning/planningTimelineTypes";
 import { buildTimelineProjection, getCurrentMonthKey, mergePlanningUpdate, parseCurrencyInput } from "./planning/planningTimelineUtils";
 import {
     getAllCreditCardIds,
@@ -41,7 +41,6 @@ function areStringArraysEqual(left: string[], right: string[]): boolean {
 
 export function PlanningPage() {
     const wallets = useFinanceWallets();
-    const categories = useFinanceCategories();
     const creditCards = useFinanceCreditCards();
     const creditCardInvoices = useFinanceCreditCardInvoices();
     const transactions = useFinanceTransactions();
@@ -50,12 +49,12 @@ export function PlanningPage() {
     const planning = useFinancePlanning();
     const { updatePlanningState } = useFinanceActions();
     const { openModal } = useModal();
+    const { goToPage } = usePage();
 
     const [activePlanningTab, setActivePlanningTab] = useState<PlanningTab>(DEFAULT_PLANNING_TAB);
     const [selectedMonthKey, setSelectedMonthKey] = useState(getCurrentMonthKey());
     const [selectedPanel, setSelectedPanel] = useState<PlanningPanel>("income");
 
-    const categoryIconById = useMemo(() => new Map(categories.map((category) => [category.id, category.icon])), [categories]);
     const activeWishItems = useMemo(() => wishItems.filter((item) => item.isActive).sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id)), [wishItems]);
     const wishlistSelectionByWishItemId = useMemo(() => new Map(planning.wishlistSelections.map((selection) => [selection.wishItemId, selection])), [planning.wishlistSelections]);
     const walletIds = useMemo(() => getAllWalletIds(wallets), [wallets]);
@@ -183,6 +182,7 @@ export function PlanningPage() {
         void updatePlanningState(
             mergePlanningUpdate(planning, {
                 simulatedExpenses: planning.simulatedExpenses.filter((expense) => expense.id !== expenseId),
+                disabledSimulatedExpenseIds: (planning.disabledSimulatedExpenseIds ?? []).filter((id) => id !== expenseId),
             }),
         );
     };
@@ -200,6 +200,41 @@ export function PlanningPage() {
         void updatePlanningState(
             mergePlanningUpdate(planning, {
                 simulatedIncomes: planning.simulatedIncomes.filter((item) => item.id !== income.id),
+                disabledSimulatedIncomeIds: (planning.disabledSimulatedIncomeIds ?? []).filter((id) => id !== income.id),
+            }),
+        );
+    };
+
+    const handleToggleSimulatedExpense = (expenseId: string) => {
+        const disabledIds = new Set(planning.disabledSimulatedExpenseIds ?? []);
+        if (disabledIds.has(expenseId)) {
+            disabledIds.delete(expenseId);
+        } else {
+            disabledIds.add(expenseId);
+        }
+
+        void updatePlanningState(
+            mergePlanningUpdate(planning, {
+                disabledSimulatedExpenseIds: Array.from(disabledIds),
+            }),
+        );
+    };
+
+    const handleToggleSimulatedIncome = (income: SimulatedIncomeItem) => {
+        if (income.source !== "simulated_income") {
+            return;
+        }
+
+        const disabledIds = new Set(planning.disabledSimulatedIncomeIds ?? []);
+        if (disabledIds.has(income.id)) {
+            disabledIds.delete(income.id);
+        } else {
+            disabledIds.add(income.id);
+        }
+
+        void updatePlanningState(
+            mergePlanningUpdate(planning, {
+                disabledSimulatedIncomeIds: Array.from(disabledIds),
             }),
         );
     };
@@ -263,7 +298,90 @@ export function PlanningPage() {
         );
     };
 
-    const handleSubmitSimulation = async (draft: { description: string; amountInput: string; monthKey: string; tone: "income" | "expense" }) => {
+    const commitEditedIncome = async (income: SimulatedIncomeItem, draft: PlanningSimulationModalDraft) => {
+        if (income.source !== "simulated_income") {
+            return;
+        }
+
+        const existingIncome = planning.simulatedIncomes.find((item) => item.id === income.id);
+        if (!existingIncome) {
+            throw new Error("Receita simulada nao encontrada.");
+        }
+
+        const amount = parseCurrencyInput(draft.amountInput);
+        if (amount <= 0) {
+            throw new Error("Informe um valor maior que zero para salvar a receita.");
+        }
+
+        const baseProjection = {
+            monthKey: draft.monthKey,
+            description: draft.description.trim() || (draft.tone === "income" ? "Receita simulada" : "Gasto simulado"),
+            amount,
+            createdAt: existingIncome.createdAt,
+        };
+
+        if (draft.tone === "income") {
+            await updatePlanningState(
+                mergePlanningUpdate(planning, {
+                    simulatedIncomes: planning.simulatedIncomes.map((item) => (item.id === existingIncome.id ? { ...baseProjection, id: existingIncome.id } : item)),
+                }),
+            );
+            return;
+        }
+
+        await updatePlanningState(
+            mergePlanningUpdate(planning, {
+                simulatedIncomes: planning.simulatedIncomes.filter((item) => item.id !== existingIncome.id),
+                simulatedExpenses: [
+                    ...planning.simulatedExpenses,
+                    {
+                        ...baseProjection,
+                        id: `planning-expense-${Date.now()}-${Math.floor(Math.random() * 1_000_000)}`,
+                    },
+                ],
+                disabledSimulatedIncomeIds: (planning.disabledSimulatedIncomeIds ?? []).filter((id) => id !== existingIncome.id),
+            }),
+        );
+    };
+
+    const commitEditedExpense = async (expense: SimulatedExpenseItem, draft: PlanningSimulationModalDraft) => {
+        const amount = parseCurrencyInput(draft.amountInput);
+        if (amount <= 0) {
+            throw new Error("Informe um valor maior que zero para salvar o gasto.");
+        }
+
+        const baseProjection = {
+            monthKey: draft.monthKey,
+            description: draft.description.trim() || (draft.tone === "income" ? "Receita simulada" : "Gasto simulado"),
+            amount,
+            createdAt: expense.createdAt,
+        };
+
+        if (draft.tone === "expense") {
+            await updatePlanningState(
+                mergePlanningUpdate(planning, {
+                    simulatedExpenses: planning.simulatedExpenses.map((item) => (item.id === expense.id ? { ...baseProjection, id: expense.id } : item)),
+                }),
+            );
+            return;
+        }
+
+        await updatePlanningState(
+            mergePlanningUpdate(planning, {
+                simulatedExpenses: planning.simulatedExpenses.filter((item) => item.id !== expense.id),
+                simulatedIncomes: [
+                    ...planning.simulatedIncomes,
+                    {
+                        ...baseProjection,
+                        id: `planning-income-${Date.now()}-${Math.floor(Math.random() * 1_000_000)}`,
+                    },
+                ],
+                disabledSimulatedExpenseIds: (planning.disabledSimulatedExpenseIds ?? []).filter((id) => id !== expense.id),
+            }),
+        );
+    };
+
+    const handleSubmitSimulation = async (draft: PlanningSimulationModalDraft) => {
         if (draft.tone === "income") {
             await commitIncomeDraft(draft.monthKey, draft);
             return;
@@ -274,6 +392,56 @@ export function PlanningPage() {
 
     const openSimulationModal = (month: MonthProjection, tone: "income" | "expense") => {
         openModal(<PlanningSimulationModal tone={tone} monthKey={month.monthKey} onSubmit={handleSubmitSimulation} />);
+    };
+
+    const openIncomeEditModal = (income: SimulatedIncomeItem) => {
+        if (income.source !== "simulated_income") {
+            return;
+        }
+
+        const existingIncome = planning.simulatedIncomes.find((item) => item.id === income.id);
+        if (!existingIncome) {
+            return;
+        }
+
+        openModal(
+            <PlanningSimulationModal
+                title="Editar projeção"
+                tone="income"
+                monthKey={existingIncome.monthKey}
+                initialValues={{
+                    description: existingIncome.description,
+                    amount: existingIncome.amount,
+                    monthKey: existingIncome.monthKey,
+                    tone: "income",
+                }}
+                onSubmit={(draft) => commitEditedIncome(income, draft)}
+            />,
+        );
+    };
+
+    const openExpenseEditModal = (expense: SimulatedExpenseItem) => {
+        openModal(
+            <PlanningSimulationModal
+                title="Editar projeção"
+                tone="expense"
+                monthKey={expense.monthKey}
+                initialValues={{
+                    description: expense.description,
+                    amount: expense.amount,
+                    monthKey: expense.monthKey,
+                    tone: "expense",
+                }}
+                onSubmit={(draft) => commitEditedExpense(expense, draft)}
+            />,
+        );
+    };
+
+    const openWishlistItemOnWishlistPage = (wishItemId: string) => {
+        goToPage("wishlist");
+        window.setTimeout(() => {
+            openModal(<AddWishItem mode="edit" wishItemId={wishItemId} />);
+        }, 0);
     };
 
     const handleSelectPanel = (monthKey: string, panel: PlanningPanel) => {
@@ -344,7 +512,7 @@ export function PlanningPage() {
     const isReportsTab = activePlanningTab === "reports";
 
     return (
-        <AuthShell mainClassName="text-white">
+        <>
             <div className="flex flex-col min-h-full gap-3">
                 <PlanningPageHeader
                     activePlanningTab={activePlanningTab}
@@ -390,18 +558,22 @@ export function PlanningPage() {
                             fallbackMonth={currentMonth}
                             selectedPanel={selectedPanel}
                             activeWishItems={activeWishItems}
-                            categoryIconById={categoryIconById}
                             wishlistSelectionByWishItemId={wishlistSelectionByWishItemId}
                             onAddIncome={(month) => openSimulationModal(month, "income")}
                             onDeleteExpense={handleDeleteExpense}
                             onDeleteIncome={handleDeleteIncome}
+                            onEditExpense={openExpenseEditModal}
+                            onEditIncome={openIncomeEditModal}
+                            onEditWishlistItem={openWishlistItemOnWishlistPage}
+                            onToggleExpense={handleToggleSimulatedExpense}
                             onToggleIncome={handleToggleIncome}
+                            onToggleSimulatedIncome={handleToggleSimulatedIncome}
                             onToggleInheritedExpense={handleToggleInheritedExpense}
                             onToggleWishlistSelection={handleToggleWishlistSelection}
                         />
                     </div>
                 )}
             </div>
-        </AuthShell>
+        </>
     );
 }

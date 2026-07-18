@@ -11,10 +11,26 @@ const MONTH_LABEL_FORMATTER = new Intl.DateTimeFormat("pt-BR", {
     year: "numeric",
 });
 
+export interface PlanningSimulationModalDraft {
+    description: string;
+    amountInput: string;
+    monthKey: string;
+    tone: "income" | "expense";
+}
+
+interface PlanningSimulationModalInitialValues {
+    description: string;
+    amount: number;
+    monthKey: string;
+    tone: "income" | "expense";
+}
+
 interface PlanningSimulationModalProps {
     tone: "income" | "expense";
     monthKey: string;
-    onSubmit: (draft: { description: string; amountInput: string; monthKey: string; tone: "income" | "expense" }) => Promise<void> | void;
+    initialValues?: PlanningSimulationModalInitialValues;
+    title?: string;
+    onSubmit: (draft: PlanningSimulationModalDraft) => Promise<void> | void;
 }
 
 interface PlanningToneOption extends ComboboxOptionBase {
@@ -71,6 +87,11 @@ function formatMonthDisplay(monthKey: string): string {
     }
 
     return capitalizeLabel(MONTH_LABEL_FORMATTER.format(parsed));
+}
+
+function formatAmountInputFromNumber(amount: number): string {
+    const cents = Math.round(Math.max(0, Math.abs(amount)) * 100);
+    return formatCurrencyFromDigits(String(cents));
 }
 
 function PlanningMonthField({ value, onChange }: { value: string; onChange: (value: string) => void }) {
@@ -214,17 +235,26 @@ function PlanningToneOptionContent({ option }: { option: PlanningToneOption }) {
     );
 }
 
-export function PlanningSimulationModal({ tone, monthKey, onSubmit }: PlanningSimulationModalProps) {
+export function PlanningSimulationModal({ tone, monthKey, initialValues, title = "Nova projeção", onSubmit }: PlanningSimulationModalProps) {
     const { closeModal } = useModal();
-    const [selectedTone, setSelectedTone] = useState<"income" | "expense">(tone);
-    const [selectedMonthKey, setSelectedMonthKey] = useState(monthKey);
-    const [description, setDescription] = useState("");
-    const [amountInput, setAmountInput] = useState("R$ 0,00");
+    const [selectedTone, setSelectedTone] = useState<"income" | "expense">(initialValues?.tone ?? tone);
+    const [selectedMonthKey, setSelectedMonthKey] = useState(initialValues?.monthKey ?? monthKey);
+    const [description, setDescription] = useState(initialValues?.description ?? "");
+    const [amountInput, setAmountInput] = useState(initialValues ? formatAmountInputFromNumber(initialValues.amount) : "R$ 0,00");
     const [error, setError] = useState<string | null>(null);
     const [submitting, setSubmitting] = useState(false);
 
     const descriptionPlaceholder = selectedTone === "income" ? "Descrição da receita" : "Descrição do gasto";
-    const submitClassName = "border-emerald-400/35 bg-emerald-500/15 text-emerald-100 hover:border-emerald-400/55 hover:bg-emerald-500/20"
+    const submitClassName = "border-emerald-400/35 bg-emerald-500/15 text-emerald-100 hover:border-emerald-400/55 hover:bg-emerald-500/20";
+
+    useEffect(() => {
+        setSelectedTone(initialValues?.tone ?? tone);
+        setSelectedMonthKey(initialValues?.monthKey ?? monthKey);
+        setDescription(initialValues?.description ?? "");
+        setAmountInput(initialValues ? formatAmountInputFromNumber(initialValues.amount) : "R$ 0,00");
+        setError(null);
+        setSubmitting(false);
+    }, [initialValues, monthKey, tone]);
 
     const handleAmountChange = (value: string) => {
         setAmountInput(formatCurrencyFromDigits(extractCurrencyDigits(value)));
@@ -268,7 +298,7 @@ export function PlanningSimulationModal({ tone, monthKey, onSubmit }: PlanningSi
             <div className="rounded-xl border border-white/[0.09] bg-[#131313] p-4 text-white shadow-[0_26px_70px_-38px_rgba(0,0,0,0.95)]">
                 <header className="flex items-center justify-between gap-3">
                     <div>
-                        <h2 className="text-sm ml-1 uppercase opacity-50">Nova projeção</h2>
+                        <h2 className="text-sm ml-1 uppercase opacity-50">{title}</h2>
                     </div>
                     <button
                         type="button"

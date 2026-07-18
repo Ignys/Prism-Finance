@@ -84,7 +84,7 @@ export function TransactionsFiltersPanel({
 
     return (
         <section className="">
-            <div className="relative flex flex-col gap-4">
+            <div className="relative flex flex-col gap-1">
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                     <div className="flex flex-wrap gap-2 overflow-x-auto pb-1">
                         {tabs.map((tab) => {

@@ -33,6 +33,7 @@ import {
     type CreditCardInvoiceRow,
     type CreditCardRow,
     type FinancePreferenceRow,
+    type FinanceSyncStateRow,
     type LedgerEntryRow,
     type TagRow,
     type TransactionGroupRow,
@@ -46,10 +47,36 @@ export interface SupabaseFinanceData extends FinanceSnapshot {
     favoriteWalletId: string | null;
 }
 
+export interface SupabaseFinanceLoadResult {
+    data: SupabaseFinanceData | null;
+    revision: number;
+}
+
+export interface SaveSupabaseFinanceDataParams {
+    userId: string;
+    financeData: SupabaseFinanceData;
+    baseRevision: number;
+    clientId: string;
+}
+
+export interface SupabaseFinanceSaveResult {
+    revision: number;
+}
+
 type FinanceTableName = (typeof FINANCE_TABLES)[keyof typeof FINANCE_TABLES];
 
 interface UserScopedRow {
     user_id: string;
+}
+
+export class FinanceRevisionConflictError extends Error {
+    readonly currentRevision: number;
+
+    constructor(currentRevision: number) {
+        super("Os dados financeiros foram atualizados em outra aba ou dispositivo.");
+        this.name = "FinanceRevisionConflictError";
+        this.currentRevision = currentRevision;
+    }
 }
 
 async function throwIfError<T>(result: { data: T | null; error: Error | null }): Promise<T> {
@@ -74,37 +101,63 @@ async function selectPreferences(client: SupabaseClient, userId: string): Promis
     return (result.data as FinancePreferenceRow | null) ?? null;
 }
 
-async function upsertRows<T extends UserScopedRow>(client: SupabaseClient, tableName: FinanceTableName, rows: T[]): Promise<void> {
-    if (rows.length === 0) {
-        return;
-    }
-
-    await throwIfError(await client.from(tableName).upsert(rows));
-}
-
-async function listExistingIds(client: SupabaseClient, tableName: FinanceTableName, userId: string): Promise<string[]> {
-    const rows = await throwIfError<Array<{ id: string }>>(await client.from(tableName).select("id").eq("user_id", userId));
-    return rows?.map((row) => row.id) ?? [];
-}
-
-async function deleteRowsMissingFromSnapshot(client: SupabaseClient, tableName: FinanceTableName, userId: string, currentIds: string[]): Promise<void> {
-    const existingIds = await listExistingIds(client, tableName, userId);
-    const currentIdSet = new Set(currentIds);
-    const staleIds = existingIds.filter((id) => !currentIdSet.has(id));
-
-    if (staleIds.length === 0) {
-        return;
-    }
-
-    await throwIfError(await client.from(tableName).delete().eq("user_id", userId).in("id", staleIds));
-}
-
 function readPlanning(value: unknown): PlanningState {
     return (typeof value === "object" && value !== null ? value : {}) as PlanningState;
 }
 
-export async function loadSupabaseFinanceData(userId: string, client = getSupabaseClient()): Promise<SupabaseFinanceData | null> {
+function toRevision(value: number | string | null | undefined): number {
+    const revision = Number(value);
+    return Number.isFinite(revision) && revision >= 0 ? revision : 0;
+}
+
+async function selectFinanceRevision(client: SupabaseClient, userId: string): Promise<number> {
+    const result = await client.from(FINANCE_TABLES.syncState).select("revision").eq("user_id", userId).maybeSingle();
+    if (result.error) {
+        throw result.error;
+    }
+
+    return toRevision((result.data as Pick<FinanceSyncStateRow, "revision"> | null)?.revision);
+}
+
+function buildFinanceSnapshotPayload(userId: string, financeData: SupabaseFinanceData): Record<string, unknown> {
+    return {
+        preferences: toPreferenceRow({
+            userId,
+            favoriteWalletId: financeData.favoriteWalletId,
+            favoriteCreditCardId: financeData.favoriteCreditCardId,
+            planning: financeData.planning,
+        }),
+        wallets: financeData.wallets.map((wallet) => toWalletRow(userId, wallet)),
+        credit_cards: financeData.creditCards.map((card) => toCreditCardRow(userId, card)),
+        beneficiaries: financeData.beneficiaries.map((beneficiary) => toBeneficiaryRow(userId, beneficiary)),
+        categories: financeData.categories.map((category) => toCategoryRow(userId, category)),
+        tags: financeData.tags.map((tag) => toTagRow(userId, tag)),
+        wish_items: financeData.wishItems.map((wishItem) => toWishItemRow(userId, wishItem)),
+        transaction_groups: financeData.transactionGroups.map((group) => toTransactionGroupRow(userId, group)),
+        credit_card_invoices: financeData.creditCardInvoices.map((invoice) => toCreditCardInvoiceRow(userId, invoice)),
+        transactions: financeData.transactions.map((transaction) => toTransactionRow(userId, transaction)),
+        ledger_entries: financeData.ledgerEntries.map((entry) => toLedgerEntryRow(userId, entry)),
+        transaction_tags: financeData.transactionTags.map((link) => toTransactionTagRow(userId, link)),
+    };
+}
+
+function parseRevisionConflict(error: Error): FinanceRevisionConflictError | null {
+    const message = error.message ?? "";
+    const match = /FINANCE_REVISION_CONFLICT:(\d+)/.exec(message);
+    if (!match) {
+        return null;
+    }
+
+    return new FinanceRevisionConflictError(toRevision(match[1]));
+}
+
+export function isFinanceRevisionConflictError(error: unknown): error is FinanceRevisionConflictError {
+    return error instanceof FinanceRevisionConflictError;
+}
+
+export async function loadSupabaseFinanceData(userId: string, client = getSupabaseClient()): Promise<SupabaseFinanceLoadResult> {
     const [
+        revision,
         preferences,
         walletRows,
         creditCardRows,
@@ -118,6 +171,7 @@ export async function loadSupabaseFinanceData(userId: string, client = getSupaba
         ledgerEntryRows,
         transactionTagRows,
     ] = await Promise.all([
+        selectFinanceRevision(client, userId),
         selectPreferences(client, userId),
         selectByUser<WalletRow>(client, FINANCE_TABLES.wallets, userId),
         selectByUser<CreditCardRow>(client, FINANCE_TABLES.creditCards, userId),
@@ -146,7 +200,10 @@ export async function loadSupabaseFinanceData(userId: string, client = getSupaba
         transactionTagRows.length > 0;
 
     if (!preferences && !hasFinanceRows) {
-        return null;
+        return {
+            data: null,
+            revision,
+        };
     }
 
     const snapshot = createFinanceSnapshot(
@@ -166,43 +223,26 @@ export async function loadSupabaseFinanceData(userId: string, client = getSupaba
     );
 
     return {
-        ...snapshot,
-        favoriteWalletId: preferences?.favorite_wallet_id ?? null,
+        data: {
+            ...snapshot,
+            favoriteWalletId: preferences?.favorite_wallet_id ?? null,
+        },
+        revision,
     };
 }
 
-export async function saveSupabaseFinanceData(userId: string, financeData: SupabaseFinanceData, client = getSupabaseClient()): Promise<void> {
-    await upsertRows(client, FINANCE_TABLES.preferences, [
-        toPreferenceRow({
-            userId,
-            favoriteWalletId: financeData.favoriteWalletId,
-            favoriteCreditCardId: financeData.favoriteCreditCardId,
-            planning: financeData.planning,
-        }),
-    ]);
+export async function saveSupabaseFinanceData({ userId, financeData, baseRevision, clientId }: SaveSupabaseFinanceDataParams, client = getSupabaseClient()): Promise<SupabaseFinanceSaveResult> {
+    const result = await client.rpc("save_finance_snapshot", {
+        expected_revision: baseRevision,
+        payload: buildFinanceSnapshotPayload(userId, financeData),
+        client_id: clientId,
+    });
 
-    await upsertRows(client, FINANCE_TABLES.wallets, financeData.wallets.map((wallet) => toWalletRow(userId, wallet)));
-    await upsertRows(client, FINANCE_TABLES.creditCards, financeData.creditCards.map((card) => toCreditCardRow(userId, card)));
-    await upsertRows(client, FINANCE_TABLES.beneficiaries, financeData.beneficiaries.map((beneficiary) => toBeneficiaryRow(userId, beneficiary)));
-    await upsertRows(client, FINANCE_TABLES.categories, financeData.categories.map((category) => toCategoryRow(userId, category)));
-    await upsertRows(client, FINANCE_TABLES.tags, financeData.tags.map((tag) => toTagRow(userId, tag)));
-    await upsertRows(client, FINANCE_TABLES.wishItems, financeData.wishItems.map((wishItem) => toWishItemRow(userId, wishItem)));
-    await upsertRows(client, FINANCE_TABLES.transactionGroups, financeData.transactionGroups.map((group) => toTransactionGroupRow(userId, group)));
-    await upsertRows(client, FINANCE_TABLES.creditCardInvoices, financeData.creditCardInvoices.map((invoice) => toCreditCardInvoiceRow(userId, invoice)));
-    await upsertRows(client, FINANCE_TABLES.transactions, financeData.transactions.map((transaction) => toTransactionRow(userId, transaction)));
-    await upsertRows(client, FINANCE_TABLES.ledgerEntries, financeData.ledgerEntries.map((entry) => toLedgerEntryRow(userId, entry)));
+    if (result.error) {
+        throw parseRevisionConflict(result.error) ?? result.error;
+    }
 
-    await throwIfError(await client.from(FINANCE_TABLES.transactionTags).delete().eq("user_id", userId));
-    await upsertRows(client, FINANCE_TABLES.transactionTags, financeData.transactionTags.map((link) => toTransactionTagRow(userId, link)));
-
-    await deleteRowsMissingFromSnapshot(client, FINANCE_TABLES.ledgerEntries, userId, financeData.ledgerEntries.map((entry) => entry.id));
-    await deleteRowsMissingFromSnapshot(client, FINANCE_TABLES.transactions, userId, financeData.transactions.map((transaction) => transaction.id));
-    await deleteRowsMissingFromSnapshot(client, FINANCE_TABLES.creditCardInvoices, userId, financeData.creditCardInvoices.map((invoice) => invoice.id));
-    await deleteRowsMissingFromSnapshot(client, FINANCE_TABLES.transactionGroups, userId, financeData.transactionGroups.map((group) => group.id));
-    await deleteRowsMissingFromSnapshot(client, FINANCE_TABLES.wishItems, userId, financeData.wishItems.map((wishItem) => wishItem.id));
-    await deleteRowsMissingFromSnapshot(client, FINANCE_TABLES.tags, userId, financeData.tags.map((tag) => tag.id));
-    await deleteRowsMissingFromSnapshot(client, FINANCE_TABLES.categories, userId, financeData.categories.map((category) => category.id));
-    await deleteRowsMissingFromSnapshot(client, FINANCE_TABLES.beneficiaries, userId, financeData.beneficiaries.map((beneficiary) => beneficiary.id));
-    await deleteRowsMissingFromSnapshot(client, FINANCE_TABLES.creditCards, userId, financeData.creditCards.map((card) => card.id));
-    await deleteRowsMissingFromSnapshot(client, FINANCE_TABLES.wallets, userId, financeData.wallets.map((wallet) => wallet.id));
+    return {
+        revision: toRevision(result.data as number | string | null),
+    };
 }

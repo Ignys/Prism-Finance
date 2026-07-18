@@ -95,8 +95,9 @@ import { getDefaultCategoryIconName } from "../../lib/categoryIcons";
 import { saveLocalFinanceBackup } from "../../lib/financeBackup";
 import { parseAppDate } from "../../lib/localDate";
 import { buildUserProfileData, type UserProfileData } from "../../lib/userProfile";
-import { loadSupabaseFinanceData, saveSupabaseFinanceData, type SupabaseFinanceData } from "../../supabase/finance";
-import { publishFinanceSnapshotToTabs, subscribeToFinanceSnapshotMessages } from "./crossTabSync";
+import { loadSupabaseFinanceData, saveSupabaseFinanceData, subscribeToFinanceRevisionChanges, type SupabaseFinanceData } from "../../supabase/finance";
+import { getFinanceClientId, publishFinanceRevisionToTabs, subscribeToFinanceRevisionMessages } from "./crossTabSync";
+import { mergeSupabaseFinanceData } from "./financeSyncMerge";
 import { toSupabaseFinanceData, useFinanceSyncQueue } from "./useFinanceSyncQueue";
 
 function resolveFavoriteWalletId(candidate: unknown, wallets: Wallet[]): string {
@@ -795,8 +796,9 @@ export function useFinanceStore(): FinanceStoreValue {
     const transactionTagsRef = useRef(transactionTags);
     const ledgerEntriesRef = useRef(ledgerEntries);
     const planningRef = useRef(planning);
-    const latestLocalSnapshotUpdateAtRef = useRef(0);
-    const latestCrossTabSnapshotAtRef = useRef(0);
+    const financeClientId = useMemo(() => getFinanceClientId(), []);
+    const currentRevisionRef = useRef(0);
+    const lastAcknowledgedDataRef = useRef<SupabaseFinanceData | null>(null);
 
     useEffect(() => {
         profileRef.current = profile;
@@ -940,11 +942,102 @@ export function useFinanceStore(): FinanceStoreValue {
         );
     }, []);
 
+    const applySupabaseFinanceData = useCallback(
+        (params: { financeData: SupabaseFinanceData | null; revision: number; profile: UserProfileData; trigger: string }) => {
+            const preparedFinance = prepareFinanceSnapshot({
+                financeSource: params.financeData,
+                userId: user?.uid ?? "",
+                profile: params.profile,
+            });
+            const acknowledgedData = toSupabaseFinanceData(preparedFinance.snapshot, preparedFinance.favoriteWalletId);
+
+            currentRevisionRef.current = params.revision;
+            lastAcknowledgedDataRef.current = acknowledgedData;
+            favoriteWalletIdRef.current = preparedFinance.favoriteWalletId;
+            setProfile(params.profile);
+            setSnapshotState(preparedFinance.snapshot);
+            setFavoriteWalletId(preparedFinance.favoriteWalletId);
+            setFamilyState(null, []);
+            saveLocalSnapshotBackup(preparedFinance.snapshot, params.trigger, preparedFinance.favoriteWalletId);
+
+            return {
+                preparedFinance,
+                acknowledgedData,
+            };
+        },
+        [saveLocalSnapshotBackup, setFamilyState, setSnapshotState, user?.uid],
+    );
+
+    const applyConfirmedRevision = useCallback(
+        (financeData: SupabaseFinanceData, revision: number) => {
+            currentRevisionRef.current = revision;
+            lastAcknowledgedDataRef.current = financeData;
+            if (user) {
+                publishFinanceRevisionToTabs(user.uid, revision, financeClientId);
+            }
+        },
+        [financeClientId, user],
+    );
+
+    const mergeAndPrepareFinanceData = useCallback(
+        (params: { baseData: SupabaseFinanceData; remoteData: SupabaseFinanceData; targetData: SupabaseFinanceData }): SupabaseFinanceData => {
+            const resolvedProfile = profileRef.current ?? (user ? buildUserProfileData(user) : null);
+            const mergedData = mergeSupabaseFinanceData(params);
+            if (!resolvedProfile) {
+                return mergedData;
+            }
+
+            const preparedFinance = prepareFinanceSnapshot({
+                financeSource: mergedData,
+                userId: user?.uid ?? "",
+                profile: resolvedProfile,
+            });
+
+            return toSupabaseFinanceData(preparedFinance.snapshot, preparedFinance.favoriteWalletId);
+        },
+        [user],
+    );
+
+    const applyConflictMergedData = useCallback(
+        (financeData: SupabaseFinanceData, baseData: SupabaseFinanceData, revision: number) => {
+            const resolvedProfile = profileRef.current ?? (user ? buildUserProfileData(user) : null);
+            if (!resolvedProfile) {
+                return;
+            }
+
+            const preparedFinance = prepareFinanceSnapshot({
+                financeSource: financeData,
+                userId: user?.uid ?? "",
+                profile: resolvedProfile,
+            });
+
+            currentRevisionRef.current = revision;
+            lastAcknowledgedDataRef.current = baseData;
+            favoriteWalletIdRef.current = preparedFinance.favoriteWalletId;
+            setProfile(resolvedProfile);
+            setSnapshotState(preparedFinance.snapshot);
+            setFavoriteWalletId(preparedFinance.favoriteWalletId);
+            setFamilyState(null, []);
+            saveLocalSnapshotBackup(preparedFinance.snapshot, "revision-conflict-merge", preparedFinance.favoriteWalletId);
+        },
+        [saveLocalSnapshotBackup, setFamilyState, setSnapshotState, user],
+    );
+
     const financeSync = useFinanceSyncQueue({
         userId: user?.uid ?? null,
+        clientId: financeClientId,
         saveFinanceData: saveSupabaseFinanceData,
+        loadFinanceData: loadSupabaseFinanceData,
+        mergeFinanceData: mergeAndPrepareFinanceData,
+        onSyncAccepted: applyConfirmedRevision,
+        onConflictMerged: applyConflictMergedData,
     });
-    const { enqueueSync: enqueueFinanceSync, getPendingSyncData } = financeSync;
+    const {
+        enqueueSync: enqueueFinanceSync,
+        getPendingSyncData,
+        hasPendingSync: hasPendingFinanceSync,
+        retrySync: retryFinanceSync,
+    } = financeSync;
 
     const syncCurrentUserFamilyBeneficiary = useCallback(
         async (familyId: string, snapshotOverride?: FinanceSnapshot, profileOverride?: UserProfileData | null) => {
@@ -1004,8 +1097,14 @@ export function useFinanceStore(): FinanceStoreValue {
                     setProfile(profile);
                 }
                 const pendingSyncFinance = getPendingSyncData();
-                const supabaseFinance = pendingSyncFinance ? null : await loadSupabaseFinanceData(user.uid);
-                const financeSource = pendingSyncFinance ?? supabaseFinance;
+                const supabaseFinance = await loadSupabaseFinanceData(user.uid);
+                const remotePreparedFinance = prepareFinanceSnapshot({
+                    financeSource: supabaseFinance.data,
+                    userId: user.uid,
+                    profile,
+                });
+                const remoteAcknowledgedData = toSupabaseFinanceData(remotePreparedFinance.snapshot, remotePreparedFinance.favoriteWalletId);
+                const financeSource = pendingSyncFinance ?? supabaseFinance.data;
                 const preparedFinance = prepareFinanceSnapshot({
                     financeSource,
                     userId: user.uid,
@@ -1016,14 +1115,19 @@ export function useFinanceStore(): FinanceStoreValue {
                     return;
                 }
 
+                currentRevisionRef.current = supabaseFinance.revision;
+                lastAcknowledgedDataRef.current = remoteAcknowledgedData;
                 favoriteWalletIdRef.current = preparedFinance.favoriteWalletId;
                 setSnapshotState(preparedFinance.snapshot);
                 setFavoriteWalletId(preparedFinance.favoriteWalletId);
                 setFamilyState(null, []);
                 saveLocalSnapshotBackup(preparedFinance.snapshot, "load-success", preparedFinance.favoriteWalletId);
 
-                if (!pendingSyncFinance && (!supabaseFinance || preparedFinance.changed)) {
-                    enqueueFinanceSync(toSupabaseFinanceData(preparedFinance.snapshot, preparedFinance.favoriteWalletId));
+                if (!pendingSyncFinance && (!supabaseFinance.data || preparedFinance.changed)) {
+                    enqueueFinanceSync(toSupabaseFinanceData(preparedFinance.snapshot, preparedFinance.favoriteWalletId), {
+                        baseRevision: supabaseFinance.revision,
+                        baseData: remoteAcknowledgedData,
+                    });
                 }
             } catch (error) {
                 console.error("Failed to load finance data:", error);
@@ -1052,39 +1156,64 @@ export function useFinanceStore(): FinanceStoreValue {
         };
     }, [enqueueFinanceSync, getPendingSyncData, profileVersion, refreshFamilyState, saveLocalSnapshotBackup, setFamilyState, setSnapshotState, syncCurrentUserFamilyBeneficiary, user]);
 
+    const refreshFromConfirmedRevision = useCallback(
+        async (revision: number, trigger: string, updatedBy: string | null) => {
+            if (!user || revision <= currentRevisionRef.current) {
+                return;
+            }
+
+            if (updatedBy === financeClientId) {
+                currentRevisionRef.current = Math.max(currentRevisionRef.current, revision);
+                return;
+            }
+
+            if (hasPendingFinanceSync) {
+                retryFinanceSync();
+                return;
+            }
+
+            try {
+                const loadedFinance = await loadSupabaseFinanceData(user.uid);
+                if (loadedFinance.revision <= currentRevisionRef.current) {
+                    return;
+                }
+
+                const resolvedProfile = profileRef.current ?? buildUserProfileData(user);
+                applySupabaseFinanceData({
+                    financeData: loadedFinance.data,
+                    revision: loadedFinance.revision,
+                    profile: resolvedProfile,
+                    trigger,
+                });
+                setFinanceLoading(false);
+            } catch (error) {
+                console.error("Failed to refresh finance data after revision update:", error);
+            }
+        },
+        [applySupabaseFinanceData, financeClientId, hasPendingFinanceSync, retryFinanceSync, user],
+    );
+
     useEffect(() => {
         if (!user) {
-            latestLocalSnapshotUpdateAtRef.current = 0;
-            latestCrossTabSnapshotAtRef.current = 0;
+            currentRevisionRef.current = 0;
+            lastAcknowledgedDataRef.current = null;
             return;
         }
 
-        return subscribeToFinanceSnapshotMessages(user.uid, (message) => {
-            const messageTime = Date.parse(message.sentAt);
-            if (!Number.isFinite(messageTime)) {
-                return;
-            }
-
-            if (messageTime <= latestLocalSnapshotUpdateAtRef.current || messageTime <= latestCrossTabSnapshotAtRef.current) {
-                return;
-            }
-
-            const resolvedProfile = profileRef.current ?? buildUserProfileData(user);
-            const preparedFinance = prepareFinanceSnapshot({
-                financeSource: message.data,
-                userId: user.uid,
-                profile: resolvedProfile,
-            });
-
-            latestCrossTabSnapshotAtRef.current = messageTime;
-            favoriteWalletIdRef.current = preparedFinance.favoriteWalletId;
-            setProfile(resolvedProfile);
-            setSnapshotState(preparedFinance.snapshot);
-            setFavoriteWalletId(preparedFinance.favoriteWalletId);
-            setFinanceLoading(false);
-            saveLocalSnapshotBackup(preparedFinance.snapshot, "cross-tab-sync", preparedFinance.favoriteWalletId);
+        return subscribeToFinanceRevisionChanges(user.uid, (change) => {
+            void refreshFromConfirmedRevision(change.revision, "supabase-realtime", change.updatedBy);
         });
-    }, [saveLocalSnapshotBackup, setSnapshotState, user]);
+    }, [refreshFromConfirmedRevision, user]);
+
+    useEffect(() => {
+        if (!user) {
+            return;
+        }
+
+        return subscribeToFinanceRevisionMessages(user.uid, (message) => {
+            void refreshFromConfirmedRevision(message.revision, "cross-tab-revision", message.updatedBy);
+        });
+    }, [refreshFromConfirmedRevision, user]);
 
     const persistFinanceFields = useCallback(
         async (fields: PersistFields) => {
@@ -1110,10 +1239,11 @@ export function useFinanceStore(): FinanceStoreValue {
 
             const resolvedFavoriteWalletId = fields.favoriteWalletId ?? favoriteWalletIdRef.current;
             const financeData = toSupabaseFinanceData(snapshot, resolvedFavoriteWalletId);
-            const crossTabMessage = publishFinanceSnapshotToTabs(user.uid, financeData);
-            latestLocalSnapshotUpdateAtRef.current = Date.parse(crossTabMessage.sentAt) || Date.now();
             saveLocalSnapshotBackup(snapshot, "persist-fields", resolvedFavoriteWalletId);
-            enqueueFinanceSync(financeData);
+            enqueueFinanceSync(financeData, {
+                baseRevision: currentRevisionRef.current,
+                baseData: lastAcknowledgedDataRef.current ?? financeData,
+            });
         },
         [buildSnapshot, enqueueFinanceSync, saveLocalSnapshotBackup, user],
     );

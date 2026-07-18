@@ -250,6 +250,8 @@ export interface PlanningState {
     revenueOverrides: PlanningRevenueOverride[];
     disabledInheritedExpenseIds: string[];
     disabledIncomeIds: string[];
+    disabledSimulatedExpenseIds: string[];
+    disabledSimulatedIncomeIds: string[];
     timelineSelectedWalletIds: string[];
     timelineCompareMode: boolean;
     timelineHorizontalMode: boolean;
@@ -405,6 +407,8 @@ export const DEFAULT_PLANNING_STATE: PlanningState = {
     revenueOverrides: [],
     disabledInheritedExpenseIds: [],
     disabledIncomeIds: [],
+    disabledSimulatedExpenseIds: [],
+    disabledSimulatedIncomeIds: [],
     timelineSelectedWalletIds: [],
     timelineCompareMode: true,
     timelineHorizontalMode: false,
@@ -1366,6 +1370,20 @@ export function normalizePlanningState(rawPlanning: unknown): PlanningState {
             new Set(
                 asArray(rawPlanning.disabledIncomeIds).filter(
                     (value): value is string => typeof value === "string" && value.trim().length > 0,
+                ),
+            ),
+        ).sort((a, b) => a.localeCompare(b)),
+        disabledSimulatedExpenseIds: Array.from(
+            new Set(
+                asArray(rawPlanning.disabledSimulatedExpenseIds).filter(
+                    (value): value is string => typeof value === "string" && expensesById.has(value),
+                ),
+            ),
+        ).sort((a, b) => a.localeCompare(b)),
+        disabledSimulatedIncomeIds: Array.from(
+            new Set(
+                asArray(rawPlanning.disabledSimulatedIncomeIds).filter(
+                    (value): value is string => typeof value === "string" && incomesById.has(value),
                 ),
             ),
         ).sort((a, b) => a.localeCompare(b)),

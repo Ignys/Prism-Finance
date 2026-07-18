@@ -1,56 +1,53 @@
+import { CircleCheckBig, Pencil, SquareArrowOutUpRight, SquareSlash, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
-import { CheckCheck, CircleCheckBig, Clock, Copy, Eye, ListChecks, SquareArrowOutUpRight, SquareSlash, Trash2, TriangleAlert } from "lucide-react";
-import type { TransactionContextAction, TransactionContextActionId } from "./transactionContextActions";
+import type { PlanningProjectionContextAction, PlanningProjectionContextActionId } from "./planningProjectionContextActions";
 
-export interface TransactionContextMenuState {
-    transactionId: string;
+export interface PlanningProjectionContextMenuState {
+    itemId: string;
     x: number;
     y: number;
 }
 
-interface TransactionContextMenuProps {
-    state: TransactionContextMenuState | null;
-    actions: TransactionContextAction[];
-    onSelect: (action: TransactionContextAction) => void;
+interface PlanningProjectionContextMenuProps {
+    state: PlanningProjectionContextMenuState | null;
+    actions: PlanningProjectionContextAction[];
+    onSelect: (action: PlanningProjectionContextAction) => void;
     onClose: () => void;
 }
 
-const MENU_WIDTH = 260;
+const MENU_WIDTH = 240;
 const MENU_PADDING = 12;
 const MENU_VERTICAL_PADDING = 16;
 const MENU_ITEM_HEIGHT = 40;
 const MENU_DIVIDER_HEIGHT = 13;
 
-const ACTION_ICONS: Record<TransactionContextActionId, typeof Eye> = {
-    open: SquareArrowOutUpRight,
-    select: ListChecks,
-    toggle_status: CircleCheckBig,
-    pay_today: CheckCheck,
-    ignore: SquareSlash,
-    duplicate: Copy,
-    delete_single: Trash2,
-    delete_this_and_next: Trash2,
-    delete_all: TriangleAlert,
+const ACTION_ICONS: Record<PlanningProjectionContextActionId, typeof Pencil> = {
+    toggle: CircleCheckBig,
+    edit: Pencil,
+    remove: Trash2,
 };
 
-function resolveActionIcon(action: TransactionContextAction): typeof Eye {
-    if (action.id === "toggle_status" && action.nextStatus === "pending") {
-        return Clock;
+function buildActionSections(actions: PlanningProjectionContextAction[]): PlanningProjectionContextAction[][] {
+    const destructive = actions.filter((action) => action.tone === "danger");
+    const primary = actions.filter((action) => action.tone !== "danger");
+
+    return [primary, destructive].filter((section) => section.length > 0);
+}
+
+function resolveActionIcon(action: PlanningProjectionContextAction): typeof Pencil {
+    if (action.id === "toggle" && action.label === "Desativar") {
+        return SquareSlash;
+    }
+
+    if (action.id === "edit" && action.itemType === "wishlist") {
+        return SquareArrowOutUpRight;
     }
 
     return ACTION_ICONS[action.id];
 }
 
-function buildActionSections(actions: TransactionContextAction[]): TransactionContextAction[][] {
-    const primary = actions.filter((action) => action.id === "open");
-    const destructive = actions.filter((action) => action.tone === "danger");
-    const secondary = actions.filter((action) => action.id !== "open" && action.tone !== "danger");
-
-    return [primary, secondary, destructive].filter((section) => section.length > 0);
-}
-
-function resolveMenuPosition(state: TransactionContextMenuState, actions: TransactionContextAction[]): { left: number; top: number } {
+function resolveMenuPosition(state: PlanningProjectionContextMenuState, actions: PlanningProjectionContextAction[]): { left: number; top: number } {
     if (typeof window === "undefined") {
         return { left: state.x, top: state.y };
     }
@@ -68,7 +65,7 @@ function resolveMenuPosition(state: TransactionContextMenuState, actions: Transa
     };
 }
 
-export function TransactionContextMenu({ state, actions, onSelect, onClose }: TransactionContextMenuProps) {
+export function PlanningProjectionContextMenu({ state, actions, onSelect, onClose }: PlanningProjectionContextMenuProps) {
     const menuRef = useRef<HTMLDivElement | null>(null);
     const sections = useMemo(() => buildActionSections(actions), [actions]);
     const position = useMemo(() => (state ? resolveMenuPosition(state, actions) : null), [actions, state]);
@@ -107,8 +104,8 @@ export function TransactionContextMenu({ state, actions, onSelect, onClose }: Tr
         <div
             ref={menuRef}
             role="menu"
-            aria-label="Ações da transação"
-            className="fixed z-[220] w-[260px] overflow-hidden rounded-2xl border border-white/[0.1] bg-[#101113]/95 p-2 text-white shadow-2xl backdrop-blur-xl"
+            aria-label="Acoes da projecao"
+            className="fixed z-[220] w-[240px] overflow-hidden rounded-2xl border border-white/[0.1] bg-[#101113]/95 p-2 text-white shadow-2xl backdrop-blur-xl"
             style={{ left: position.left, top: position.top }}
         >
             {sections.map((section, sectionIndex) => (

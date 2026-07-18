@@ -1,46 +1,48 @@
-import { Trash2 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+import type { MouseEvent } from "react";
 import { getCategoryIconComponent } from "../../../lib/categoryIcons";
 import type { ItemIconTone } from "./planningTimelineTypes";
 import { formatCurrency } from "./planningTimelineUtils";
 
 interface PlanningListRowProps {
+    active?: boolean;
     label: string;
     amount: number;
     iconName: string | null;
     iconTone: ItemIconTone;
+    customIcon?: LucideIcon;
     valueClassName: string;
-    onDelete?: () => void;
-    deleteLabel?: string;
+    onContextMenu?: (event: MouseEvent<HTMLDivElement>) => void;
 }
 
-export function PlanningListRow({ label, amount, iconName, iconTone, valueClassName, onDelete, deleteLabel }: PlanningListRowProps) {
-    const Icon = getCategoryIconComponent(iconName, iconTone);
+export function PlanningListRow({ active = true, label, amount, iconName, iconTone, customIcon, valueClassName, onContextMenu }: PlanningListRowProps) {
+    const Icon = customIcon ?? getCategoryIconComponent(iconName, iconTone);
+    const iconClassName =
+        iconTone === "income"
+            ? active
+                ? "bg-emerald-500/12 text-emerald-200"
+                : "bg-white/[0.04] text-white/35"
+            : active
+              ? "bg-red-500/12 text-red-200"
+              : "bg-white/[0.04] text-white/35";
 
     return (
-        <div className="flex items-center justify-between gap-2 rounded-lg border border-white/[0.06] bg-black/18 p-1.5 pr-2.5">
+        <div
+            onContextMenu={onContextMenu}
+            className={`flex items-center justify-between gap-2 rounded-lg border p-1.5 pr-2.5 transition-colors ${
+                active
+                    ? "border-white/[0.13] bg-white/[0.06] shadow-[0_10px_30px_-24px_rgba(255,255,255,0.65)]"
+                    : "border-white/[0.04] bg-black/10 opacity-65"
+            } ${onContextMenu ? "cursor-context-menu hover:border-white/[0.2] hover:bg-white/[0.09]" : ""}`}
+        >
             <div className="flex min-w-0 items-center gap-2">
-                <span
-                    className={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md ${
-                        iconTone === "income" ? "bg-emerald-500/10 text-emerald-200" : "bg-orange-500/10 text-orange-200"
-                    }`}
-                >
+                <span className={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md ${iconClassName}`}>
                     <Icon size={14} />
                 </span>
-                <p className="truncate text-sm text-white/82">{label}</p>
+                <p className={`truncate text-sm ${active ? "text-white/82" : "text-white/42"}`}>{label}</p>
             </div>
             <div className="flex items-center gap-1.5">
-                <span className={`shrink-0 text-xs font-medium ${valueClassName}`}>{formatCurrency(amount)}</span>
-                {onDelete ? (
-                    <button
-                        type="button"
-                        onClick={onDelete}
-                        className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-white/45 transition-colors hover:bg-white/[0.07] hover:text-red-200"
-                        aria-label={deleteLabel}
-                        title="Remover"
-                    >
-                        <Trash2 size={14} />
-                    </button>
-                ) : null}
+                <span className={`shrink-0 text-xs font-medium ${active ? valueClassName : "text-white/35"}`}>{formatCurrency(amount)}</span>
             </div>
         </div>
     );

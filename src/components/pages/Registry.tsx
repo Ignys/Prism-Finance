@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
-import { CreditCard, FolderKanban, Grid, LayoutGrid, Tag, UserRound, Wallet } from "lucide-react";
+import { CreditCard, LayoutGrid, Tag, UserRound, Wallet } from "lucide-react";
 import { type AppPage, usePage } from "../../context/PageContext";
-import { AuthShell } from "../layout/AuthShell";
 import { RegistryBeneficiariesSection } from "./registry/RegistryBeneficiariesSection";
 import { RegistryCategoriesSection } from "./registry/RegistryCategoriesSection";
 import { RegistryCreditCardsSection } from "./registry/RegistryCreditCardsSection";
@@ -44,34 +43,32 @@ export function RegistryPage() {
     const activeTab = currentPage === "registry" ? "wallets" : isRegistryTabPage(currentPage) ? currentPage : "wallets";
 
     return (
-        <AuthShell>
-            <div className="flex min-h-[calc(100vh-8rem)] justify-center overflow-visible lg:h-[calc(95vh-5rem)] lg:min-h-0 lg:overflow-hidden">
-                <section className="flex min-h-0 w-full flex-col space-y-3 overflow-visible lg:h-full lg:overflow-hidden">
-                    <div className="flex flex-wrap gap-2">
-                        {REGISTRY_TABS.map((tab) => {
-                            const isActive = tab.page === activeTab;
+        <div className="flex min-h-[calc(100vh-8rem)] justify-center overflow-visible lg:h-[calc(95vh-5rem)] lg:min-h-0 lg:overflow-hidden">
+            <section className="flex min-h-0 w-full flex-col space-y-3 overflow-visible lg:h-full lg:overflow-hidden">
+                <div className="flex flex-wrap gap-2">
+                    {REGISTRY_TABS.map((tab) => {
+                        const isActive = tab.page === activeTab;
 
-                            return (
-                                <button
-                                    key={tab.page}
-                                    type="button"
-                                    onClick={() => goToPage(tab.page)}
-                                    className={`inline-flex items-center gap-2 rounded-full border px-3 py-2 text-sm transition-colors ${
-                                        isActive
-                                            ? "border-white/20 bg-white/[0.08] text-white"
-                                            : "border-white/[0.08] bg-white/[0.02] text-white/65 hover:border-white/[0.16] hover:bg-white/[0.04] hover:text-white"
-                                    }`}
-                                >
-                                    {tab.icon}
-                                    <span>{tab.label}</span>
-                                </button>
-                            );
-                        })}
-                    </div>
+                        return (
+                            <button
+                                key={tab.page}
+                                type="button"
+                                onClick={() => goToPage(tab.page)}
+                                className={`inline-flex items-center gap-2 rounded-full border px-3 py-2 text-sm transition-colors ${
+                                    isActive
+                                        ? "border-white/20 bg-white/[0.08] text-white"
+                                        : "border-white/[0.08] bg-white/[0.02] text-white/65 hover:border-white/[0.16] hover:bg-white/[0.04] hover:text-white"
+                                }`}
+                            >
+                                {tab.icon}
+                                <span>{tab.label}</span>
+                            </button>
+                        );
+                    })}
+                </div>
 
-                    <div className="min-h-0 flex-1 overflow-visible lg:overflow-hidden">{renderRegistrySection(activeTab)}</div>
-                </section>
-            </div>
-        </AuthShell>
+                <div className="min-h-0 flex-1 overflow-visible lg:overflow-hidden">{renderRegistrySection(activeTab)}</div>
+            </section>
+        </div>
     );
 }

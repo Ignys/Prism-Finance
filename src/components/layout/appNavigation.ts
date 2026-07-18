@@ -49,7 +49,7 @@ export const APP_NAVIGATION_ITEMS: AppNavigationItem[] = [
 ];
 
 const REGISTRY_PAGES = new Set<AppPage>(["registry", "wallets", "creditCards", "beneficiaries", "categories", "tags"]);
-const TRANSACTION_PAGES = new Set<AppPage>(["transactions", "spending", "income"]);
+const TRANSACTION_PAGES = new Set<AppPage>(["transactions", "spending", "income", "transfer"]);
 
 export function normalizeNavigationPage(page: AppPage): AppPage {
     if (REGISTRY_PAGES.has(page)) {

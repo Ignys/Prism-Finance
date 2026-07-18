@@ -75,6 +75,7 @@ export interface FinanceSyncValue {
     pendingCount: number;
     lastSyncedAt: string | null;
     lastError: string | null;
+    hasPendingSync: boolean;
     retrySync: () => void;
 }
 

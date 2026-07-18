@@ -22,8 +22,7 @@ export function PlanningReportsFlowSection({ monthReports }: { monthReports: Mon
         <section className="rounded-lg border border-white/[0.08] bg-[#111111] p-4">
             <div className="mb-4 flex items-center justify-between gap-3">
                 <div>
-                    <p className="text-base font-medium text-white">Receitas vs despesas</p>
-                    <p className="text-xs text-white/42">Evolução mensal da saída de caixa e das receitas registradas</p>
+                    <p className="text-base font-medium text-white">Balanço mensal</p>
                 </div>
                 <CalendarRange size={18} className="text-white/42" />
             </div>
