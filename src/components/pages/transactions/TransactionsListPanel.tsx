@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type MouseEvent } from "react";
 import { ArrowDown, ArrowUp, Circle, CircleSlash, Repeat2 } from "lucide-react";
-import { type Beneficiary, type Transaction, type Wallet, useFinanceBeneficiaries, useFinanceTransactionGroups } from "../../../context/FinanceContext";
+import { type Beneficiary, type Transaction, type Wallet, useFinanceActions, useFinanceBeneficiaries, useFinanceTransactionGroups } from "../../../context/FinanceContext";
+import { getTodayDate } from "../../../context/finance/helpers";
 import { useModal } from "../../../context/ModalContext";
 import { getCategoryIconComponent } from "../../../lib/categoryIcons";
 import { getTransactionCategoryDisplay, getTransactionCategoryDisplayLabel } from "../../../lib/transactionCategory";
@@ -8,9 +9,10 @@ import { BeneficiaryAvatar } from "../../common/BeneficiaryAvatar";
 import { TableColumnToggleButton } from "../../common/TableColumnToggleButton";
 import { WalletAvatar } from "../../common/WalletAvatar";
 import { BulkTransactionEditModal } from "../../modal/BulkTransactionEditModal";
-import { BulkHeaderCheckbox, BulkRowCheckbox, TransactionBulkActionsBar } from "../../transactions/TransactionBulkSelectionControls";
+import { ConfirmActionModal } from "../../modal/ConfirmActionModal";
+import { BulkHeaderCheckbox, BulkRowCheckbox, FloatingTransactionBulkFooter } from "../../transactions/TransactionBulkSelectionControls";
 import { TransactionContextMenu, type TransactionContextMenuState } from "../../transactions/TransactionContextMenu";
-import { buildTransactionContextActions, type TransactionContextAction } from "../../transactions/transactionContextActions";
+import { buildDuplicateTransactionDraft, buildTransactionContextActions, type TransactionContextAction } from "../../transactions/transactionContextActions";
 import { formatCurrencyBRL, formatTransactionDate, getTransactionTypeMeta, resolveTransactionWallet } from "../../transactions/transactionView";
 import { isTransactionEligibleForBulkEdit, useTransactionBulkSelection } from "../../transactions/useTransactionBulkSelection";
 import {
@@ -158,6 +160,7 @@ function TransactionsTable({ tabs, activeTab, wallets, beneficiariesById, transa
     const transactions = activeTabConfig?.transactions ?? [];
     const [contextMenu, setContextMenu] = useState<TransactionContextMenuState | null>(null);
     const { openModal } = useModal();
+    const { updateTransaction, updateTransactionsBulk } = useFinanceActions();
     const bulkSelection = useTransactionBulkSelection(transactions);
     const [selectionMode, setSelectionMode] = useState(false);
 
@@ -182,6 +185,8 @@ function TransactionsTable({ tabs, activeTab, wallets, beneficiariesById, transa
         [bulkSelection.selectedIdSet, contextTransaction, transactionGroupsById],
     );
     const selectedTransactions = useMemo(() => transactions.filter((transaction) => bulkSelection.selectedIdSet.has(transaction.id)), [bulkSelection.selectedIdSet, transactions]);
+    const selectedTransactionsTotal = useMemo(() => selectedTransactions.reduce((sum, transaction) => sum + transaction.value, 0), [selectedTransactions]);
+    const selectedTransactionsLabel = `${selectedTransactions.length} ${selectedTransactions.length === 1 ? "transacao selecionada" : "transacoes selecionadas"}`;
 
     useEffect(() => {
         if (contextMenu && !contextTransaction) {
@@ -232,6 +237,58 @@ function TransactionsTable({ tabs, activeTab, wallets, beneficiariesById, transa
         openModal(<BulkTransactionEditModal transactions={selectedTransactions} context="wallet" onApplied={handleClearBulkSelection} />);
     };
 
+    const handleMarkSelectedAsPaid = () => {
+        if (selectedTransactions.length < 1) {
+            return;
+        }
+
+        openModal(
+            <ConfirmActionModal
+                title="Marcar transacoes como pagas?"
+                description={`Essa acao marca ${selectedTransactionsLabel} como pagas e atualiza os saldos vinculados.`}
+                confirmLabel="Marcar como pagas"
+                tone="success"
+                onConfirm={async () => {
+                    await updateTransactionsBulk({
+                        transactionIds: selectedTransactions.map((transaction) => transaction.id),
+                        status: "paid",
+                    });
+                    handleClearBulkSelection();
+                }}
+            />,
+        );
+    };
+
+    const handlePaySelectedToday = () => {
+        if (selectedTransactions.length < 1) {
+            return;
+        }
+
+        openModal(
+            <ConfirmActionModal
+                title="Pagar todas hoje?"
+                description={`Essa acao marca ${selectedTransactionsLabel} como pagas, move a data delas para hoje e atualiza os saldos.`}
+                confirmLabel="Pagar todas hoje"
+                tone="success"
+                onConfirm={async () => {
+                    const today = getTodayDate();
+                    for (const transaction of selectedTransactions) {
+                        await updateTransaction({
+                            transaction,
+                            draft: {
+                                ...buildDuplicateTransactionDraft(transaction),
+                                date: today,
+                                scheduledDate: today,
+                                status: "paid",
+                            },
+                        });
+                    }
+                    handleClearBulkSelection();
+                }}
+            />,
+        );
+    };
+
     const handleRowClick = (transaction: Transaction) => {
         if (!selectionMode || !isTransactionEligibleForBulkEdit(transaction)) {
             return;
@@ -247,12 +304,9 @@ function TransactionsTable({ tabs, activeTab, wallets, beneficiariesById, transa
                     <h2 className="text-sm uppercase text-white/60">
                         {activeTabConfig.label} de {format(new Date(selectedMonth || new Date()), "MMMM 'de' yyyy", { locale: ptBR })}
                     </h2>
-                    {!selectionMode && (
-                        <span className="rounded-full px-2 py-0.5 text-xs border border-white/[0.05] bg-[#111111] text-white/40">
-                            {transactions.length} {transactions.length === 1 ? "item encontrado" : "itens encontrados"}
-                        </span>
-                    )}
-                    {selectionMode && <TransactionBulkActionsBar selectedCount={bulkSelection.selectedCount} onEdit={handleOpenBulkEdit} onClear={handleClearBulkSelection} />}
+                    <span className="rounded-full px-2 py-0.5 text-xs border border-white/[0.05] bg-[#111111] text-white/40">
+                        {transactions.length} {transactions.length === 1 ? "item encontrado" : "itens encontrados"}
+                    </span>
                 </div>
                 <div className="flex flex-wrap justify-end gap-2">
                     <div className="hidden sm:flex items-center gap-1 flex-wrap">
@@ -335,7 +389,7 @@ function TransactionsTable({ tabs, activeTab, wallets, beneficiariesById, transa
                                         onContextMenu={(event) => handleRowContextMenu(event, transaction)}
                                         className={`${selectionMode && canBulkEdit ? "cursor-pointer" : "cursor-context-menu"} transition-colors   ${
                                             isSelected
-                                                ? "bg-emerald-300/[0.06] odd:bg-emerald-300/[0.05] hover:bg-emerald-400/[0.05] shadow-[inset_3px_0_0_rgba(110,231,183,0.65)]"
+                                                ? "bg-sky-500/[0.09] odd:bg-sky-500/[0.12] hover:bg-sky-900/[0.6]  shadow-[inset_3px_0_0_rgba(0,_170,226,_0.7)]"
                                                 : contextMenu?.transactionId === transaction.id
                                                   ? " "
                                                   : "odd:bg-white/[0.01] hover:bg-white/[0.01] odd:hover:bg-white/[0.02]"
@@ -456,6 +510,14 @@ function TransactionsTable({ tabs, activeTab, wallets, beneficiariesById, transa
                             })}
                         </tbody>
                     </table>
+                    <FloatingTransactionBulkFooter
+                        selectedCount={bulkSelection.selectedCount}
+                        selectedAmount={formatCurrencyBRL(selectedTransactionsTotal)}
+                        onEdit={handleOpenBulkEdit}
+                        onMarkAsPaid={handleMarkSelectedAsPaid}
+                        onPayToday={handlePaySelectedToday}
+                        onClear={handleClearBulkSelection}
+                    />
                     <TransactionContextMenu state={contextMenu} actions={contextActions} onSelect={handleSelectAction} onClose={() => setContextMenu(null)} />
                 </div>
             )}

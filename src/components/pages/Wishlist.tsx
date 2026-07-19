@@ -1,14 +1,17 @@
-import { ExternalLink, Flag, Gift, Plus, Search, UserRound } from "lucide-react";
+import { CalendarDays, ExternalLink, Flag, Gift, Plus, Search, UserRound } from "lucide-react";
 import { useEffect, useMemo, useState, type MouseEvent } from "react";
+import { useNavigate } from "react-router-dom";
 import type { SharedWishlistSnapshot, WishItem } from "../../context/FinanceContext";
-import { useFinanceCategories, useFinanceFamily, useFinanceSession, useFinanceSharedWishlists, useFinanceWishItems } from "../../context/FinanceContext";
+import { useFinanceCategories, useFinanceFamily, useFinancePlanning, useFinanceSession, useFinanceSharedWishlists, useFinanceWishItems } from "../../context/FinanceContext";
 import { useModal } from "../../context/ModalContext";
 import { getCategoryIconComponent } from "../../lib/categoryIcons";
 import { getWishItemPriorityMeta } from "../../lib/wishlistPriority";
 import { resolveUserDisplayName } from "../../lib/userProfile";
 import { AddWishItem } from "../modal/AddWishItem";
+import { getCurrentMonthKey } from "./planning/planningTimelineUtils";
 import { WishlistContextMenu, type WishlistContextMenuState } from "./wishlist/WishlistContextMenu";
 import { buildWishlistContextActions, type WishlistContextAction } from "./wishlist/wishlistContextActions";
+import { buildWishlistProjectionMonthByItemId } from "./wishlist/wishlistProjectionMonths";
 import { useWishlistContextActionHandler } from "./wishlist/useWishlistContextActionHandler";
 
 const currencyFormatter = new Intl.NumberFormat("pt-BR", {
@@ -66,8 +69,10 @@ export function WishlistPage() {
     const family = useFinanceFamily();
     const wishItems = useFinanceWishItems();
     const sharedWishlists = useFinanceSharedWishlists();
+    const planning = useFinancePlanning();
     const categories = useFinanceCategories();
     const { openModal } = useModal();
+    const navigate = useNavigate();
     const handleWishlistContextAction = useWishlistContextActionHandler();
     const [activeOwnerUid, setActiveOwnerUid] = useState("");
     const [sortOption, setSortOption] = useState<WishlistSortOption>("price");
@@ -211,6 +216,8 @@ export function WishlistPage() {
         return wishItem ? buildWishlistContextActions(wishItem) : [];
     }, [contextMenuState, wishItemById]);
 
+    const projectionMonthByWishItemId = useMemo(() => buildWishlistProjectionMonthByItemId(planning, getCurrentMonthKey()), [planning]);
+
     useEffect(() => {
         setContextMenuState(null);
     }, [activeWishlist.owner.uid]);
@@ -239,6 +246,11 @@ export function WishlistPage() {
         if (wishItem) {
             handleWishlistContextAction(wishItem, action);
         }
+    };
+
+    const openProjectedWishlistMonth = (event: MouseEvent<HTMLButtonElement>, monthKey: string) => {
+        event.stopPropagation();
+        navigate(`/planning?month=${encodeURIComponent(monthKey)}&panel=projections`);
     };
 
     return (
@@ -270,22 +282,6 @@ export function WishlistPage() {
 
                                             {snapshot.owner.isCurrentUser ? "Lista de Desejos" : snapshot.owner.name}
                                         </button>
-                                        //                                         <button
-                                        //     type="button"
-                                        //     key={tab.key}
-                                        //     onClick={() => onTabChange(tab.key)}
-                                        //     aria-pressed={isActive}
-                                        //     className={`group inline-flex items-center gap-2 rounded-xl border pl-2 pr-3 py-2 text-left transition-all duration-200 ${
-                                        //         isActive
-                                        //             ? "border-neutral-300/45 bg-neutral-500/15 text-neutral-50"
-                                        //             : "border-white/[0.09] bg-white/[0.02] text-white/80 hover:-translate-y-0.5 hover:border-white/[0.22] hover:bg-white/[0.06] hover:text-white"
-                                        //     }`}
-                                        // >
-                                        //     <span className={`inline-flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${iconContainerClass}`}>
-                                        //         <Icon size={18} strokeWidth={2.2} />
-                                        //     </span>
-                                        //     <span className="text-sm">{tab.label}</span>
-                                        // </button>
                                     );
                                 })}
                         </div>
@@ -349,6 +345,7 @@ export function WishlistPage() {
                                 const CategoryIcon = getCategoryIconComponent(wishItem.categoryIcon, "expense");
                                 const priorityMeta = getWishItemPriorityMeta(wishItem.priority);
                                 const categoryAccentColor = wishItem.categoryColor ?? "#94A3B8";
+                                const projectionMonth = isOwnWishlist ? projectionMonthByWishItemId.get(wishItem.id) : null;
 
                                 return (
                                     <article
@@ -374,8 +371,19 @@ export function WishlistPage() {
                                         <WishlistItemImage src={wishItem.imageUrl} alt={wishItem.description} />
                                         <div className="flex min-w-0 grow flex-col justify-between">
                                             <div>
-                                                <div className="mb-1 flex items-start gap-3">
-                                                    <h2 className="break-words text-lg font-normal text-white sm:text-xl">{wishItem.description}</h2>
+                                                <div className="mb-1 flex items-start justify-between gap-3">
+                                                    <h2 className="min-w-0 break-words text-lg font-normal text-white sm:text-xl">{wishItem.description}</h2>
+                                                    {projectionMonth ? (
+                                                        <button
+                                                            type="button"
+                                                            onClick={(event) => openProjectedWishlistMonth(event, projectionMonth.monthKey)}
+                                                            onKeyDown={(event) => event.stopPropagation()}
+                                                            className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-fuchsia-300/25 bg-fuchsia-500/10 px-2.5 py-0.5 text-[11px] font-medium uppercase text-fuchsia-100 transition-colors hover:border-fuchsia-300/40 hover:bg-fuchsia-500/16"
+                                                            title={`Abrir projeções de ${projectionMonth.label}`}
+                                                        >
+                                                            {projectionMonth.label}
+                                                        </button>
+                                                    ) : null}
                                                 </div>
 
                                                 <div className="flex flex-wrap items-center justify-between gap-2">

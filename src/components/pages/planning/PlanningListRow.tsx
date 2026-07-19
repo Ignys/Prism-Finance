@@ -3,6 +3,13 @@ import type { MouseEvent } from "react";
 import { getCategoryIconComponent } from "../../../lib/categoryIcons";
 import type { ItemIconTone } from "./planningTimelineTypes";
 import { formatCurrency } from "./planningTimelineUtils";
+import {
+    getPlanningRowAmountClassName,
+    getPlanningRowHoverClassName,
+    getPlanningRowIconClassName,
+    getPlanningRowStateClassName,
+    PLANNING_ROW_BASE_CLASS_NAME,
+} from "./planningRowStyles";
 
 interface PlanningListRowProps {
     active?: boolean;
@@ -16,33 +23,28 @@ interface PlanningListRowProps {
 }
 
 export function PlanningListRow({ active = true, label, amount, iconName, iconTone, customIcon, valueClassName, onContextMenu }: PlanningListRowProps) {
-    const Icon = customIcon ?? getCategoryIconComponent(iconName, iconTone);
-    const iconClassName =
-        iconTone === "income"
-            ? active
-                ? "bg-emerald-500/12 text-emerald-200"
-                : "bg-white/[0.04] text-white/35"
-            : active
-              ? "bg-red-500/12 text-red-200"
-              : "bg-white/[0.04] text-white/35";
+    const categoryIconTone = iconTone === "income" || iconTone === "expense" ? iconTone : undefined;
+    const Icon = customIcon ?? getCategoryIconComponent(iconName, categoryIconTone);
+    const rowClassName = [
+        PLANNING_ROW_BASE_CLASS_NAME,
+        getPlanningRowStateClassName(active),
+        onContextMenu ? `cursor-context-menu ${getPlanningRowHoverClassName(active)}` : "",
+    ]
+        .filter(Boolean)
+        .join(" ");
+    const iconClassName = getPlanningRowIconClassName(iconTone, active);
+    const amountClassName = getPlanningRowAmountClassName(iconTone, active, valueClassName);
 
     return (
-        <div
-            onContextMenu={onContextMenu}
-            className={`flex items-center justify-between gap-2 rounded-lg border p-1.5 pr-2.5 transition-colors ${
-                active
-                    ? "border-white/[0.13] bg-white/[0.06] shadow-[0_10px_30px_-24px_rgba(255,255,255,0.65)]"
-                    : "border-white/[0.04] bg-black/10 opacity-65"
-            } ${onContextMenu ? "cursor-context-menu hover:border-white/[0.2] hover:bg-white/[0.09]" : ""}`}
-        >
+        <div onContextMenu={onContextMenu} className={rowClassName}>
             <div className="flex min-w-0 items-center gap-2">
                 <span className={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md ${iconClassName}`}>
-                    <Icon size={14} />
+                    <Icon size={13} />
                 </span>
-                <p className={`truncate text-sm ${active ? "text-white/82" : "text-white/42"}`}>{label}</p>
+                <p className={`truncate text-xs ${active ? "font-medium" : ""}`}>{label}</p>
             </div>
             <div className="flex items-center gap-1.5">
-                <span className={`shrink-0 text-xs font-medium ${active ? valueClassName : "text-white/35"}`}>{formatCurrency(amount)}</span>
+                <span className={`shrink-0 text-xs font-medium ${amountClassName}`}>{formatCurrency(amount)}</span>
             </div>
         </div>
     );

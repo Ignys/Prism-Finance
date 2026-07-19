@@ -62,6 +62,17 @@ function shiftMonth(monthKey: string, offset: number): string {
     return format(addMonths(parsedMonth, offset), MONTH_KEY_FORMAT);
 }
 
+function getMonthOffset(fromMonthKey: string, toMonthKey: string): number | null {
+    const fromMonth = parseMonthKey(fromMonthKey);
+    const toMonth = parseMonthKey(toMonthKey);
+
+    if (!fromMonth || !toMonth) {
+        return null;
+    }
+
+    return (toMonth.getFullYear() - fromMonth.getFullYear()) * 12 + (toMonth.getMonth() - fromMonth.getMonth());
+}
+
 function formatMonthLabel(monthKey: string, pattern = "MMMM 'de' yyyy"): string {
     const parsedMonth = parseMonthKey(monthKey);
     return parsedMonth ? capitalizeLabel(format(parsedMonth, pattern, { locale: ptBR }).replace(".", "")) : monthKey;
@@ -288,10 +299,13 @@ export function buildTimelineProjection(params: {
     wishItems: WishItem[];
     planning: PlanningState;
     monthsToShow: number;
+    pinnedMonthKey?: string | null;
 }): TimelineProjection {
     const currentMonth = getCurrentMonthKey();
     const safeMonthsToShow = TIMELINE_MONTH_OPTIONS.includes(params.monthsToShow as (typeof TIMELINE_MONTH_OPTIONS)[number]) ? params.monthsToShow : DEFAULT_TIMELINE_MONTHS;
-    const monthKeys = Array.from({ length: safeMonthsToShow }, (_, index) => shiftMonth(currentMonth, index));
+    const pinnedMonthOffset = params.pinnedMonthKey ? getMonthOffset(currentMonth, params.pinnedMonthKey) : null;
+    const monthsToBuild = pinnedMonthOffset !== null && pinnedMonthOffset >= 0 ? Math.max(safeMonthsToShow, pinnedMonthOffset + 1) : safeMonthsToShow;
+    const monthKeys = Array.from({ length: monthsToBuild }, (_, index) => shiftMonth(currentMonth, index));
     const openingBalance = getOpeningBalance(currentMonth, params.wallets, params.ledgerEntries);
     const disabledInheritedExpenseIds = new Set(params.planning.disabledInheritedExpenseIds ?? []);
     const disabledIncomeIds = new Set(params.planning.disabledIncomeIds ?? []);

@@ -11,7 +11,7 @@ export function NavSection() {
     const NAV_ITEMS: { label: string; page: AppPage; icon: React.ReactNode }[] = [
         { label: "Início", page: "home", icon: <Home size={iconSize} /> },
         { label: "Transações", page: "transactions", icon: <ArrowLeftRight size={iconSize} /> },
-        { label: "Fatura", page: "statement", icon: <FileText size={iconSize} /> },
+        { label: "Faturas", page: "statement", icon: <FileText size={iconSize} /> },
         { label: "Análises", page: "planning", icon: <ChartNoAxesCombined size={iconSize} /> },
         { label: "Lista de Desejos", page: "wishlist", icon: <Gift size={iconSize} /> },
         { label: "Cadastros", page: "registry", icon: <WalletCards size={iconSize} /> },

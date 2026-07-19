@@ -1,7 +1,7 @@
 import type { PlanningSimulatedExpense } from "../../../context/FinanceContext";
 
 export type BalanceTone = "positive" | "tight" | "negative";
-export type ItemIconTone = "expense" | "income";
+export type ItemIconTone = "expense" | "income" | "wishlist" | "neutral";
 export type SimulatedIncomeSource = "simulated_income" | "legacy_override";
 export type PlanningPanel = "income" | "inherited_expenses" | "projections";
 export type PlanningTab = "timeline" | "reports";

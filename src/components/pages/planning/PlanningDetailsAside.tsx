@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState, type MouseEvent } from "react";
 import type { PlanningWishlistSelection, WishItem } from "../../../context/FinanceContext";
 import type { MonthProjection, PlanningPanel, SimulatedExpenseItem, SimulatedIncomeItem } from "./planningTimelineTypes";
 import { getAmountClassName } from "./planningTimelineUtils";
+import { PlanningDetailsSection } from "./PlanningDetailsSection";
 import { PlanningListRow } from "./PlanningListRow";
 import { PlanningProjectionContextMenu, type PlanningProjectionContextMenuState } from "./PlanningProjectionContextMenu";
 import { buildPlanningProjectionContextActions, type PlanningProjectionContextAction } from "./planningProjectionContextActions";
@@ -219,98 +220,80 @@ export function PlanningDetailsAside({
                 {!hasProjectionItems ? <p className="rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-sm text-white/52">Você não criou nenhuma projeção nesse mês.</p> : null}
 
                 {hasSimulatedIncomes ? (
-                    <section className="">
-                        <div className="flex w-full items-center mb-3 mt-1 px-1.5">
-                            <p className=" text-[11px] uppercase tracking-[0.14em] text-emerald-100/90">Receitas</p>
-                            <div className="grow h-px bg-emerald-100/90 mx-1.5 "></div>
-                        </div>
-                        <div className="space-y-1">
-                            {selectedMonth.simulatedIncomeItems.map((item) => (
-                                <PlanningListRow
-                                    key={item.id}
-                                    active={!item.isDisabled}
-                                    label={item.label}
-                                    amount={item.amount}
-                                    iconName={item.iconName}
-                                    iconTone="income"
-                                    customIcon={ArrowUpRight}
-                                    valueClassName={getAmountClassName("income", item.amount)}
-                                    onContextMenu={
-                                        item.source === "simulated_income"
-                                            ? (event) =>
-                                                  handleProjectionContextMenu(event, {
-                                                      itemType: "income",
-                                                      item,
-                                                  })
-                                            : undefined
-                                    }
-                                />
-                            ))}
-                        </div>
-                    </section>
+                    <PlanningDetailsSection title="Receitas" tone="income">
+                        {selectedMonth.simulatedIncomeItems.map((item) => (
+                            <PlanningListRow
+                                key={item.id}
+                                active={!item.isDisabled}
+                                label={item.label}
+                                amount={item.amount}
+                                iconName={item.iconName}
+                                iconTone="income"
+                                customIcon={ArrowUpRight}
+                                valueClassName={getAmountClassName("income", item.amount)}
+                                onContextMenu={
+                                    item.source === "simulated_income"
+                                        ? (event) =>
+                                              handleProjectionContextMenu(event, {
+                                                  itemType: "income",
+                                                  item,
+                                              })
+                                        : undefined
+                                }
+                            />
+                        ))}
+                    </PlanningDetailsSection>
                 ) : null}
 
                 {hasSimulatedExpenses ? (
-                    <section className="">
-                        <div className="flex w-full items-center mb-3 mt-1 px-1.5">
-                            <p className=" text-[11px] uppercase tracking-[0.14em] text-orange-100/90">Despesas</p>
-                            <div className="grow h-px bg-orange-100/90 mx-1.5 "></div>
-                        </div>
-                        <div className="space-y-1">
-                            {selectedMonth.simulatedExpenseItems.map((expense) => (
-                                <PlanningListRow
-                                    key={expense.id}
-                                    active={!expense.isDisabled}
-                                    label={expense.description}
-                                    amount={expense.amount}
-                                    iconName={null}
-                                    iconTone="expense"
-                                    customIcon={ArrowDownRight}
-                                    valueClassName={getAmountClassName("simulation", expense.amount)}
-                                    onContextMenu={(event) =>
-                                        handleProjectionContextMenu(event, {
-                                            itemType: "expense",
-                                            item: expense,
-                                        })
-                                    }
-                                />
-                            ))}
-                        </div>
-                    </section>
+                    <PlanningDetailsSection title="Despesas" tone="expense">
+                        {selectedMonth.simulatedExpenseItems.map((expense) => (
+                            <PlanningListRow
+                                key={expense.id}
+                                active={!expense.isDisabled}
+                                label={expense.description}
+                                amount={expense.amount}
+                                iconName={null}
+                                iconTone="expense"
+                                customIcon={ArrowDownRight}
+                                valueClassName={getAmountClassName("simulation", expense.amount)}
+                                onContextMenu={(event) =>
+                                    handleProjectionContextMenu(event, {
+                                        itemType: "expense",
+                                        item: expense,
+                                    })
+                                }
+                            />
+                        ))}
+                    </PlanningDetailsSection>
                 ) : null}
 
                 {hasWishlistItems ? (
-                    <section className="">
-                        <div className="flex w-full items-center mb-3 mt-1 px-1.5">
-                            <p className=" text-[11px] uppercase tracking-[0.14em] text-rose-300/90">Lista de Desejos</p>
-                            <div className="grow h-px bg-rose-300/90 mx-1.5 "></div>
-                        </div>
-                        <div className="space-y-1">
-                            {activeWishItems.map((item) => {
-                                const selection = wishlistSelectionByWishItemId.get(item.id);
-                                return (
-                                    <PlanningToggleRow
-                                        key={item.id}
-                                        toggleId={item.id}
-                                        label={item.description.trim() || "Desejo"}
-                                        amount={item.value}
-                                        iconName={null}
-                                        iconTone="expense"
-                                        customIcon={Gift}
-                                        active={selection?.monthKey === selectedMonth.monthKey}
-                                        onToggle={onToggleWishlistSelection}
-                                        onContextMenu={(event) =>
-                                            handleProjectionContextMenu(event, {
-                                                itemType: "wishlist",
-                                                wishItemId: item.id,
-                                                isActive: selection?.monthKey === selectedMonth.monthKey,
-                                            })
-                                        }
-                                    />
-                                );
-                            })}
-                        </div>
-                    </section>
+                    <PlanningDetailsSection title="Lista de Desejos" tone="wishlist">
+                        {activeWishItems.map((item) => {
+                            const selection = wishlistSelectionByWishItemId.get(item.id);
+                            return (
+                                <PlanningToggleRow
+                                    key={item.id}
+                                    toggleId={item.id}
+                                    label={item.description.trim() || "Desejo"}
+                                    amount={item.value}
+                                    iconName={null}
+                                    iconTone="wishlist"
+                                    customIcon={Gift}
+                                    active={selection?.monthKey === selectedMonth.monthKey}
+                                    onToggle={onToggleWishlistSelection}
+                                    onContextMenu={(event) =>
+                                        handleProjectionContextMenu(event, {
+                                            itemType: "wishlist",
+                                            wishItemId: item.id,
+                                            isActive: selection?.monthKey === selectedMonth.monthKey,
+                                        })
+                                    }
+                                />
+                            );
+                        })}
+                    </PlanningDetailsSection>
                 ) : null}
             </>
         );

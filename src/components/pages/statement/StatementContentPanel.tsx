@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type MouseEvent } from "react";
+import { useEffect, useMemo, useState, type MouseEvent, type ReactNode } from "react";
 import { ArrowDown, ArrowUp, Circle, CreditCard as CreditCardIcon, Plus, Repeat2, Search } from "lucide-react";
 import { type Beneficiary, type CreditCard, type CreditCardInvoice, type Transaction, useFinanceBeneficiaries, useFinanceTransactionGroups } from "../../../context/FinanceContext";
 import { useModal } from "../../../context/ModalContext";
@@ -9,10 +9,10 @@ import { BeneficiaryAvatar } from "../../common/BeneficiaryAvatar";
 import { TableColumnToggleButton } from "../../common/TableColumnToggleButton";
 import { WalletAvatar } from "../../common/WalletAvatar";
 import { BulkTransactionEditModal } from "../../modal/BulkTransactionEditModal";
-import { BulkHeaderCheckbox, BulkRowCheckbox, TransactionBulkActionsBar } from "../../transactions/TransactionBulkSelectionControls";
+import { BulkHeaderCheckbox, BulkRowCheckbox, FloatingTransactionBulkFooter } from "../../transactions/TransactionBulkSelectionControls";
 import { TransactionContextMenu, type TransactionContextMenuState } from "../../transactions/TransactionContextMenu";
 import { buildTransactionContextActions, type TransactionContextAction } from "../../transactions/transactionContextActions";
-import { formatTransactionDate } from "../../transactions/transactionView";
+import { formatCurrencyBRL, formatTransactionDate } from "../../transactions/transactionView";
 import { isTransactionEligibleForBulkEdit, useTransactionBulkSelection } from "../../transactions/useTransactionBulkSelection";
 import {
     compareInvoicesByDueDate,
@@ -35,6 +35,7 @@ interface StatementContentPanelProps {
     onInvoiceStateAdjustment: (invoices: CreditCardInvoice[], action: "close" | "reopen") => void;
     onCreateCardSpending: () => void;
     onAction: (transaction: Transaction, action: TransactionContextAction) => void;
+    summaryAside?: ReactNode;
 }
 
 type StatementSortField = "status" | "date" | "description" | "category" | "beneficiary" | "value";
@@ -213,6 +214,7 @@ export function StatementContentPanel({
     onInvoiceStateAdjustment,
     onCreateCardSpending,
     onAction,
+    summaryAside,
 }: StatementContentPanelProps) {
     const beneficiaries = useFinanceBeneficiaries();
     const transactionGroups = useFinanceTransactionGroups();
@@ -384,6 +386,7 @@ export function StatementContentPanel({
     };
 
     const selectedTransactions = useMemo(() => displayedTransactions.filter((transaction) => bulkSelection.selectedIdSet.has(transaction.id)), [bulkSelection.selectedIdSet, displayedTransactions]);
+    const selectedTransactionsTotal = useMemo(() => selectedTransactions.reduce((sum, transaction) => sum + transaction.value, 0), [selectedTransactions]);
 
     const handleClearBulkSelection = () => {
         bulkSelection.clearSelection();
@@ -453,12 +456,16 @@ export function StatementContentPanel({
 
     const payButtonLabel = payableSnapshot?.visualStatus === "open" || payableSnapshot?.visualStatus === "future" ? "Pagar adiantado" : "Pagar fatura";
     const closeableSnapshots = useMemo(
-        () => invoiceSnapshots.filter((snapshot): snapshot is InvoiceSnapshot & { creditCard: CreditCard } => Boolean(snapshot.creditCard) && snapshot.visualStatus === "overdue" && snapshot.openAmount > 0),
+        () =>
+            invoiceSnapshots.filter(
+                (snapshot): snapshot is InvoiceSnapshot & { creditCard: CreditCard } => Boolean(snapshot.creditCard) && snapshot.visualStatus === "overdue" && snapshot.openAmount > 0,
+            ),
         [invoiceSnapshots],
     );
     const reopenableSnapshots = useMemo(() => invoiceSnapshots.filter((snapshot) => snapshot.visualStatus === "paid"), [invoiceSnapshots]);
     const manualActionMode: "close" | "reopen" | null = closeableSnapshots.length > 0 ? "close" : reopenableSnapshots.length > 0 ? "reopen" : null;
-    const manualActionInvoices = manualActionMode === "close" ? closeableSnapshots.map((snapshot) => snapshot.invoice) : manualActionMode === "reopen" ? reopenableSnapshots.map((snapshot) => snapshot.invoice) : [];
+    const manualActionInvoices =
+        manualActionMode === "close" ? closeableSnapshots.map((snapshot) => snapshot.invoice) : manualActionMode === "reopen" ? reopenableSnapshots.map((snapshot) => snapshot.invoice) : [];
     const manualActionLabel = manualActionMode === "close" ? "Fechar vencida" : manualActionMode === "reopen" ? "Reabrir paga" : "";
     const canCreateCardSpending = cardById.size > 0;
     return (
@@ -531,16 +538,14 @@ export function StatementContentPanel({
                 </div>
             </div>
 
-            <section className="rounded-2xl border border-white/[0.08] bg-[#111111] shadow-[0_24px_60px_-32px_rgba(0,0,0,0.9)]">
+            <div className="flex flex-row w-full gap-2 shrink-0">
+                <section className="min-w-0 flex-1 rounded-2xl border border-white/[0.08] bg-[#111111] shadow-[0_24px_60px_-32px_rgba(0,0,0,0.9)]">
                 <div className="flex flex-wrap items-center justify-between gap-3 p-3">
                     <div className="flex flex-wrap items-center gap-3 ">
                         <p className="text-sm uppercase text-white/60">FATURA DE {invoiceMonthLabel}</p>
-                        {!selectionMode && (
-                            <span className="rounded-full border border-white/[0.05] bg-[#111111] px-2 py-0.5 text-xs text-white/40">
-                                {sortedTransactionSnapshots.length} {sortedTransactionSnapshots.length === 1 ? "item encontrado" : "itens encontrados"}
-                            </span>
-                        )}
-                        {selectionMode ? <TransactionBulkActionsBar selectedCount={bulkSelection.selectedCount} onEdit={handleOpenBulkEdit} onClear={handleClearBulkSelection} /> : null}
+                        <span className="rounded-full border border-white/[0.05] bg-[#111111] px-2 py-0.5 text-xs text-white/40">
+                            {sortedTransactionSnapshots.length} {sortedTransactionSnapshots.length === 1 ? "item encontrado" : "itens encontrados"}
+                        </span>
                     </div>
                     <div className="flex flex-wrap items-center justify-end gap-2">
                         <div className="hidden flex-wrap items-center gap-1 sm:flex">
@@ -590,142 +595,167 @@ export function StatementContentPanel({
                                     {showDescription && <SortableHeader label="Descrição" field="description" sortMode={sortMode} onSortModeChange={setSortMode} />}
                                     {showCategory && <SortableHeader label="Categoria" field="category" sortMode={sortMode} onSortModeChange={setSortMode} />}
                                     {showTags && (
-                                        <th className="overflow-hidden whitespace-nowrap border-b border-white/[0.08] px-3 py-2 text-left text-[11px] uppercase tracking-[0.08em] text-white/45">Tags</th>
+                                        <th className="overflow-hidden whitespace-nowrap border-b border-white/[0.08] px-3 py-2 text-left text-[11px] uppercase tracking-[0.08em] text-white/45">
+                                            Tags
+                                        </th>
                                     )}
                                     {showBeneficiary && <SortableHeader label="Beneficiário" field="beneficiary" sortMode={sortMode} onSortModeChange={setSortMode} />}
                                     {showValue && <SortableHeader label="Valor" field="value" sortMode={sortMode} align="right" onSortModeChange={setSortMode} />}
                                 </tr>
                             </thead>
-                        <tbody>
-                            {sortedTransactionSnapshots.map(({ transaction, transactionStatus, categoryLabel }) => {
-                                const group = transactionGroupsById.get(transaction.groupId);
-                                const seriesIndicator = resolveTransactionSeriesIndicator(transaction, group);
-                                const creditCard = transaction.creditCardId ? cardById.get(transaction.creditCardId) : null;
-                                const CategoryIcon = getCategoryIconComponent(transaction.category.icon, transaction.category.type);
-                                const categoryColor = transaction.category.color ?? "#9CA3AF";
-                                const categoryBackground = `${categoryColor}22`;
-                                const beneficiary = transaction.beneficiaryId ? beneficiariesById.get(transaction.beneficiaryId) : null;
-                                const visibleTags = transaction.tags.slice(0, 2);
-                                const hiddenTagsCount = Math.max(transaction.tags.length - visibleTags.length, 0);
-                                const canBulkEdit = isTransactionEligibleForBulkEdit(transaction);
-                                const isSelected = bulkSelection.selectedIdSet.has(transaction.id);
+                            <tbody>
+                                {sortedTransactionSnapshots.map(({ transaction, transactionStatus, categoryLabel }) => {
+                                    const group = transactionGroupsById.get(transaction.groupId);
+                                    const seriesIndicator = resolveTransactionSeriesIndicator(transaction, group);
+                                    const creditCard = transaction.creditCardId ? cardById.get(transaction.creditCardId) : null;
+                                    const CategoryIcon = getCategoryIconComponent(transaction.category.icon, transaction.category.type);
+                                    const categoryColor = transaction.category.color ?? "#9CA3AF";
+                                    const categoryBackground = `${categoryColor}22`;
+                                    const beneficiary = transaction.beneficiaryId ? beneficiariesById.get(transaction.beneficiaryId) : null;
+                                    const visibleTags = transaction.tags.slice(0, 2);
+                                    const hiddenTagsCount = Math.max(transaction.tags.length - visibleTags.length, 0);
+                                    const canBulkEdit = isTransactionEligibleForBulkEdit(transaction);
+                                    const isSelected = bulkSelection.selectedIdSet.has(transaction.id);
 
-                                return (
-                                    <tr
-                                        key={transaction.id}
-                                        onClick={() => handleRowClick(transaction)}
-                                        onContextMenu={(event) => handleRowContextMenu(event, transaction)}
-                                        className={`${selectionMode && canBulkEdit ? "cursor-pointer" : "cursor-context-menu"} transition-colors odd:bg-white/[0.01] hover:bg-white/[0.04] ${
-                                            isSelected
-                                                ? "bg-emerald-500/[0.07] shadow-[inset_3px_0_0_rgba(110,231,183,0.65)]"
-                                                : contextMenu?.transactionId === transaction.id
-                                                  ? "bg-white/[0.06]"
-                                                  : ""
-                                        }`}
-                                    >
-                                        {selectionMode && (
-                                            <td className="border-b border-white/[0.04] px-3 py-2.5">
-                                                <BulkRowCheckbox
-                                                    checked={isSelected}
-                                                    disabled={!canBulkEdit}
-                                                    title={canBulkEdit ? "Selecionar transacao" : "Pagamentos de fatura nao podem ser editados em massa"}
-                                                    onChange={() => bulkSelection.toggleTransaction(transaction.id)}
-                                                />
-                                            </td>
-                                        )}
-                                        {showStatus && (
-                                            <td className="overflow-hidden whitespace-nowrap border-b border-white/[0.04] px-3 py-2.5 text-white/70">
-                                                <div className="flex min-w-0 items-center gap-2 overflow-hidden whitespace-nowrap">
-                                                    <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center">
-                                                        {creditCard ? (
-                                                            <WalletAvatar wallet={creditCard} className="h-8 w-8 rounded-md border border-white/[0.12]" iconSize={16} iconStrokeWidth={1.7} />
-                                                        ) : (
-                                                            <span className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-white/[0.12] bg-white/[0.03] text-white/45">
-                                                                <CreditCardIcon size={14} />
-                                                            </span>
-                                                        )}
-                                                    </span>
-                                                    {transactionStatus ? (
-                                                        <span
-                                                            className={`inline-flex shrink-0 rounded-full border px-2 py-0.5 text-[11px] uppercase tracking-[0.08em] ${TRANSACTION_STATUS_BADGE_CLASS[transactionStatus]}`}
-                                                        >
-                                                            {TRANSACTION_STATUS_LABELS[transactionStatus]}
+                                    return (
+                                        <tr
+                                            key={transaction.id}
+                                            onClick={() => handleRowClick(transaction)}
+                                            onContextMenu={(event) => handleRowContextMenu(event, transaction)}
+                                            className={`${selectionMode && canBulkEdit ? "cursor-pointer" : "cursor-context-menu"} transition-colors odd:bg-white/[0.01] hover:bg-white/[0.04] ${
+                                                isSelected
+                                                    ? "bg-emerald-500/[0.07] shadow-[inset_3px_0_0_rgba(110,231,183,0.65)]"
+                                                    : contextMenu?.transactionId === transaction.id
+                                                      ? "bg-white/[0.06]"
+                                                      : ""
+                                            }`}
+                                        >
+                                            {selectionMode && (
+                                                <td className="border-b border-white/[0.04] px-3 py-2.5">
+                                                    <BulkRowCheckbox
+                                                        checked={isSelected}
+                                                        disabled={!canBulkEdit}
+                                                        title={canBulkEdit ? "Selecionar transacao" : "Pagamentos de fatura nao podem ser editados em massa"}
+                                                        onChange={() => bulkSelection.toggleTransaction(transaction.id)}
+                                                    />
+                                                </td>
+                                            )}
+                                            {showStatus && (
+                                                <td className="overflow-hidden whitespace-nowrap border-b border-white/[0.04] px-3 py-2.5 text-white/70">
+                                                    <div className="flex min-w-0 items-center gap-2 overflow-hidden whitespace-nowrap">
+                                                        <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center">
+                                                            {creditCard ? (
+                                                                <WalletAvatar wallet={creditCard} className="h-8 w-8 rounded-md border border-white/[0.12]" iconSize={16} iconStrokeWidth={1.7} />
+                                                            ) : (
+                                                                <span className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-white/[0.12] bg-white/[0.03] text-white/45">
+                                                                    <CreditCardIcon size={14} />
+                                                                </span>
+                                                            )}
                                                         </span>
-                                                    ) : (
-                                                        "--"
-                                                    )}
-                                                </div>
-                                            </td>
-                                        )}
-                                        {showDate && <td className="overflow-hidden whitespace-nowrap border-b border-white/[0.04] px-3 py-2.5 text-white/70">{formatTransactionDate(transaction.date, "dd/MM/yyyy")}</td>}
-                                        {showDescription && (
-                                            <td className="truncate border-b border-white/[0.04] px-3 py-2.5 text-[14px] font-medium text-white">
-                                                <div className="flex min-w-0 max-w-full items-center gap-1.5">
-                                                    <span className="truncate">{transaction.description || "Sem descricao"}</span>
-                                                    {seriesIndicator?.kind === "installment" && <span className="shrink-0 text-xs text-white/55">{seriesIndicator.label}</span>}
-                                                    {seriesIndicator?.kind === "recurring" && (
-                                                        <span className="inline-flex shrink-0 text-white/55" role="img" title="Transacao recorrente" aria-label="Transacao recorrente">
-                                                            <Repeat2 size={13} />
-                                                        </span>
-                                                    )}
-                                                </div>
-                                            </td>
-                                        )}
-                                        {showCategory && (
-                                            <td className="overflow-hidden whitespace-nowrap border-b border-white/[0.04] px-3 py-2.5 text-white/70">
-                                                <div className="flex min-w-0 max-w-full items-center gap-2">
-                                                    <span
-                                                        className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-white/[0.1]"
-                                                        style={{ color: categoryColor, backgroundColor: categoryBackground }}
-                                                    >
-                                                        <CategoryIcon size={16} />
-                                                    </span>
-                                                    <span className="truncate">{categoryLabel}</span>
-                                                </div>
-                                            </td>
-                                        )}
-                                        {showTags && (
-                                            <td className="overflow-hidden whitespace-nowrap border-b border-white/[0.04] px-3 py-2.5 text-white/70">
-                                                {visibleTags.length < 1 ? (
-                                                    <span className="text-white/35">Sem tags</span>
-                                                ) : (
-                                                    <div className="flex min-w-0 max-w-full flex-nowrap items-center gap-1.5 overflow-hidden">
-                                                        {visibleTags.map((tag) => (
+                                                        {transactionStatus ? (
                                                             <span
-                                                                key={tag.id}
-                                                                className="min-w-0 max-w-[96px] truncate rounded-full border border-white/12 px-2 py-0.5 text-[11px]/4 font-medium uppercase text-white/75"
-                                                                style={{ backgroundColor: `${tag.color ?? "#64748B"}26` }}
+                                                                className={`inline-flex shrink-0 rounded-full border px-2 py-0.5 text-[11px] uppercase tracking-[0.08em] ${TRANSACTION_STATUS_BADGE_CLASS[transactionStatus]}`}
                                                             >
-                                                                {tag.name}
+                                                                {TRANSACTION_STATUS_LABELS[transactionStatus]}
                                                             </span>
-                                                        ))}
-                                                        {hiddenTagsCount > 0 && (
-                                                            <span className="shrink-0 rounded-full border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[10px] font-medium text-white/55">
-                                                                +{hiddenTagsCount}
+                                                        ) : (
+                                                            "--"
+                                                        )}
+                                                    </div>
+                                                </td>
+                                            )}
+                                            {showDate && (
+                                                <td className="overflow-hidden whitespace-nowrap border-b border-white/[0.04] px-3 py-2.5 text-white/70">
+                                                    {formatTransactionDate(transaction.date, "dd/MM/yyyy")}
+                                                </td>
+                                            )}
+                                            {showDescription && (
+                                                <td className="truncate border-b border-white/[0.04] px-3 py-2.5 text-[14px] font-medium text-white">
+                                                    <div className="flex min-w-0 max-w-full items-center gap-1.5">
+                                                        <span className="truncate">{transaction.description || "Sem descricao"}</span>
+                                                        {seriesIndicator?.kind === "installment" && <span className="shrink-0 text-xs text-white/55">{seriesIndicator.label}</span>}
+                                                        {seriesIndicator?.kind === "recurring" && (
+                                                            <span className="inline-flex shrink-0 text-white/55" role="img" title="Transacao recorrente" aria-label="Transacao recorrente">
+                                                                <Repeat2 size={13} />
                                                             </span>
                                                         )}
                                                     </div>
-                                                )}
-                                            </td>
-                                        )}
-                                        {showBeneficiary && (
-                                            <td className="overflow-hidden whitespace-nowrap border-b border-white/[0.04] px-3 py-2.5">
-                                                <div className="flex min-w-0 max-w-full items-center gap-2 text-white/70">
-                                                    <BeneficiaryAvatar beneficiary={{ name: beneficiary?.name ?? transaction.beneficiary, avatarImage: beneficiary?.avatarImage ?? null, avatarColor: beneficiary?.avatarColor ?? "#374151" }} />
-                                                    <span className="truncate">{beneficiary?.name ?? transaction.beneficiary}</span>
-                                                </div>
-                                            </td>
-                                        )}
-                                        {showValue && <td className="overflow-hidden whitespace-nowrap border-b border-white/[0.04] px-3 py-2.5 text-right font-semibold text-red-400">{formatCurrency(transaction.value)}</td>}
-                                    </tr>
-                                );
-                            })}
-                        </tbody>
+                                                </td>
+                                            )}
+                                            {showCategory && (
+                                                <td className="overflow-hidden whitespace-nowrap border-b border-white/[0.04] px-3 py-2.5 text-white/70">
+                                                    <div className="flex min-w-0 max-w-full items-center gap-2">
+                                                        <span
+                                                            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-white/[0.1]"
+                                                            style={{ color: categoryColor, backgroundColor: categoryBackground }}
+                                                        >
+                                                            <CategoryIcon size={16} />
+                                                        </span>
+                                                        <span className="truncate">{categoryLabel}</span>
+                                                    </div>
+                                                </td>
+                                            )}
+                                            {showTags && (
+                                                <td className="overflow-hidden whitespace-nowrap border-b border-white/[0.04] px-3 py-2.5 text-white/70">
+                                                    {visibleTags.length < 1 ? (
+                                                        <span className="text-white/35">Sem tags</span>
+                                                    ) : (
+                                                        <div className="flex min-w-0 max-w-full flex-nowrap items-center gap-1.5 overflow-hidden">
+                                                            {visibleTags.map((tag) => (
+                                                                <span
+                                                                    key={tag.id}
+                                                                    className="min-w-0 max-w-[96px] truncate rounded-full border border-white/12 px-2 py-0.5 text-[11px]/4 font-medium uppercase text-white/75"
+                                                                    style={{ backgroundColor: `${tag.color ?? "#64748B"}26` }}
+                                                                >
+                                                                    {tag.name}
+                                                                </span>
+                                                            ))}
+                                                            {hiddenTagsCount > 0 && (
+                                                                <span className="shrink-0 rounded-full border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[10px] font-medium text-white/55">
+                                                                    +{hiddenTagsCount}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                </td>
+                                            )}
+                                            {showBeneficiary && (
+                                                <td className="overflow-hidden whitespace-nowrap border-b border-white/[0.04] px-3 py-2.5">
+                                                    <div className="flex min-w-0 max-w-full items-center gap-2 text-white/70">
+                                                        <BeneficiaryAvatar
+                                                            beneficiary={{
+                                                                name: beneficiary?.name ?? transaction.beneficiary,
+                                                                avatarImage: beneficiary?.avatarImage ?? null,
+                                                                avatarColor: beneficiary?.avatarColor ?? "#374151",
+                                                            }}
+                                                        />
+                                                        <span className="truncate">{beneficiary?.name ?? transaction.beneficiary}</span>
+                                                    </div>
+                                                </td>
+                                            )}
+                                            {showValue && (
+                                                <td className="overflow-hidden whitespace-nowrap border-b border-white/[0.04] px-3 py-2.5 text-right font-semibold text-red-400">
+                                                    {formatCurrency(transaction.value)}
+                                                </td>
+                                            )}
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
                         </table>
+                        <FloatingTransactionBulkFooter
+                            selectedCount={bulkSelection.selectedCount}
+                            selectedAmount={formatCurrencyBRL(selectedTransactionsTotal)}
+                            onEdit={handleOpenBulkEdit}
+                            onClear={handleClearBulkSelection}
+                        />
                         <TransactionContextMenu state={contextMenu} actions={contextActions} onSelect={handleSelectAction} onClose={() => setContextMenu(null)} />
                     </div>
                 )}
-            </section>
+                </section>
+
+                {summaryAside ? <div className="w-1/7">{summaryAside}</div> : null}
+            </div>
         </div>
     );
 }

@@ -260,11 +260,8 @@ export function StatementPage() {
                         onInvoiceStateAdjustment={handleInvoiceStateAdjustment}
                         onCreateCardSpending={handleCreateCardSpendingFromStatement}
                         onAction={handleTransactionContextAction}
+                        summaryAside={<StatementSummaryCards summary={summary} />}
                     />
-                </div>
-
-                <div className="w-full 2xl:w-[230px]">
-                    <StatementSummaryCards summary={summary} />
                 </div>
             </div>
         </div>

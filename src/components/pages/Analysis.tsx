@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
     type PlanningSimulatedExpense,
     type PlanningSimulatedIncome,
@@ -39,6 +40,14 @@ function areStringArraysEqual(left: string[], right: string[]): boolean {
     return left.length === right.length && left.every((value, index) => value === right[index]);
 }
 
+function isValidPlanningMonthKey(monthKey: string): boolean {
+    return /^\d{4}-(0[1-9]|1[0-2])$/.test(monthKey);
+}
+
+function isPlanningPanel(value: string | null): value is PlanningPanel {
+    return value === "income" || value === "inherited_expenses" || value === "projections";
+}
+
 export function PlanningPage() {
     const wallets = useFinanceWallets();
     const creditCards = useFinanceCreditCards();
@@ -50,10 +59,16 @@ export function PlanningPage() {
     const { updatePlanningState } = useFinanceActions();
     const { openModal } = useModal();
     const { goToPage } = usePage();
+    const [searchParams] = useSearchParams();
+    const currentMonthKey = getCurrentMonthKey();
+    const requestedMonthKey = searchParams.get("month");
+    const requestedPanel = searchParams.get("panel");
 
     const [activePlanningTab, setActivePlanningTab] = useState<PlanningTab>(DEFAULT_PLANNING_TAB);
-    const [selectedMonthKey, setSelectedMonthKey] = useState(getCurrentMonthKey());
-    const [selectedPanel, setSelectedPanel] = useState<PlanningPanel>("income");
+    const [selectedMonthKey, setSelectedMonthKey] = useState(() =>
+        requestedMonthKey && isValidPlanningMonthKey(requestedMonthKey) && requestedMonthKey >= currentMonthKey ? requestedMonthKey : currentMonthKey,
+    );
+    const [selectedPanel, setSelectedPanel] = useState<PlanningPanel>(() => (isPlanningPanel(requestedPanel) ? requestedPanel : "income"));
 
     const activeWishItems = useMemo(() => wishItems.filter((item) => item.isActive).sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id)), [wishItems]);
     const wishlistSelectionByWishItemId = useMemo(() => new Map(planning.wishlistSelections.map((selection) => [selection.wishItemId, selection])), [planning.wishlistSelections]);
@@ -88,6 +103,21 @@ export function PlanningPage() {
             ),
         [creditCardIds.length, reportsSelectedCreditCardIds, reportsSelectedWalletIds, transactions, walletIds.length],
     );
+
+    useEffect(() => {
+        if (!requestedMonthKey && !requestedPanel) {
+            return;
+        }
+
+        if (requestedMonthKey && isValidPlanningMonthKey(requestedMonthKey) && requestedMonthKey >= currentMonthKey) {
+            setSelectedMonthKey(requestedMonthKey);
+        }
+
+        if (isPlanningPanel(requestedPanel)) {
+            setSelectedPanel(requestedPanel);
+            setActivePlanningTab("timeline");
+        }
+    }, [currentMonthKey, requestedMonthKey, requestedPanel]);
 
     useEffect(() => {
         const nextTimelineWalletIds = timelineSelectedWalletIds;
@@ -129,8 +159,9 @@ export function PlanningPage() {
                 wishItems,
                 planning,
                 monthsToShow: timelineMonthCount,
+                pinnedMonthKey: selectedMonthKey,
             }),
-        [planning, scopedCreditCardInvoices, scopedCreditCards, scopedLedgerEntries, scopedTransactions, scopedWallets, timelineMonthCount, wishItems],
+        [planning, scopedCreditCardInvoices, scopedCreditCards, scopedLedgerEntries, scopedTransactions, scopedWallets, selectedMonthKey, timelineMonthCount, wishItems],
     );
 
     const currentMonth = projection.months[0] ?? null;
