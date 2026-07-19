@@ -28,14 +28,16 @@ export function PlanningReportsTab({ period, transactions, allTransactions, cred
             ) : (
                 <>
                     <PlanningReportsMetricsSection summary={summary} />
-                    <div className="grid min-h-0 gap-3 xl:grid-cols-[minmax(0,1.35fr)_minmax(340px,0.85fr)]">
+                    <div className="grid min-h-0 gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(340px,1fr)_minmax(340px,0.7fr)]">
                         <PlanningReportsCategoriesSection categoryReports={categoryReports} totalAmount={summary.spending} />
-
+                       
+                        <PlanningReportsCategoriesSection categoryReports={incomeCategoryReports} totalAmount={summary.income} kind="income" />
+                        
                         <PlanningReportsFlowSection monthReports={monthReports} />
                     </div>
                     <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_360px]">
-                        <PlanningReportsCategoriesSection categoryReports={incomeCategoryReports} totalAmount={summary.income} kind="income" />
-                        <PlanningReportsRankingSection beneficiaryReports={beneficiaryReports} />
+                         <PlanningReportsRankingSection beneficiaryReports={beneficiaryReports} />
+                        
                     </div>
                 </>
             )}

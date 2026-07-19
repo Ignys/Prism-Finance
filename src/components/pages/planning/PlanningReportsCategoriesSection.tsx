@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import type { ChartOptions, TooltipItem } from "chart.js";
 import { Doughnut } from "react-chartjs-2";
-import { ArrowDown, ArrowDownRight, ChevronDown, ChevronUp, CreditCard } from "lucide-react";
+import { ArrowDown, ArrowDownRight, ArrowUpRight, ChevronDown, ChevronUp, CreditCard } from "lucide-react";
 import { getCategoryIconComponent } from "../../../lib/categoryIcons";
 import { formatReportCurrency } from "./planningReportFormatting";
 import type { CategoryReport } from "./planningReportsUtils";
@@ -16,16 +16,16 @@ interface PlanningReportsCategoriesSectionProps {
 
 const SECTION_COPY: Record<CategorySectionKind, { title: string; datasetLabel: string; emptyChartLabel: string; emptyListLabel: string }> = {
     spending: {
-        title: "Gastos por categoria",
+        title: "Categoria de Despesas",
         datasetLabel: "Despesas",
         emptyChartLabel: "Sem despesas",
-        emptyListLabel: "Nenhuma despesa encontrada no periodo.",
+        emptyListLabel: "Nenhuma despesa encontrada no período.",
     },
     income: {
-        title: "Receitas por categoria",
+        title: "Categoria de Receitas",
         datasetLabel: "Receitas",
         emptyChartLabel: "Sem receitas",
-        emptyListLabel: "Nenhuma receita encontrada no periodo.",
+        emptyListLabel: "Nenhuma receita encontrada no período.",
     },
 };
 
@@ -121,7 +121,7 @@ function CategoryRow({ category, showDetails, totalAmount, kind }: { category: C
                             </div>
                         ) : showDetails ? (
                             <div className="flex items-center justify-between w-25 gap-1 p-1 text-xs">
-                                <ArrowDown className="h-4 w-4 opacity-60" />
+                                <ArrowUpRight className="h-4 w-4 opacity-60" />
                                 <span className=" text-white/60">{formatReportCurrency(category.walletAmount)}</span>
                             </div>
                         ) : (
