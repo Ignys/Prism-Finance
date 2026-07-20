@@ -1,7 +1,6 @@
 import { useMemo } from "react";
 import type { ChartOptions, TooltipItem } from "chart.js";
 import { Bar } from "react-chartjs-2";
-import { CalendarRange } from "lucide-react";
 import type { MonthReport } from "./planningReportsUtils";
 import { formatReportCurrency } from "./planningReportFormatting";
 
@@ -22,9 +21,8 @@ export function PlanningReportsFlowSection({ monthReports }: { monthReports: Mon
         <section className="rounded-lg border border-white/[0.08] bg-[#111111] p-4">
             <div className="mb-4 flex items-center justify-between gap-3">
                 <div>
-                    <p className="text-base font-medium text-white">Balanço mensal</p>
+                    <p className="text-base font-medium text-white">Balanço Mensal</p>
                 </div>
-                <CalendarRange size={18} className="text-white/42" />
             </div>
             <div className="h-[315px]">
                 <Bar data={data} options={options} />

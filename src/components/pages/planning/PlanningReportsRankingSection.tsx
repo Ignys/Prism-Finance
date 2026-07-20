@@ -1,4 +1,3 @@
-import { ReceiptText } from "lucide-react";
 import { BeneficiaryAvatar } from "../../common/BeneficiaryAvatar";
 import { formatReportCurrency } from "./planningReportFormatting";
 import type { BeneficiaryReport } from "./planningReportsUtils";
@@ -8,9 +7,8 @@ export function PlanningReportsRankingSection({ beneficiaryReports }: { benefici
         <section className="rounded-lg border border-white/[0.08] bg-[#111111] p-4">
             <div className="mb-4 flex items-center justify-between gap-3">
                 <div>
-                    <p className="text-base font-medium text-white">Despesas dos beneficiários</p>
+                    <p className="text-base font-medium text-white">Despesas dos Beneficiários</p>
                 </div>
-                <ReceiptText size={18} className="text-white/42" />
             </div>
             <div className="space-y-2">
                 {beneficiaryReports.length > 0 ? (
@@ -46,7 +44,7 @@ function RankingRow({ beneficiary }: { beneficiary: BeneficiaryReport }) {
                 </div>
             </div>
             <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/[0.06]">
-                <div className="h-full rounded-full bg-rose-500/90" style={{ width: `${Math.min(100, beneficiary.percent)}%` }} />
+                <div className="h-full rounded-full bg-rose-400/80" style={{ width: `${Math.min(100, beneficiary.percent)}%` }} />
             </div>
         </div>
     );
