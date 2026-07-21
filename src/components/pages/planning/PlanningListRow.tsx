@@ -19,16 +19,18 @@ interface PlanningListRowProps {
     iconTone: ItemIconTone;
     customIcon?: LucideIcon;
     valueClassName: string;
-    onContextMenu?: (event: MouseEvent<HTMLDivElement>) => void;
+    onClick?: () => void;
+    onContextMenu?: (event: MouseEvent) => void;
 }
 
-export function PlanningListRow({ active = true, label, amount, iconName, iconTone, customIcon, valueClassName, onContextMenu }: PlanningListRowProps) {
+export function PlanningListRow({ active = true, label, amount, iconName, iconTone, customIcon, valueClassName, onClick, onContextMenu }: PlanningListRowProps) {
     const categoryIconTone = iconTone === "income" || iconTone === "expense" ? iconTone : undefined;
     const Icon = customIcon ?? getCategoryIconComponent(iconName, categoryIconTone);
+    const interactiveClassName = onClick ? `cursor-pointer ${getPlanningRowHoverClassName(active)}` : onContextMenu ? `cursor-context-menu ${getPlanningRowHoverClassName(active)}` : "";
     const rowClassName = [
         PLANNING_ROW_BASE_CLASS_NAME,
         getPlanningRowStateClassName(active),
-        onContextMenu ? `cursor-context-menu ${getPlanningRowHoverClassName(active)}` : "",
+        interactiveClassName,
     ]
         .filter(Boolean)
         .join(" ");
@@ -36,7 +38,7 @@ export function PlanningListRow({ active = true, label, amount, iconName, iconTo
     const amountClassName = getPlanningRowAmountClassName(iconTone, active, valueClassName);
 
     return (
-        <div onContextMenu={onContextMenu} className={rowClassName}>
+        <button type="button" onClick={onClick} onContextMenu={onContextMenu} className={rowClassName} title={onClick ? (active ? "Ignorar" : "Ativar") : undefined}>
             <div className="flex min-w-0 items-center gap-2">
                 <span className={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md ${iconClassName}`}>
                     <Icon size={13} />
@@ -46,6 +48,6 @@ export function PlanningListRow({ active = true, label, amount, iconName, iconTo
             <div className="flex items-center gap-1.5">
                 <span className={`shrink-0 text-xs font-medium ${amountClassName}`}>{formatCurrency(amount)}</span>
             </div>
-        </div>
+        </button>
     );
 }

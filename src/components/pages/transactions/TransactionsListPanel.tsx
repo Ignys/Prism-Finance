@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState, type MouseEvent } from "react";
 import { ArrowDown, ArrowUp, Circle, CircleSlash, Repeat2 } from "lucide-react";
-import { type Beneficiary, type Transaction, type Wallet, useFinanceActions, useFinanceBeneficiaries, useFinanceTransactionGroups } from "../../../context/FinanceContext";
+import { type Beneficiary, type Transaction, type Wallet, useFinanceActions, useFinanceBeneficiaries, useFinanceSession, useFinanceTransactionGroups } from "../../../context/FinanceContext";
 import { getTodayDate } from "../../../context/finance/helpers";
 import { useModal } from "../../../context/ModalContext";
 import { getCategoryIconComponent } from "../../../lib/categoryIcons";
+import { useLocalPreferenceSection } from "../../../lib/localPreferences";
 import { getTransactionCategoryDisplay, getTransactionCategoryDisplayLabel } from "../../../lib/transactionCategory";
 import { BeneficiaryAvatar } from "../../common/BeneficiaryAvatar";
 import { TableColumnToggleButton } from "../../common/TableColumnToggleButton";
@@ -39,6 +40,47 @@ interface TransactionsListPanelProps {
     sortMode: SortMode;
     onSortModeChange: (sortMode: SortMode) => void;
     onAction: (transaction: Transaction, action: TransactionContextAction) => void;
+}
+
+interface TransactionsTableViewPreferences {
+    showStatus: boolean;
+    showDate: boolean;
+    showDescription: boolean;
+    showCategory: boolean;
+    showTags: boolean;
+    showBeneficiary: boolean;
+    showValue: boolean;
+}
+
+const TRANSACTIONS_TABLE_VIEW_PREFERENCES_SECTION = "transactions.table-view";
+const DEFAULT_TRANSACTIONS_TABLE_VIEW_PREFERENCES: TransactionsTableViewPreferences = {
+    showStatus: true,
+    showDate: true,
+    showDescription: true,
+    showCategory: true,
+    showTags: true,
+    showBeneficiary: true,
+    showValue: true,
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function normalizeTransactionsTableViewPreferences(value: unknown): TransactionsTableViewPreferences {
+    if (!isRecord(value)) {
+        return DEFAULT_TRANSACTIONS_TABLE_VIEW_PREFERENCES;
+    }
+
+    return {
+        showStatus: typeof value.showStatus === "boolean" ? value.showStatus : DEFAULT_TRANSACTIONS_TABLE_VIEW_PREFERENCES.showStatus,
+        showDate: typeof value.showDate === "boolean" ? value.showDate : DEFAULT_TRANSACTIONS_TABLE_VIEW_PREFERENCES.showDate,
+        showDescription: typeof value.showDescription === "boolean" ? value.showDescription : DEFAULT_TRANSACTIONS_TABLE_VIEW_PREFERENCES.showDescription,
+        showCategory: typeof value.showCategory === "boolean" ? value.showCategory : DEFAULT_TRANSACTIONS_TABLE_VIEW_PREFERENCES.showCategory,
+        showTags: typeof value.showTags === "boolean" ? value.showTags : DEFAULT_TRANSACTIONS_TABLE_VIEW_PREFERENCES.showTags,
+        showBeneficiary: typeof value.showBeneficiary === "boolean" ? value.showBeneficiary : DEFAULT_TRANSACTIONS_TABLE_VIEW_PREFERENCES.showBeneficiary,
+        showValue: typeof value.showValue === "boolean" ? value.showValue : DEFAULT_TRANSACTIONS_TABLE_VIEW_PREFERENCES.showValue,
+    };
 }
 
 interface TabConfig {
@@ -159,18 +201,25 @@ function TransactionsTable({ tabs, activeTab, wallets, beneficiariesById, transa
     const activeTabConfig = tabs.find((tab) => tab.key === activeTab) ?? tabs[0];
     const transactions = activeTabConfig?.transactions ?? [];
     const [contextMenu, setContextMenu] = useState<TransactionContextMenuState | null>(null);
+    const { user } = useFinanceSession();
     const { openModal } = useModal();
     const { updateTransaction, updateTransactionsBulk } = useFinanceActions();
     const bulkSelection = useTransactionBulkSelection(transactions);
     const [selectionMode, setSelectionMode] = useState(false);
+    const [viewPreferences, setViewPreferences] = useLocalPreferenceSection(
+        user?.uid,
+        TRANSACTIONS_TABLE_VIEW_PREFERENCES_SECTION,
+        DEFAULT_TRANSACTIONS_TABLE_VIEW_PREFERENCES,
+        normalizeTransactionsTableViewPreferences,
+    );
+    const { showStatus, showDate, showDescription, showCategory, showTags, showBeneficiary, showValue } = viewPreferences;
 
-    const [showStatus, setShowStatus] = useState(true);
-    const [showDate, setShowDate] = useState(true);
-    const [showDescription, setShowDescription] = useState(true);
-    const [showCategory, setShowCategory] = useState(true);
-    const [showTags, setShowTags] = useState(true);
-    const [showBeneficiary, setShowBeneficiary] = useState(true);
-    const [showValue, setShowValue] = useState(true);
+    const toggleViewPreference = (key: keyof TransactionsTableViewPreferences) => {
+        setViewPreferences((current) => ({
+            ...current,
+            [key]: !current[key],
+        }));
+    };
 
     const contextTransaction = useMemo(() => transactions.find((transaction) => transaction.id === contextMenu?.transactionId) ?? null, [contextMenu?.transactionId, transactions]);
     const contextActions = useMemo(
@@ -310,13 +359,13 @@ function TransactionsTable({ tabs, activeTab, wallets, beneficiariesById, transa
                 </div>
                 <div className="flex flex-wrap justify-end gap-2">
                     <div className="hidden sm:flex items-center gap-1 flex-wrap">
-                        <TableControlButton label="STATUS" active={showStatus} onClick={() => setShowStatus(!showStatus)} />
-                        <TableControlButton label="DATA" active={showDate} onClick={() => setShowDate(!showDate)} />
-                        <TableControlButton label="DESCRIÇÃO" active={showDescription} onClick={() => setShowDescription(!showDescription)} />
-                        <TableControlButton label="CATEGORIA" active={showCategory} onClick={() => setShowCategory(!showCategory)} />
-                        <TableControlButton label="TAGS" active={showTags} onClick={() => setShowTags(!showTags)} />
-                        <TableControlButton label="BENEFICIÁRIO" active={showBeneficiary} onClick={() => setShowBeneficiary(!showBeneficiary)} />
-                        <TableControlButton label="VALOR" active={showValue} onClick={() => setShowValue(!showValue)} />
+                        <TableControlButton label="STATUS" active={showStatus} onClick={() => toggleViewPreference("showStatus")} />
+                        <TableControlButton label="DATA" active={showDate} onClick={() => toggleViewPreference("showDate")} />
+                        <TableControlButton label="DESCRIÇÃO" active={showDescription} onClick={() => toggleViewPreference("showDescription")} />
+                        <TableControlButton label="CATEGORIA" active={showCategory} onClick={() => toggleViewPreference("showCategory")} />
+                        <TableControlButton label="TAGS" active={showTags} onClick={() => toggleViewPreference("showTags")} />
+                        <TableControlButton label="BENEFICIÁRIO" active={showBeneficiary} onClick={() => toggleViewPreference("showBeneficiary")} />
+                        <TableControlButton label="VALOR" active={showValue} onClick={() => toggleViewPreference("showValue")} />
                     </div>
                 </div>
             </div>

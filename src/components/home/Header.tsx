@@ -113,7 +113,7 @@ export function Header({ onOpenSidebar }: HeaderProps) {
                             type="button"
                             onClick={onOpenSidebar}
                             aria-label="Abrir menu lateral"
-                            className="inline-flex h-10 w-10 items-center justify-center rounded-[10px] border border-white/[0.08] bg-white/[0.03] text-white/75 transition-colors hover:bg-white/[0.07] hover:text-white lg:hidden"
+                            className="inline-flex h-10 w-10 items-center justify-center rounded-[10px] border border-white/[0.08] bg-white/[0.03] text-white/75 transition-[background-color,color,transform] duration-200 hover:scale-[1.04] hover:bg-white/[0.07] hover:text-white laptop:hidden"
                         >
                             <Menu size={18} />
                         </button>

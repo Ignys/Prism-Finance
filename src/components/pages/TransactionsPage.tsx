@@ -1,11 +1,13 @@
-import { useEffect, useMemo, useState } from "react";
-import { useFinanceTransactions, useFinanceWallets } from "../../context/FinanceContext";
+import { useEffect, useMemo, useState, type SetStateAction } from "react";
+import { useFinanceSession, useFinanceTransactions, useFinanceWallets } from "../../context/FinanceContext";
 import { normalizeComparisonText } from "../../context/finance/helpers";
 import { useModal } from "../../context/ModalContext";
 import { usePage } from "../../context/PageContext";
+import { useLocalPreferenceSection } from "../../lib/localPreferences";
 import { getLocalTodayDate } from "../../lib/localDate";
 import { AddTransactionModal } from "../modal/AddTransaction";
 import { AddTransferModal } from "../modal/AddTransferModal";
+import { EditTransaction } from "../modal/EditTransaction";
 import { useTransactionContextActionHandler } from "../transactions/useTransactionContextActionHandler";
 import { TransactionsFiltersPanel } from "./transactions/TransactionsFiltersPanel";
 import { TransactionsListPanel } from "./transactions/TransactionsListPanel";
@@ -26,6 +28,68 @@ import {
     type TransactionsTabKey,
     type TransactionsSummary,
 } from "./transactions/transactionsPageShared";
+
+interface TransactionsPagePreferences {
+    activeTab: TransactionsTabKey;
+    filters: TransactionsFilterState;
+}
+
+const TRANSACTIONS_PAGE_PREFERENCES_SECTION = "transactions";
+const DEFAULT_TRANSACTIONS_PAGE_PREFERENCES: TransactionsPagePreferences = {
+    activeTab: "income",
+    filters: INITIAL_FILTER_STATE,
+};
+const VALID_TRANSACTION_TABS = new Set<TransactionsTabKey>(["income", "spending", "transfer"]);
+const VALID_TRANSACTION_STATUS_FILTERS = new Set<TransactionsFilterState["selectedStatus"]>(["all", "pending", "paid", "cancelled", "skipped"]);
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function asString(value: unknown, fallback: string): string {
+    return typeof value === "string" ? value : fallback;
+}
+
+function asStringArray(value: unknown): string[] {
+    return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+}
+
+function normalizeTransactionsFilterState(value: unknown): TransactionsFilterState {
+    if (!isRecord(value)) {
+        return INITIAL_FILTER_STATE;
+    }
+
+    const sortMode = asString(value.sortMode, INITIAL_FILTER_STATE.sortMode);
+    const selectedStatus = asString(value.selectedStatus, INITIAL_FILTER_STATE.selectedStatus) as TransactionsFilterState["selectedStatus"];
+
+    return {
+        selectedMonth: /^\d{4}-(0[1-9]|1[0-2])$/.test(asString(value.selectedMonth, "")) ? asString(value.selectedMonth, INITIAL_FILTER_STATE.selectedMonth) : INITIAL_FILTER_STATE.selectedMonth,
+        sortMode: /^(date|value|status|category|beneficiary)-(asc|desc)$/.test(sortMode) ? (sortMode as TransactionsFilterState["sortMode"]) : INITIAL_FILTER_STATE.sortMode,
+        showAdvancedFilters: typeof value.showAdvancedFilters === "boolean" ? value.showAdvancedFilters : INITIAL_FILTER_STATE.showAdvancedFilters,
+        searchQuery: asString(value.searchQuery, INITIAL_FILTER_STATE.searchQuery),
+        selectedCategoryKey: asString(value.selectedCategoryKey, INITIAL_FILTER_STATE.selectedCategoryKey),
+        selectedWalletId: asString(value.selectedWalletId, INITIAL_FILTER_STATE.selectedWalletId),
+        selectedBeneficiary: asString(value.selectedBeneficiary, INITIAL_FILTER_STATE.selectedBeneficiary),
+        selectedStatus: VALID_TRANSACTION_STATUS_FILTERS.has(selectedStatus) ? selectedStatus : INITIAL_FILTER_STATE.selectedStatus,
+        selectedTagIds: asStringArray(value.selectedTagIds),
+        dateFrom: asString(value.dateFrom, INITIAL_FILTER_STATE.dateFrom),
+        dateTo: asString(value.dateTo, INITIAL_FILTER_STATE.dateTo),
+        minAmount: asString(value.minAmount, INITIAL_FILTER_STATE.minAmount),
+        maxAmount: asString(value.maxAmount, INITIAL_FILTER_STATE.maxAmount),
+    };
+}
+
+function normalizeTransactionsPagePreferences(value: unknown): TransactionsPagePreferences {
+    if (!isRecord(value)) {
+        return DEFAULT_TRANSACTIONS_PAGE_PREFERENCES;
+    }
+
+    const activeTab = asString(value.activeTab, DEFAULT_TRANSACTIONS_PAGE_PREFERENCES.activeTab) as TransactionsTabKey;
+    return {
+        activeTab: VALID_TRANSACTION_TABS.has(activeTab) ? activeTab : DEFAULT_TRANSACTIONS_PAGE_PREFERENCES.activeTab,
+        filters: normalizeTransactionsFilterState(value.filters),
+    };
+}
 
 function resolveMonthStartDate(monthKey: string): string {
     const match = /^(\d{4})-(\d{2})$/.exec(monthKey.trim());
@@ -52,23 +116,73 @@ function resolveTransactionsTabFromPage(page: ReturnType<typeof usePage>["curren
 }
 
 export function TransactionsPage() {
+    const { user } = useFinanceSession();
     const transactions = useFinanceTransactions();
     const wallets = useFinanceWallets();
     const { openModal } = useModal();
     const handleTransactionContextAction = useTransactionContextActionHandler();
     const { consumePendingNavigation, currentPage, goToPage } = usePage();
-    const [filters, setFilters] = useState<TransactionsFilterState>(INITIAL_FILTER_STATE);
-    const [activeTab, setActiveTab] = useState<TransactionsTabKey>(() => resolveTransactionsTabFromPage(currentPage));
+    const [pagePreferences, setPagePreferences] = useLocalPreferenceSection(
+        user?.uid,
+        TRANSACTIONS_PAGE_PREFERENCES_SECTION,
+        DEFAULT_TRANSACTIONS_PAGE_PREFERENCES,
+        normalizeTransactionsPagePreferences,
+    );
+    const [pendingOpenTransactionId, setPendingOpenTransactionId] = useState<string | null>(null);
+    const { activeTab, filters } = pagePreferences;
+
+    const setFilters = (nextFiltersAction: SetStateAction<TransactionsFilterState>) => {
+        setPagePreferences((current) => {
+            const nextFilters = typeof nextFiltersAction === "function" ? (nextFiltersAction as (currentFilters: TransactionsFilterState) => TransactionsFilterState)(current.filters) : nextFiltersAction;
+            return {
+                ...current,
+                filters: nextFilters,
+            };
+        });
+    };
 
     useEffect(() => {
         const pendingNavigation = consumePendingNavigation();
         if (pendingNavigation?.page === "transactions") {
-            setActiveTab(pendingNavigation.tab);
+            setPagePreferences((current) => ({
+                ...current,
+                activeTab: pendingNavigation.tab,
+                filters: {
+                    ...current.filters,
+                    selectedMonth: pendingNavigation.selectedMonth ?? current.filters.selectedMonth,
+                },
+            }));
+            setPendingOpenTransactionId(pendingNavigation.targetTransactionId ?? null);
             return;
         }
 
-        setActiveTab(resolveTransactionsTabFromPage(currentPage));
-    }, [consumePendingNavigation, currentPage]);
+        if (currentPage === "transactions") {
+            return;
+        }
+
+        setPagePreferences((current) => ({
+            ...current,
+            activeTab: resolveTransactionsTabFromPage(currentPage),
+        }));
+    }, [consumePendingNavigation, currentPage, setPagePreferences]);
+
+    useEffect(() => {
+        if (!pendingOpenTransactionId) {
+            return;
+        }
+
+        const transaction = transactions.find((item) => item.id === pendingOpenTransactionId);
+        if (!transaction) {
+            return;
+        }
+
+        setFilters((current) => ({
+            ...current,
+            selectedMonth: getTransactionMonthKey(transaction.date),
+        }));
+        setPendingOpenTransactionId(null);
+        openModal(<EditTransaction transaction={transaction} />);
+    }, [openModal, pendingOpenTransactionId, transactions]);
 
     const {
         selectedMonth,
@@ -159,6 +273,34 @@ export function TransactionsPage() {
         beneficiaries.sort((a, b) => a.localeCompare(b, "pt-BR"));
         return beneficiaries;
     }, [nonCreditCardTransactions]);
+
+    useEffect(() => {
+        const validWalletIds = new Set(wallets.map((wallet) => wallet.id));
+        const validCategoryKeys = new Set(categoryOptions.map((option) => option.value));
+        const validBeneficiaries = new Set(beneficiaryOptions);
+        const validTagIds = new Set(tagOptions.map((tag) => tag.id));
+
+        setPagePreferences((current) => {
+            const nextFilters: TransactionsFilterState = {
+                ...current.filters,
+                selectedWalletId: current.filters.selectedWalletId === "all" || validWalletIds.has(current.filters.selectedWalletId) ? current.filters.selectedWalletId : "all",
+                selectedCategoryKey:
+                    current.filters.selectedCategoryKey === "all" || validCategoryKeys.has(current.filters.selectedCategoryKey) ? current.filters.selectedCategoryKey : "all",
+                selectedBeneficiary:
+                    current.filters.selectedBeneficiary === "all" || validBeneficiaries.has(current.filters.selectedBeneficiary) ? current.filters.selectedBeneficiary : "all",
+                selectedTagIds: current.filters.selectedTagIds.filter((tagId) => validTagIds.has(tagId)),
+            };
+
+            if (JSON.stringify(nextFilters) === JSON.stringify(current.filters)) {
+                return current;
+            }
+
+            return {
+                ...current,
+                filters: nextFilters,
+            };
+        });
+    }, [beneficiaryOptions, categoryOptions, setPagePreferences, tagOptions, wallets]);
 
     const hasAdvancedFilters = hasActiveAdvancedFilters(filters);
 
@@ -288,7 +430,10 @@ export function TransactionsPage() {
     };
 
     const handleTabChange = (tab: TransactionsTabKey) => {
-        setActiveTab(tab);
+        setPagePreferences((current) => ({
+            ...current,
+            activeTab: tab,
+        }));
         goToPage(tab);
     };
 

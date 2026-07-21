@@ -148,10 +148,22 @@ export function getProjectionNetClassName(amount: number): string {
     }
 
     if (amount < 0) {
-        return "text-orange-200";
+        return "text-red-200";
     }
 
     return "text-white/60";
+}
+
+export function getProjectionBgClassName(amount: number): string {
+        if (amount > 0) {
+        return "bg-emerald-400/10";
+    }
+
+    if (amount < 0) {
+        return "bg-red-400/10";
+    }
+
+    return "bg-white/10";
 }
 
 export function getNextTimelineMonthCount(currentCount: number): number {
@@ -200,6 +212,7 @@ function getMonthReality(params: {
                 income += transaction.value;
                 incomeItems.push({
                     id: `income-transaction:${transaction.id}`,
+                    transactionId: transaction.id,
                     label: transaction.category.label,
                     amount: roundToCents(transaction.value),
                     iconName: wallet?.icon ?? null,
@@ -217,6 +230,7 @@ function getMonthReality(params: {
             inheritedItems.push({
                 id: `transaction:${transaction.id}`,
                 source: "transaction",
+                transactionId: transaction.id,
                 label: transaction.category.label,
                 amount: roundToCents(transaction.value),
                 iconName: wallet?.icon ?? null,
@@ -242,6 +256,7 @@ function getMonthReality(params: {
         inheritedItems.push({
             id: `invoice:${invoice.id}`,
             source: "invoice",
+            invoiceId: invoice.id,
             label: `Fatura ${cardNameById.get(invoice.creditCardId) ?? "cartao"}`,
             amount: openAmount,
             iconName: null,

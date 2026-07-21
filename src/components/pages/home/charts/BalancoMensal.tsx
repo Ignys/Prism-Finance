@@ -111,7 +111,7 @@ export function BalancoMensal() {
                             <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-2">
                                     <div className="h-3 w-3 rounded bg-amber-400" />
-                                    <span className="font-medium text-neutral-200">Fatura do cartão</span>
+                                    <span className="font-medium text-neutral-200">Faturas</span>
                                 </div>
                                 <div className=" flex items-center gap-3 text-sm">
                                     <span className="text-neutral-400">{invoiceShareForDisplay.toFixed(1)}%</span>

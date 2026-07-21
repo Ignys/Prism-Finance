@@ -93,7 +93,16 @@ import {
 } from "./permanentDeletion";
 import { getDefaultCategoryIconName } from "../../lib/categoryIcons";
 import { saveLocalFinanceBackup } from "../../lib/financeBackup";
+import { readLocalPreferenceSection, writeLocalPreferenceSection } from "../../lib/localPreferences";
 import { parseAppDate } from "../../lib/localDate";
+import {
+    arePlanningLocalPreferencesEqual,
+    areSyncedPlanningFieldsEqual,
+    extractPlanningLocalPreferences,
+    mergePlanningLocalPreferences,
+    normalizePlanningLocalPreferences,
+    PLANNING_LOCAL_PREFERENCES_SECTION,
+} from "../../lib/planningLocalPreferences";
 import { buildUserProfileData, type UserProfileData } from "../../lib/userProfile";
 import { loadSupabaseFinanceData, saveSupabaseFinanceData, subscribeToFinanceRevisionChanges, type SupabaseFinanceData } from "../../supabase/finance";
 import { getFinanceClientId, publishFinanceRevisionToTabs, subscribeToFinanceRevisionMessages } from "./crossTabSync";
@@ -175,6 +184,25 @@ function prepareFinanceSnapshot(params: {
         snapshot,
         favoriteWalletId,
         changed: normalizedFinance.changed || recurringHydration.changed || syncedInvoices.changed || favoriteWalletId !== rawFavoriteWalletId,
+    };
+}
+
+function applyLocalPlanningPreferences(snapshot: FinanceSnapshot, userId: string | null | undefined): FinanceSnapshot {
+    const fallbackPreferences = extractPlanningLocalPreferences(snapshot.planning);
+    const localPreferences = readLocalPreferenceSection(
+        userId,
+        PLANNING_LOCAL_PREFERENCES_SECTION,
+        fallbackPreferences,
+        normalizePlanningLocalPreferences,
+    );
+
+    if (!localPreferences.exists) {
+        writeLocalPreferenceSection(userId, PLANNING_LOCAL_PREFERENCES_SECTION, fallbackPreferences);
+    }
+
+    return {
+        ...snapshot,
+        planning: mergePlanningLocalPreferences(snapshot.planning, localPreferences.value),
     };
 }
 
@@ -949,19 +977,23 @@ export function useFinanceStore(): FinanceStoreValue {
                 userId: user?.uid ?? "",
                 profile: params.profile,
             });
+            const localSnapshot = applyLocalPlanningPreferences(preparedFinance.snapshot, user?.uid);
             const acknowledgedData = toSupabaseFinanceData(preparedFinance.snapshot, preparedFinance.favoriteWalletId);
 
             currentRevisionRef.current = params.revision;
             lastAcknowledgedDataRef.current = acknowledgedData;
             favoriteWalletIdRef.current = preparedFinance.favoriteWalletId;
             setProfile(params.profile);
-            setSnapshotState(preparedFinance.snapshot);
+            setSnapshotState(localSnapshot);
             setFavoriteWalletId(preparedFinance.favoriteWalletId);
             setFamilyState(null, []);
-            saveLocalSnapshotBackup(preparedFinance.snapshot, params.trigger, preparedFinance.favoriteWalletId);
+            saveLocalSnapshotBackup(localSnapshot, params.trigger, preparedFinance.favoriteWalletId);
 
             return {
-                preparedFinance,
+                preparedFinance: {
+                    ...preparedFinance,
+                    snapshot: localSnapshot,
+                },
                 acknowledgedData,
             };
         },
@@ -1010,15 +1042,16 @@ export function useFinanceStore(): FinanceStoreValue {
                 userId: user?.uid ?? "",
                 profile: resolvedProfile,
             });
+            const localSnapshot = applyLocalPlanningPreferences(preparedFinance.snapshot, user?.uid);
 
             currentRevisionRef.current = revision;
             lastAcknowledgedDataRef.current = baseData;
             favoriteWalletIdRef.current = preparedFinance.favoriteWalletId;
             setProfile(resolvedProfile);
-            setSnapshotState(preparedFinance.snapshot);
+            setSnapshotState(localSnapshot);
             setFavoriteWalletId(preparedFinance.favoriteWalletId);
             setFamilyState(null, []);
-            saveLocalSnapshotBackup(preparedFinance.snapshot, "revision-conflict-merge", preparedFinance.favoriteWalletId);
+            saveLocalSnapshotBackup(localSnapshot, "revision-conflict-merge", preparedFinance.favoriteWalletId);
         },
         [saveLocalSnapshotBackup, setFamilyState, setSnapshotState, user],
     );
@@ -1110,6 +1143,7 @@ export function useFinanceStore(): FinanceStoreValue {
                     userId: user.uid,
                     profile,
                 });
+                const localSnapshot = applyLocalPlanningPreferences(preparedFinance.snapshot, user.uid);
 
                 if (!isActive) {
                     return;
@@ -1118,13 +1152,13 @@ export function useFinanceStore(): FinanceStoreValue {
                 currentRevisionRef.current = supabaseFinance.revision;
                 lastAcknowledgedDataRef.current = remoteAcknowledgedData;
                 favoriteWalletIdRef.current = preparedFinance.favoriteWalletId;
-                setSnapshotState(preparedFinance.snapshot);
+                setSnapshotState(localSnapshot);
                 setFavoriteWalletId(preparedFinance.favoriteWalletId);
                 setFamilyState(null, []);
-                saveLocalSnapshotBackup(preparedFinance.snapshot, "load-success", preparedFinance.favoriteWalletId);
+                saveLocalSnapshotBackup(localSnapshot, "load-success", preparedFinance.favoriteWalletId);
 
                 if (!pendingSyncFinance && (!supabaseFinance.data || preparedFinance.changed)) {
-                    enqueueFinanceSync(toSupabaseFinanceData(preparedFinance.snapshot, preparedFinance.favoriteWalletId), {
+                    enqueueFinanceSync(toSupabaseFinanceData(localSnapshot, preparedFinance.favoriteWalletId), {
                         baseRevision: supabaseFinance.revision,
                         baseData: remoteAcknowledgedData,
                     });
@@ -1214,6 +1248,34 @@ export function useFinanceStore(): FinanceStoreValue {
             void refreshFromConfirmedRevision(message.revision, "cross-tab-revision", message.updatedBy);
         });
     }, [refreshFromConfirmedRevision, user]);
+
+    useEffect(() => {
+        if (typeof window === "undefined") {
+            return;
+        }
+
+        const handleStorage = () => {
+            const localPreferences = readLocalPreferenceSection(
+                user?.uid,
+                PLANNING_LOCAL_PREFERENCES_SECTION,
+                extractPlanningLocalPreferences(planningRef.current),
+                normalizePlanningLocalPreferences,
+            );
+            if (!localPreferences.exists) {
+                return;
+            }
+
+            const nextPlanning = mergePlanningLocalPreferences(planningRef.current, localPreferences.value);
+            if (arePlanningLocalPreferencesEqual(planningRef.current, nextPlanning)) {
+                return;
+            }
+
+            setSnapshotState(buildSnapshot({ planning: nextPlanning }));
+        };
+
+        window.addEventListener("storage", handleStorage);
+        return () => window.removeEventListener("storage", handleStorage);
+    }, [buildSnapshot, setSnapshotState, user?.uid]);
 
     const persistFinanceFields = useCallback(
         async (fields: PersistFields) => {
@@ -1319,15 +1381,22 @@ export function useFinanceStore(): FinanceStoreValue {
 
     const updatePlanningState = useCallback(
         async (nextPlanning: PlanningState) => {
+            const previousPlanning = planningRef.current;
             const normalizedPlanning = normalizePlanningState(nextPlanning);
             const snapshot = buildSnapshot({ planning: normalizedPlanning });
             setSnapshotState(snapshot);
 
-            await persistFinanceFields({
-                planning: snapshot.planning,
-            });
+            if (!arePlanningLocalPreferencesEqual(previousPlanning, normalizedPlanning)) {
+                writeLocalPreferenceSection(user?.uid, PLANNING_LOCAL_PREFERENCES_SECTION, extractPlanningLocalPreferences(normalizedPlanning));
+            }
+
+            if (!areSyncedPlanningFieldsEqual(previousPlanning, normalizedPlanning)) {
+                await persistFinanceFields({
+                    planning: snapshot.planning,
+                });
+            }
         },
-        [buildSnapshot, persistFinanceFields, setSnapshotState],
+        [buildSnapshot, persistFinanceFields, setSnapshotState, user?.uid],
     );
 
     const setStartBalance = useCallback(

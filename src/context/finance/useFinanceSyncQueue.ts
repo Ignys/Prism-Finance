@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FinanceSnapshot } from "../financeTypes";
+import { toSupabasePlanningState } from "../../lib/planningLocalPreferences";
 import {
     isFinanceRevisionConflictError,
     type SaveSupabaseFinanceDataParams,
@@ -594,6 +595,7 @@ export function useFinanceSyncQueue({
 export function toSupabaseFinanceData(snapshot: FinanceSnapshot, favoriteWalletId: string | null): SupabaseFinanceData {
     return {
         ...snapshot,
+        planning: toSupabasePlanningState(snapshot.planning),
         favoriteWalletId,
     };
 }

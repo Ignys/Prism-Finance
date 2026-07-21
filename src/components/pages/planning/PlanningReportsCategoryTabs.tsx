@@ -16,7 +16,7 @@ const CATEGORY_VIEW_OPTIONS: Array<{ value: CategoryReportView; label: string; I
 export function PlanningReportsCategoryTabs({ activeView, layoutId, onChange }: PlanningReportsCategoryTabsProps) {
     return (
         <div className="inline-flex rounded-full border border-white/[0.12] bg-white/[0.035] p-0.5">
-            {CATEGORY_VIEW_OPTIONS.map(({ value, label, Icon }) => {
+            {CATEGORY_VIEW_OPTIONS.map(({ value, label }) => {
                 const isActive = activeView === value;
 
                 return (

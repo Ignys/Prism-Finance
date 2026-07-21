@@ -22,22 +22,19 @@ export function PlanningReportsTab({ period, transactions, allTransactions, cred
     );
 
     return (
-        <section className="flex min-h-0 flex-1 flex-col gap-3 text-left">
+        <section className="flex flex-1 flex-col gap-3 text-left">
             {summary.transactionCount === 0 ? (
                 <PlanningReportsEmptyState />
             ) : (
                 <>
                     <PlanningReportsMetricsSection summary={summary} />
-                    <div className="grid min-h-0 gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(340px,1fr)_minmax(340px,0.7fr)]">
+                    <div className="grid min-h-0 gap-3 grid-cols-[minmax(0,1fr)_minmax(340px,1fr)] desktop:grid-cols-[minmax(0,1fr)_minmax(340px,1fr)_minmax(340px,0.7fr)]">
                         <PlanningReportsCategoriesSection categoryReports={categoryReports} totalAmount={summary.spending} />
                        
                         <PlanningReportsCategoriesSection categoryReports={incomeCategoryReports} totalAmount={summary.income} kind="income" />
                         
                         <PlanningReportsFlowSection monthReports={monthReports} />
-                    </div>
-                    <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_360px]">
-                         <PlanningReportsRankingSection beneficiaryReports={beneficiaryReports} />
-                        
+                        <PlanningReportsRankingSection beneficiaryReports={beneficiaryReports} />
                     </div>
                 </>
             )}

@@ -11,39 +11,39 @@ export interface AppNavigationItem {
 
 export const APP_NAVIGATION_ITEMS: AppNavigationItem[] = [
     {
-        label: "Inicio",
+        label: "Início",
         page: "home",
-        icon: createElement(Home, { size: 18 }),
+        icon: createElement(Home, { size: 20 }),
         description: "Visão geral, alertas e atividades recentes.",
     },
     {
-        label: "Transacoes",
+        label: "Transações",
         page: "transactions",
-        icon: createElement(ArrowLeftRight, { size: 18 }),
+        icon: createElement(ArrowLeftRight, { size: 20 }),
         description: "Entradas, saídas e transferências.",
     },
     {
-        label: "Fatura",
+        label: "Faturas",
         page: "statement",
-        icon: createElement(FileText, { size: 18 }),
+        icon: createElement(FileText, { size: 20 }),
         description: "Controle de cartões e faturas abertas.",
     },
     {
-        label: "Analises",
+        label: "Análises",
         page: "planning",
-        icon: createElement(ChartNoAxesCombined, { size: 18 }),
+        icon: createElement(ChartNoAxesCombined, { size: 20 }),
         description: "Planejamento e simulações financeiras.",
     },
     {
-        label: "Wishlist",
+        label: "Lista de desejos",
         page: "wishlist",
-        icon: createElement(Gift, { size: 18 }),
+        icon: createElement(Gift, { size: 20 }),
         description: "Itens desejados e prioridades de compra.",
     },
     {
         label: "Cadastros",
         page: "registry",
-        icon: createElement(WalletCards, { size: 18 }),
+        icon: createElement(WalletCards, { size: 20 }),
         description: "Carteiras, categorias, beneficiários e tags.",
     },
 ];

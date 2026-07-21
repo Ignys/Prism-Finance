@@ -12,12 +12,16 @@ interface BuildPlanningProjectionContextActionsParams {
     itemType: PlanningProjectionContextItemType;
     isActive: boolean;
     canRemove?: boolean;
+    editLabel?: string;
+    canEdit?: boolean;
 }
 
 export function buildPlanningProjectionContextActions({
     itemType,
     isActive,
     canRemove = itemType !== "wishlist",
+    editLabel = "Editar",
+    canEdit = true,
 }: BuildPlanningProjectionContextActionsParams): PlanningProjectionContextAction[] {
     const actions: PlanningProjectionContextAction[] = [
         {
@@ -25,12 +29,15 @@ export function buildPlanningProjectionContextActions({
             itemType,
             label: isActive ? "Desativar" : "Ativar",
         },
-        {
+    ];
+
+    if (canEdit) {
+        actions.push({
             id: "edit",
             itemType,
-            label: "Editar",
-        },
-    ];
+            label: editLabel,
+        });
+    }
 
     if (canRemove) {
         actions.push({

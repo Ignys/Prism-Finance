@@ -14,6 +14,7 @@ import {
     useFinanceWallets,
     useFinanceWishItems,
 } from "../../context/FinanceContext";
+import { getMonthKeyFromDateValue } from "../../context/financeTypes";
 import { useModal } from "../../context/ModalContext";
 import { usePage } from "../../context/PageContext";
 import { AddWishItem } from "../modal/AddWishItem";
@@ -35,10 +36,6 @@ import {
     getScopedWallets,
     resolveSelectedIds,
 } from "./planning/planningWalletScope";
-
-function areStringArraysEqual(left: string[], right: string[]): boolean {
-    return left.length === right.length && left.every((value, index) => value === right[index]);
-}
 
 function isValidPlanningMonthKey(monthKey: string): boolean {
     return /^\d{4}-(0[1-9]|1[0-2])$/.test(monthKey);
@@ -118,35 +115,6 @@ export function PlanningPage() {
             setActivePlanningTab("timeline");
         }
     }, [currentMonthKey, requestedMonthKey, requestedPanel]);
-
-    useEffect(() => {
-        const nextTimelineWalletIds = timelineSelectedWalletIds;
-        const nextReportsWalletIds = reportsSelectedWalletIds;
-        const nextReportsCreditCardIds = reportsSelectedCreditCardIds;
-        const shouldPersistTimelineWallets = !areStringArraysEqual(planning.timelineSelectedWalletIds ?? [], nextTimelineWalletIds);
-        const shouldPersistReportsWallets = !areStringArraysEqual(planning.reportsSelectedWalletIds ?? [], nextReportsWalletIds);
-        const shouldPersistReportsCreditCards = !areStringArraysEqual(planning.reportsSelectedCreditCardIds ?? [], nextReportsCreditCardIds);
-
-        if (!shouldPersistTimelineWallets && !shouldPersistReportsWallets && !shouldPersistReportsCreditCards) {
-            return;
-        }
-
-        void updatePlanningState(
-            mergePlanningUpdate(planning, {
-                timelineSelectedWalletIds: nextTimelineWalletIds,
-                reportsSelectedWalletIds: nextReportsWalletIds,
-                reportsSelectedCreditCardIds: nextReportsCreditCardIds,
-            }),
-        );
-    }, [
-        planning.reportsSelectedCreditCardIds,
-        planning.reportsSelectedWalletIds,
-        planning.timelineSelectedWalletIds,
-        reportsSelectedCreditCardIds,
-        reportsSelectedWalletIds,
-        timelineSelectedWalletIds,
-        updatePlanningState,
-    ]);
 
     const projection = useMemo(
         () =>
@@ -475,6 +443,20 @@ export function PlanningPage() {
         }, 0);
     };
 
+    const openTransactionOnTransactionsPage = (transactionId: string) => {
+        const transaction = transactions.find((item) => item.id === transactionId);
+        if (!transaction || transaction.type === "transfer") {
+            return;
+        }
+
+        goToPage("transactions", {
+            page: "transactions",
+            tab: transaction.type === "income" ? "income" : "spending",
+            selectedMonth: getMonthKeyFromDateValue(transaction.date),
+            targetTransactionId: transaction.id,
+        });
+    };
+
     const handleSelectPanel = (monthKey: string, panel: PlanningPanel) => {
         setSelectedMonthKey(monthKey);
         setSelectedPanel(panel);
@@ -574,7 +556,7 @@ export function PlanningPage() {
                 {isReportsTab ? (
                     <PlanningReportsTab period={reportPeriod} transactions={reportScopedTransactions} allTransactions={transactions} creditCardInvoices={creditCardInvoices} />
                 ) : (
-                    <div className="flex max-h-190 flex-1 flex-col gap-2 xl:flex-row">
+                    <div className="flex max-h-[calc(100vh-11rem)] flex-1 flex-col gap-2 xl:flex-row">
                         <PlanningTimelinePanel
                             months={projection.months}
                             selectedMonthKey={selectedMonth?.monthKey ?? null}
@@ -596,6 +578,7 @@ export function PlanningPage() {
                             onEditExpense={openExpenseEditModal}
                             onEditIncome={openIncomeEditModal}
                             onEditWishlistItem={openWishlistItemOnWishlistPage}
+                            onOpenTransaction={openTransactionOnTransactionsPage}
                             onToggleExpense={handleToggleSimulatedExpense}
                             onToggleIncome={handleToggleIncome}
                             onToggleSimulatedIncome={handleToggleSimulatedIncome}

@@ -1,4 +1,3 @@
-import type { LucideIcon } from "lucide-react";
 import { getCategoryIconComponent } from "../../../lib/categoryIcons";
 import { formatReportCurrency } from "./planningReportFormatting";
 import type { CategorySectionKind } from "./planningReportsCategoryTypes";

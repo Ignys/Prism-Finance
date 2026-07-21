@@ -55,12 +55,12 @@ function FullPageSkeletonScreen({ page }: PageSkeletonScreenProps) {
 
 function SkeletonSidebar() {
     return (
-        <aside className="hidden w-[240px] shrink-0 bg-zinc-950/70 p-2 lg:block">
-            <div className="sticky top-4 flex h-[calc(100vh-2rem)] flex-col justify-between">
+        <aside className="hidden shrink-0 laptop:block laptop:w-[72px] desktop:w-[240px]">
+            <div className="fixed inset-y-0 left-0 flex h-dvh flex-col justify-between bg-zinc-950/70 p-2 laptop:w-[72px] desktop:w-[240px]">
                 <div>
-                    <div className="flex items-center gap-2 px-2.5 pb-2 pt-3">
+                    <div className="flex items-center justify-center gap-2 px-2.5 pb-2 pt-3 desktop:justify-start">
                         <SkeletonBlock className="h-7 w-7 rounded-md" />
-                        <SkeletonLine className="w-20" />
+                        <SkeletonLine className="hidden w-20 desktop:block" />
                     </div>
                     <div className="my-2 h-px bg-zinc-500/20" />
                     <div className="space-y-1">
@@ -69,7 +69,7 @@ function SkeletonSidebar() {
                         ))}
                     </div>
                 </div>
-                <SkeletonBlock className="h-16 rounded-2xl" />
+                <SkeletonBlock className="mx-auto h-3 w-3 rounded-full desktop:h-16 desktop:w-full desktop:rounded-2xl" />
             </div>
         </aside>
     );
@@ -81,7 +81,7 @@ function SkeletonHeader() {
             <div className="rounded-[18px] border border-white/[0.08] bg-zinc-950/70 px-3 py-2">
                 <div className="flex items-center justify-between gap-3">
                     <div className="flex min-w-0 flex-1 items-center gap-2">
-                        <SkeletonBlock className="h-10 w-10 rounded-[10px] lg:hidden" />
+                        <SkeletonBlock className="h-10 w-10 rounded-[10px] laptop:hidden" />
                         <div className="flex min-w-0 items-center gap-2 overflow-hidden">
                             {Array.from({ length: 4 }, (_, index) => (
                                 <div key={index} className="min-w-[132px] space-y-2 px-2 py-1.5">

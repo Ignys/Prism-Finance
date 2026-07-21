@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState, type MouseEvent, type ReactNode } from "react";
 import { ArrowDown, ArrowUp, Circle, CreditCard as CreditCardIcon, Plus, Repeat2, Search } from "lucide-react";
-import { type Beneficiary, type CreditCard, type CreditCardInvoice, type Transaction, useFinanceBeneficiaries, useFinanceTransactionGroups } from "../../../context/FinanceContext";
+import { type Beneficiary, type CreditCard, type CreditCardInvoice, type Transaction, useFinanceBeneficiaries, useFinanceSession, useFinanceTransactionGroups } from "../../../context/FinanceContext";
 import { useModal } from "../../../context/ModalContext";
 import { normalizeComparisonText } from "../../../context/finance/helpers";
 import { getCategoryIconComponent } from "../../../lib/categoryIcons";
+import { useLocalPreferenceSection } from "../../../lib/localPreferences";
 import { getTransactionCategoryDisplayLabel } from "../../../lib/transactionCategory";
 import { BeneficiaryAvatar } from "../../common/BeneficiaryAvatar";
 import { TableColumnToggleButton } from "../../common/TableColumnToggleButton";
@@ -43,6 +44,59 @@ type StatementSortDirection = "asc" | "desc";
 type StatementSortMode = `${StatementSortField}-${StatementSortDirection}`;
 type ConsolidatedHeaderStatus = StatementInvoiceVisualStatus | "mixed" | "none";
 type StatementTransactionVisualStatus = StatementInvoiceVisualStatus | "skipped";
+
+interface StatementTableViewPreferences {
+    sortMode: StatementSortMode;
+    searchQuery: string;
+    showStatus: boolean;
+    showDate: boolean;
+    showDescription: boolean;
+    showCategory: boolean;
+    showTags: boolean;
+    showBeneficiary: boolean;
+    showValue: boolean;
+}
+
+const STATEMENT_TABLE_VIEW_PREFERENCES_SECTION = "statement.table-view";
+const DEFAULT_STATEMENT_TABLE_VIEW_PREFERENCES: StatementTableViewPreferences = {
+    sortMode: "date-desc",
+    searchQuery: "",
+    showStatus: true,
+    showDate: true,
+    showDescription: true,
+    showCategory: true,
+    showTags: true,
+    showBeneficiary: true,
+    showValue: true,
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function normalizeStatementSortMode(value: unknown): StatementSortMode {
+    return typeof value === "string" && /^(status|date|description|category|beneficiary|value)-(asc|desc)$/.test(value)
+        ? (value as StatementSortMode)
+        : DEFAULT_STATEMENT_TABLE_VIEW_PREFERENCES.sortMode;
+}
+
+function normalizeStatementTableViewPreferences(value: unknown): StatementTableViewPreferences {
+    if (!isRecord(value)) {
+        return DEFAULT_STATEMENT_TABLE_VIEW_PREFERENCES;
+    }
+
+    return {
+        sortMode: normalizeStatementSortMode(value.sortMode),
+        searchQuery: typeof value.searchQuery === "string" ? value.searchQuery : DEFAULT_STATEMENT_TABLE_VIEW_PREFERENCES.searchQuery,
+        showStatus: typeof value.showStatus === "boolean" ? value.showStatus : DEFAULT_STATEMENT_TABLE_VIEW_PREFERENCES.showStatus,
+        showDate: typeof value.showDate === "boolean" ? value.showDate : DEFAULT_STATEMENT_TABLE_VIEW_PREFERENCES.showDate,
+        showDescription: typeof value.showDescription === "boolean" ? value.showDescription : DEFAULT_STATEMENT_TABLE_VIEW_PREFERENCES.showDescription,
+        showCategory: typeof value.showCategory === "boolean" ? value.showCategory : DEFAULT_STATEMENT_TABLE_VIEW_PREFERENCES.showCategory,
+        showTags: typeof value.showTags === "boolean" ? value.showTags : DEFAULT_STATEMENT_TABLE_VIEW_PREFERENCES.showTags,
+        showBeneficiary: typeof value.showBeneficiary === "boolean" ? value.showBeneficiary : DEFAULT_STATEMENT_TABLE_VIEW_PREFERENCES.showBeneficiary,
+        showValue: typeof value.showValue === "boolean" ? value.showValue : DEFAULT_STATEMENT_TABLE_VIEW_PREFERENCES.showValue,
+    };
+}
 
 interface SortableHeaderProps {
     label: string;
@@ -218,19 +272,39 @@ export function StatementContentPanel({
 }: StatementContentPanelProps) {
     const beneficiaries = useFinanceBeneficiaries();
     const transactionGroups = useFinanceTransactionGroups();
+    const { user } = useFinanceSession();
     const { openModal } = useModal();
     const sortedInvoices = [...invoices].sort(compareInvoicesByDueDate);
-    const [sortMode, setSortMode] = useState<StatementSortMode>("date-desc");
-    const [searchQuery, setSearchQuery] = useState("");
+    const [viewPreferences, setViewPreferences] = useLocalPreferenceSection(
+        user?.uid,
+        STATEMENT_TABLE_VIEW_PREFERENCES_SECTION,
+        DEFAULT_STATEMENT_TABLE_VIEW_PREFERENCES,
+        normalizeStatementTableViewPreferences,
+    );
     const [contextMenu, setContextMenu] = useState<TransactionContextMenuState | null>(null);
     const [selectionMode, setSelectionMode] = useState(false);
-    const [showStatus, setShowStatus] = useState(true);
-    const [showDate, setShowDate] = useState(true);
-    const [showDescription, setShowDescription] = useState(true);
-    const [showCategory, setShowCategory] = useState(true);
-    const [showTags, setShowTags] = useState(true);
-    const [showBeneficiary, setShowBeneficiary] = useState(true);
-    const [showValue, setShowValue] = useState(true);
+    const { sortMode, searchQuery, showStatus, showDate, showDescription, showCategory, showTags, showBeneficiary, showValue } = viewPreferences;
+
+    const setSortMode = (nextSortMode: StatementSortMode) => {
+        setViewPreferences((current) => ({
+            ...current,
+            sortMode: nextSortMode,
+        }));
+    };
+
+    const setSearchQuery = (nextSearchQuery: string) => {
+        setViewPreferences((current) => ({
+            ...current,
+            searchQuery: nextSearchQuery,
+        }));
+    };
+
+    const toggleViewPreference = (key: keyof Omit<StatementTableViewPreferences, "sortMode" | "searchQuery">) => {
+        setViewPreferences((current) => ({
+            ...current,
+            [key]: !current[key],
+        }));
+    };
 
     const beneficiariesById = useMemo(() => {
         const map = new Map<string, Beneficiary>();
@@ -549,13 +623,13 @@ export function StatementContentPanel({
                     </div>
                     <div className="flex flex-wrap items-center justify-end gap-2">
                         <div className="hidden flex-wrap items-center gap-1 sm:flex">
-                            <TableColumnToggleButton label="STATUS" active={showStatus} onClick={() => setShowStatus(!showStatus)} />
-                            <TableColumnToggleButton label="DATA" active={showDate} onClick={() => setShowDate(!showDate)} />
-                            <TableColumnToggleButton label="DESCRICAO" active={showDescription} onClick={() => setShowDescription(!showDescription)} />
-                            <TableColumnToggleButton label="CATEGORIA" active={showCategory} onClick={() => setShowCategory(!showCategory)} />
-                            <TableColumnToggleButton label="TAGS" active={showTags} onClick={() => setShowTags(!showTags)} />
-                            <TableColumnToggleButton label="BENEFICIARIO" active={showBeneficiary} onClick={() => setShowBeneficiary(!showBeneficiary)} />
-                            <TableColumnToggleButton label="VALOR" active={showValue} onClick={() => setShowValue(!showValue)} />
+                            <TableColumnToggleButton label="STATUS" active={showStatus} onClick={() => toggleViewPreference("showStatus")} />
+                            <TableColumnToggleButton label="DATA" active={showDate} onClick={() => toggleViewPreference("showDate")} />
+                            <TableColumnToggleButton label="DESCRICAO" active={showDescription} onClick={() => toggleViewPreference("showDescription")} />
+                            <TableColumnToggleButton label="CATEGORIA" active={showCategory} onClick={() => toggleViewPreference("showCategory")} />
+                            <TableColumnToggleButton label="TAGS" active={showTags} onClick={() => toggleViewPreference("showTags")} />
+                            <TableColumnToggleButton label="BENEFICIARIO" active={showBeneficiary} onClick={() => toggleViewPreference("showBeneficiary")} />
+                            <TableColumnToggleButton label="VALOR" active={showValue} onClick={() => toggleViewPreference("showValue")} />
                         </div>
                     </div>
                 </div>

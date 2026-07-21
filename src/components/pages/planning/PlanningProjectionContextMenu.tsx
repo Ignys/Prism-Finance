@@ -40,7 +40,7 @@ function resolveActionIcon(action: PlanningProjectionContextAction): typeof Penc
         return SquareSlash;
     }
 
-    if (action.id === "edit" && action.itemType === "wishlist") {
+    if (action.id === "edit" && (action.itemType === "wishlist" || action.label.startsWith("Abrir "))) {
         return SquareArrowOutUpRight;
     }
 

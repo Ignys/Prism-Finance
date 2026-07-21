@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { type CreditCard, type CreditCardInvoice, useFinanceFavoriteCreditCard, useFinanceCreditCardInvoices, useFinanceCreditCards, useFinanceActions, useFinanceSession, useFinanceTransactions } from "../../context/FinanceContext";
 import {
     buildCreditCardInvoiceId,
@@ -8,6 +8,7 @@ import {
 } from "../../context/financeTypes";
 import { useModal } from "../../context/ModalContext";
 import { usePage } from "../../context/PageContext";
+import { useLocalPreferenceSection } from "../../lib/localPreferences";
 import { getLocalTodayDate } from "../../lib/localDate";
 import { AddCardSpending } from "../modal/AddCardSpending";
 import { ConfirmActionModal } from "../modal/ConfirmActionModal";
@@ -24,17 +25,37 @@ import {
 } from "./statement/statementPageShared";
 import { StatementSummaryCards } from "./statement/StatementSummaryCards";
 
+const STATEMENT_PAGE_PREFERENCES_SECTION = "statement";
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function normalizeStatementFilterState(value: unknown): StatementFilterState {
+    if (!isRecord(value)) {
+        return INITIAL_STATEMENT_FILTER_STATE;
+    }
+
+    const selectedMonth = typeof value.selectedMonth === "string" && /^\d{4}-(0[1-9]|1[0-2])$/.test(value.selectedMonth) ? value.selectedMonth : INITIAL_STATEMENT_FILTER_STATE.selectedMonth;
+    const selectedCardId = typeof value.selectedCardId === "string" ? value.selectedCardId : INITIAL_STATEMENT_FILTER_STATE.selectedCardId;
+
+    return {
+        selectedMonth,
+        selectedCardId,
+    };
+}
+
 export function StatementPage() {
     const transactions = useFinanceTransactions();
     const creditCards = useFinanceCreditCards();
     const creditCardInvoices = useFinanceCreditCardInvoices();
     const favoriteCreditCardId = useFinanceFavoriteCreditCard();
-    const { loading: sessionLoading } = useFinanceSession();
+    const { loading: sessionLoading, user } = useFinanceSession();
     const { setCreditCardInvoicesPaidState } = useFinanceActions();
     const { openModal } = useModal();
     const handleTransactionContextAction = useTransactionContextActionHandler();
     const { consumePendingNavigation } = usePage();
-    const [filters, setFilters] = useState<StatementFilterState>(INITIAL_STATEMENT_FILTER_STATE);
+    const [filters, setFilters] = useLocalPreferenceSection(user?.uid, STATEMENT_PAGE_PREFERENCES_SECTION, INITIAL_STATEMENT_FILTER_STATE, normalizeStatementFilterState);
     const hasResolvedEntryFiltersRef = useRef(false);
 
     useEffect(() => {
@@ -67,8 +88,30 @@ export function StatementPage() {
             fallbackMonth: INITIAL_STATEMENT_FILTER_STATE.selectedMonth,
         });
 
-        setFilters(defaultFilters);
-    }, [consumePendingNavigation, creditCardInvoices, creditCards, favoriteCreditCardId, sessionLoading]);
+        setFilters((current) => {
+            const hasValidStoredCard = current.selectedCardId && creditCards.some((card) => card.id === current.selectedCardId);
+            return hasValidStoredCard ? current : defaultFilters;
+        });
+    }, [consumePendingNavigation, creditCardInvoices, creditCards, favoriteCreditCardId, sessionLoading, setFilters]);
+
+    useEffect(() => {
+        if (!hasResolvedEntryFiltersRef.current || sessionLoading) {
+            return;
+        }
+
+        setFilters((current) => {
+            if (!current.selectedCardId || creditCards.some((card) => card.id === current.selectedCardId)) {
+                return current;
+            }
+
+            return resolveDefaultStatementFilters({
+                creditCards,
+                creditCardInvoices,
+                favoriteCreditCardId,
+                fallbackMonth: current.selectedMonth,
+            });
+        });
+    }, [creditCardInvoices, creditCards, favoriteCreditCardId, sessionLoading, setFilters]);
 
     const { selectedMonth: selectedDueMonth, selectedCardId } = filters;
 

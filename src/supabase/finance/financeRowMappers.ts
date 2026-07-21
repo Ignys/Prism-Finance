@@ -21,6 +21,7 @@ import type {
     WishItem,
     WishItemPriority,
 } from "../../context/financeTypes";
+import { toSyncedPlanningPayload } from "../../lib/planningLocalPreferences";
 import type {
     BeneficiaryRow,
     CategoryRow,
@@ -55,7 +56,7 @@ export function toPreferenceRow(params: {
         user_id: params.userId,
         favorite_wallet_id: params.favoriteWalletId,
         favorite_credit_card_id: params.favoriteCreditCardId,
-        planning: params.planning,
+        planning: toSyncedPlanningPayload(params.planning),
         updated_at: new Date().toISOString(),
     };
 }

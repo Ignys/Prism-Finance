@@ -22,7 +22,7 @@ interface PlanningToggleRowProps {
     onToggle: (itemId: string) => void;
     toggleId: string;
     customIcon?: LucideIcon;
-    onContextMenu?: (event: MouseEvent<HTMLButtonElement>) => void;
+    onContextMenu?: (event: MouseEvent) => void;
 }
 
 export function PlanningToggleRow({ active, amount, label, iconTone, iconName, iconColor, iconAlt = "Carteira", onToggle, toggleId, customIcon, onContextMenu }: PlanningToggleRowProps) {

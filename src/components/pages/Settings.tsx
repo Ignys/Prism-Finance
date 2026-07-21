@@ -1,6 +1,8 @@
 import { ChevronRight, Database, UserRound, Users } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
+import { useFinanceSession } from "../../context/FinanceContext";
 import { usePage } from "../../context/PageContext";
+import { useLocalPreferenceSection } from "../../lib/localPreferences";
 import { signOutSupabase } from "../../supabase/auth/authService";
 import { AccountSettingsTab } from "./settings/AccountSettingsTab";
 import { DataSettingsTab } from "./settings/DataSettingsTab";
@@ -8,12 +10,46 @@ import { FamilySettingsTab } from "./settings/FamilySettingsTab";
 import { SettingsSidebarButton } from "./settings/SettingsSidebarButton";
 import type { SettingsTab, SettingsTabId } from "./settings/types";
 
+interface SettingsPagePreferences {
+    activeTab: SettingsTabId;
+    emailAlertsEnabled: boolean;
+    monthlySummaryEnabled: boolean;
+    focusModeEnabled: boolean;
+}
+
+const SETTINGS_PAGE_PREFERENCES_SECTION = "settings";
+const DEFAULT_SETTINGS_PAGE_PREFERENCES: SettingsPagePreferences = {
+    activeTab: "account",
+    emailAlertsEnabled: true,
+    monthlySummaryEnabled: true,
+    focusModeEnabled: false,
+};
+const VALID_SETTINGS_TABS = new Set<SettingsTabId>(["account", "family", "data"]);
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function normalizeSettingsPagePreferences(value: unknown): SettingsPagePreferences {
+    if (!isRecord(value)) {
+        return DEFAULT_SETTINGS_PAGE_PREFERENCES;
+    }
+
+    const activeTab = typeof value.activeTab === "string" ? value.activeTab : DEFAULT_SETTINGS_PAGE_PREFERENCES.activeTab;
+
+    return {
+        activeTab: VALID_SETTINGS_TABS.has(activeTab as SettingsTabId) ? (activeTab as SettingsTabId) : DEFAULT_SETTINGS_PAGE_PREFERENCES.activeTab,
+        emailAlertsEnabled: typeof value.emailAlertsEnabled === "boolean" ? value.emailAlertsEnabled : DEFAULT_SETTINGS_PAGE_PREFERENCES.emailAlertsEnabled,
+        monthlySummaryEnabled: typeof value.monthlySummaryEnabled === "boolean" ? value.monthlySummaryEnabled : DEFAULT_SETTINGS_PAGE_PREFERENCES.monthlySummaryEnabled,
+        focusModeEnabled: typeof value.focusModeEnabled === "boolean" ? value.focusModeEnabled : DEFAULT_SETTINGS_PAGE_PREFERENCES.focusModeEnabled,
+    };
+}
+
 export function SettingsPage() {
+    const { user } = useFinanceSession();
     const { goToPage } = usePage();
-    const [activeTab, setActiveTab] = useState<SettingsTabId>("account");
-    const [emailAlertsEnabled, setEmailAlertsEnabled] = useState(true);
-    const [monthlySummaryEnabled, setMonthlySummaryEnabled] = useState(true);
-    const [focusModeEnabled, setFocusModeEnabled] = useState(false);
+    const [preferences, setPreferences] = useLocalPreferenceSection(user?.uid, SETTINGS_PAGE_PREFERENCES_SECTION, DEFAULT_SETTINGS_PAGE_PREFERENCES, normalizeSettingsPagePreferences);
+    const { activeTab, emailAlertsEnabled, monthlySummaryEnabled, focusModeEnabled } = preferences;
 
     const tabs = useMemo<SettingsTab[]>(
         () => [
@@ -75,7 +111,7 @@ export function SettingsPage() {
                                     active={activeTab === tab.id}
                                     icon={tab.icon}
                                     label={tab.label}
-                                    onClick={() => setActiveTab(tab.id)}
+                                    onClick={() => setPreferences((current) => ({ ...current, activeTab: tab.id }))}
                                 />
                             ))}
                         </nav>
@@ -87,9 +123,9 @@ export function SettingsPage() {
                                 emailAlertsEnabled={emailAlertsEnabled}
                                 focusModeEnabled={focusModeEnabled}
                                 monthlySummaryEnabled={monthlySummaryEnabled}
-                                onEmailAlertsChange={setEmailAlertsEnabled}
-                                onFocusModeChange={setFocusModeEnabled}
-                                onMonthlySummaryChange={setMonthlySummaryEnabled}
+                                onEmailAlertsChange={(enabled) => setPreferences((current) => ({ ...current, emailAlertsEnabled: enabled }))}
+                                onFocusModeChange={(enabled) => setPreferences((current) => ({ ...current, focusModeEnabled: enabled }))}
+                                onMonthlySummaryChange={(enabled) => setPreferences((current) => ({ ...current, monthlySummaryEnabled: enabled }))}
                                 onOpenRegistry={() => goToPage("registry")}
                                 onOpenTransactions={() => goToPage("transactions")}
                                 onOpenWishlist={() => goToPage("wishlist")}

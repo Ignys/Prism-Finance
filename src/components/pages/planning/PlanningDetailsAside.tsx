@@ -1,7 +1,7 @@
 import { ArrowDownRight, ArrowUpRight, Columns3Cog, CreditCard as CreditCardIcon, Gift, Plus } from "lucide-react";
 import { useEffect, useMemo, useState, type MouseEvent } from "react";
 import type { PlanningWishlistSelection, WishItem } from "../../../context/FinanceContext";
-import type { MonthProjection, PlanningPanel, SimulatedExpenseItem, SimulatedIncomeItem } from "./planningTimelineTypes";
+import type { IncomeItem, InheritedExpenseItem, MonthProjection, PlanningPanel, SimulatedExpenseItem, SimulatedIncomeItem } from "./planningTimelineTypes";
 import { getAmountClassName } from "./planningTimelineUtils";
 import { PlanningDetailsSection } from "./PlanningDetailsSection";
 import { PlanningListRow } from "./PlanningListRow";
@@ -21,6 +21,7 @@ interface PlanningDetailsAsideProps {
     onEditExpense: (expense: SimulatedExpenseItem) => void;
     onEditIncome: (income: SimulatedIncomeItem) => void;
     onEditWishlistItem: (wishItemId: string) => void;
+    onOpenTransaction: (transactionId: string) => void;
     onToggleExpense: (expenseId: string) => void;
     onToggleIncome: (incomeId: string) => void;
     onToggleSimulatedIncome: (income: SimulatedIncomeItem) => void;
@@ -31,10 +32,22 @@ interface PlanningDetailsAsideProps {
 type PlanningProjectionContextTarget =
     | {
           itemType: "income";
+          variant: "normal";
+          item: IncomeItem;
+      }
+    | {
+          itemType: "income";
+          variant: "projected";
           item: SimulatedIncomeItem;
       }
     | {
           itemType: "expense";
+          variant: "normal";
+          item: InheritedExpenseItem;
+      }
+    | {
+          itemType: "expense";
+          variant: "projected";
           item: SimulatedExpenseItem;
       }
     | {
@@ -71,6 +84,7 @@ export function PlanningDetailsAside({
     onEditExpense,
     onEditIncome,
     onEditWishlistItem,
+    onOpenTransaction,
     onToggleExpense,
     onToggleIncome,
     onToggleSimulatedIncome,
@@ -85,16 +99,16 @@ export function PlanningDetailsAside({
         }
 
         const target = contextMenuState.target;
-        const isActive =
-            target.itemType === "income"
-                ? !target.item.isDisabled
-                : target.itemType === "expense"
-                  ? !target.item.isDisabled
-                  : target.isActive;
+        const isActive = target.itemType === "wishlist" ? target.isActive : !target.item.isDisabled;
+        const isNormalItem = target.itemType !== "wishlist" && target.variant === "normal";
+        const isNormalExpenseInvoice = isNormalItem && target.itemType === "expense" && target.item.source === "invoice";
 
         return buildPlanningProjectionContextActions({
             itemType: target.itemType,
             isActive,
+            canEdit: !isNormalExpenseInvoice,
+            canRemove: !isNormalItem && target.itemType !== "wishlist",
+            editLabel: isNormalItem ? (target.itemType === "income" ? "Abrir receita" : "Abrir despesa") : undefined,
         });
     }, [contextMenuState]);
 
@@ -122,14 +136,24 @@ export function PlanningDetailsAside({
 
         if (target.itemType === "income") {
             if (action.id === "toggle") {
+                if (target.variant === "normal") {
+                    onToggleIncome(target.item.id);
+                    return;
+                }
+
                 onToggleSimulatedIncome(target.item);
                 return;
             }
             if (action.id === "edit") {
+                if (target.variant === "normal") {
+                    onOpenTransaction(target.item.transactionId);
+                    return;
+                }
+
                 onEditIncome(target.item);
                 return;
             }
-            if (action.id === "remove") {
+            if (target.variant === "projected" && action.id === "remove") {
                 onDeleteIncome(target.item);
             }
             return;
@@ -137,14 +161,26 @@ export function PlanningDetailsAside({
 
         if (target.itemType === "expense") {
             if (action.id === "toggle") {
+                if (target.variant === "normal") {
+                    onToggleInheritedExpense(target.item.id);
+                    return;
+                }
+
                 onToggleExpense(target.item.id);
                 return;
             }
             if (action.id === "edit") {
+                if (target.variant === "normal") {
+                    if (target.item.transactionId) {
+                        onOpenTransaction(target.item.transactionId);
+                    }
+                    return;
+                }
+
                 onEditExpense(target.item);
                 return;
             }
-            if (action.id === "remove") {
+            if (target.variant === "projected" && action.id === "remove") {
                 onDeleteExpense(target.item.id);
             }
             return;
@@ -181,6 +217,13 @@ export function PlanningDetailsAside({
                             iconTone="income"
                             active={!item.isDisabled}
                             onToggle={onToggleIncome}
+                            onContextMenu={(event) =>
+                                handleProjectionContextMenu(event, {
+                                    itemType: "income",
+                                    variant: "normal",
+                                    item,
+                                })
+                            }
                         />
                     ))}
                 </>
@@ -204,6 +247,13 @@ export function PlanningDetailsAside({
                             active={!item.isDisabled}
                             onToggle={onToggleInheritedExpense}
                             customIcon={item.source === "invoice" ? CreditCardIcon : undefined}
+                            onContextMenu={(event) =>
+                                handleProjectionContextMenu(event, {
+                                    itemType: "expense",
+                                    variant: "normal",
+                                    item,
+                                })
+                            }
                         />
                     ))}
                 </>
@@ -231,11 +281,13 @@ export function PlanningDetailsAside({
                                 iconTone="income"
                                 customIcon={ArrowUpRight}
                                 valueClassName={getAmountClassName("income", item.amount)}
+                                onClick={item.source === "simulated_income" ? () => onToggleSimulatedIncome(item) : undefined}
                                 onContextMenu={
                                     item.source === "simulated_income"
                                         ? (event) =>
                                               handleProjectionContextMenu(event, {
                                                   itemType: "income",
+                                                  variant: "projected",
                                                   item,
                                               })
                                         : undefined
@@ -257,9 +309,11 @@ export function PlanningDetailsAside({
                                 iconTone="expense"
                                 customIcon={ArrowDownRight}
                                 valueClassName={getAmountClassName("simulation", expense.amount)}
+                                onClick={() => onToggleExpense(expense.id)}
                                 onContextMenu={(event) =>
                                     handleProjectionContextMenu(event, {
                                         itemType: "expense",
+                                        variant: "projected",
                                         item: expense,
                                     })
                                 }
@@ -301,7 +355,7 @@ export function PlanningDetailsAside({
 
     return (
         <>
-            <aside className="flex max-h-[calc(100vh-2rem)] w-full shrink-0 flex-col overflow-hidden rounded-lg border border-white/[0.08] bg-[#111111] p-3 text-left shadow-[0_24px_60px_-36px_rgba(0,0,0,0.9)] xl:sticky xl:top-4 xl:max-w-[360px]">
+            <aside className="flex max-h-[calc(100vh-2rem)] w-full shrink-0 flex-col overflow-hidden rounded-lg border border-white/[0.08] bg-[#111111] p-3 text-left xl:sticky xl:top-4 xl:max-w-[360px]">
             <div className="shrink-0">
                 <div className="flex items-center justify-between">
                     <div className="flex gap-2 items-center">

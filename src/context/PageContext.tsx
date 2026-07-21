@@ -22,6 +22,8 @@ export type PageNavigationIntent =
     | {
           page: "transactions";
           tab: TransactionsIntentTab;
+          selectedMonth?: string;
+          targetTransactionId?: string;
       }
     | {
           page: "statement";

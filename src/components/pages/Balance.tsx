@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { motion } from "framer-motion";
 import { Eye, EyeOff, Pencil, Plus, Star } from "lucide-react";
 import {
@@ -7,10 +7,12 @@ import {
     useFinanceCreditCards,
     useFinanceFavoriteCreditCard,
     useFinanceFavoriteWallet,
+    useFinanceSession,
     useFinanceSummary,
     useFinanceWallets,
 } from "../../context/FinanceContext";
 import { useModal } from "../../context/ModalContext";
+import { useLocalPreferenceSection } from "../../lib/localPreferences";
 import { WalletAvatar } from "../common/WalletAvatar";
 import { AuthShell } from "../layout/AuthShell";
 import { BalanceModal } from "../modal/BalanceModal";
@@ -22,7 +24,34 @@ const currencyFormatter = new Intl.NumberFormat("pt-BR", {
     minimumFractionDigits: 2,
 });
 
+interface BalancePagePreferences {
+    showArchivedWallets: boolean;
+    showArchivedCreditCards: boolean;
+}
+
+const BALANCE_PAGE_PREFERENCES_SECTION = "balance";
+const DEFAULT_BALANCE_PAGE_PREFERENCES: BalancePagePreferences = {
+    showArchivedWallets: false,
+    showArchivedCreditCards: false,
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function normalizeBalancePagePreferences(value: unknown): BalancePagePreferences {
+    if (!isRecord(value)) {
+        return DEFAULT_BALANCE_PAGE_PREFERENCES;
+    }
+
+    return {
+        showArchivedWallets: typeof value.showArchivedWallets === "boolean" ? value.showArchivedWallets : DEFAULT_BALANCE_PAGE_PREFERENCES.showArchivedWallets,
+        showArchivedCreditCards: typeof value.showArchivedCreditCards === "boolean" ? value.showArchivedCreditCards : DEFAULT_BALANCE_PAGE_PREFERENCES.showArchivedCreditCards,
+    };
+}
+
 export function BalancePage() {
+    const { user } = useFinanceSession();
     const wallets = useFinanceWallets();
     const creditCards = useFinanceCreditCards();
     const creditCardInvoices = useFinanceCreditCardInvoices();
@@ -31,8 +60,8 @@ export function BalancePage() {
     const favoriteCreditCardId = useFinanceFavoriteCreditCard();
     const { setFavoriteWallet, setFavoriteCreditCard } = useFinanceActions();
     const { openModal } = useModal();
-    const [showArchivedWallets, setShowArchivedWallets] = useState(false);
-    const [showArchivedCreditCards, setShowArchivedCreditCards] = useState(false);
+    const [preferences, setPreferences] = useLocalPreferenceSection(user?.uid, BALANCE_PAGE_PREFERENCES_SECTION, DEFAULT_BALANCE_PAGE_PREFERENCES, normalizeBalancePagePreferences);
+    const { showArchivedWallets, showArchivedCreditCards } = preferences;
     const visibleWallets = useMemo(() => wallets.filter((wallet) => showArchivedWallets || wallet.isActive), [showArchivedWallets, wallets]);
     const visibleCreditCards = useMemo(() => creditCards.filter((card) => showArchivedCreditCards || card.isActive), [creditCards, showArchivedCreditCards]);
     const totalCreditLimit = creditCards.reduce((sum, card) => sum + card.limit, 0);
@@ -68,7 +97,7 @@ export function BalancePage() {
                                 </button>
                                 <button
                                     type="button"
-                                    onClick={() => setShowArchivedWallets((current) => !current)}
+                                    onClick={() => setPreferences((current) => ({ ...current, showArchivedWallets: !current.showArchivedWallets }))}
                                     className="inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-white/[0.1] bg-white/[0.04] px-3 py-1 text-xs uppercase tracking-[0.05em] text-white/80 transition-all hover:border-white/[0.18] hover:bg-white/[0.08]"
                                 >
                                     {showArchivedWallets ? <EyeOff size={13} /> : <Eye size={13} />}
@@ -175,7 +204,7 @@ export function BalancePage() {
                                 </button>
                                 <button
                                     type="button"
-                                    onClick={() => setShowArchivedCreditCards((current) => !current)}
+                                    onClick={() => setPreferences((current) => ({ ...current, showArchivedCreditCards: !current.showArchivedCreditCards }))}
                                     className="inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-white/[0.1] bg-white/[0.04] px-3 py-1 text-xs  uppercase tracking-[0.05em] text-white/80 transition-all hover:border-white/[0.18] hover:bg-white/[0.08]"
                                 >
                                     {showArchivedCreditCards ? <EyeOff size={13} /> : <Eye size={13} />}

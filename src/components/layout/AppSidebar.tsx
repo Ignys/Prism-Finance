@@ -1,7 +1,6 @@
+import { AnimatePresence, motion } from "framer-motion";
 import { useEffect } from "react";
-import { Hexagon, X } from "lucide-react";
-import { FinanceSyncStatus } from "./FinanceSyncStatus";
-import { NavSection } from "./NavSection";
+import { SidebarContent } from "./SidebarContent";
 
 interface AppSidebarProps {
     isMobileOpen: boolean;
@@ -14,6 +13,13 @@ export function AppSidebar({ isMobileOpen, onCloseMobile }: AppSidebarProps) {
             return undefined;
         }
 
+        const laptopMediaQuery = window.matchMedia("(min-width: 1200px)");
+
+        if (laptopMediaQuery.matches) {
+            onCloseMobile();
+            return undefined;
+        }
+
         const previousOverflow = document.body.style.overflow;
         document.body.style.overflow = "hidden";
 
@@ -23,80 +29,51 @@ export function AppSidebar({ isMobileOpen, onCloseMobile }: AppSidebarProps) {
             }
         }
 
+        function handleLaptopBreakpoint(event: MediaQueryListEvent) {
+            if (event.matches) {
+                onCloseMobile();
+            }
+        }
+
         document.addEventListener("keydown", handleKeyDown);
+        laptopMediaQuery.addEventListener("change", handleLaptopBreakpoint);
 
         return () => {
             document.body.style.overflow = previousOverflow;
             document.removeEventListener("keydown", handleKeyDown);
+            laptopMediaQuery.removeEventListener("change", handleLaptopBreakpoint);
         };
     }, [isMobileOpen, onCloseMobile]);
 
-    if (isMobileOpen) {
-        return (
-            <aside
-                className={`${isMobileOpen ? "pointer-events-auto" : "pointer-events-none"} fixed inset-0 z-40 lg:pointer-events-auto lg:sticky lg:top-0 lg:z-auto lg:block lg:h-screen lg:w-[240px] lg:shrink-0`}
-            >
-                <button
-                    type="button"
-                    aria-label="Fechar menu lateral"
-                    onClick={onCloseMobile}
-                    className={`absolute inset-0 bg-black/60 transition-opacity lg:hidden ${isMobileOpen ? "opacity-100" : "opacity-0"}`}
-                />
-                <section
-                    className={[
-                        "relative h-full min-h-screen w-[min(82vw,240px)] bg-zinc-950/95 p-2 shadow-2xl transition-transform duration-200 lg:w-[240px] lg:translate-x-0 lg:bg-zinc-950/70 lg:shadow-none",
-                        isMobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0",
-                    ].join(" ")}
-                >
-                    <div className="sticky top-4 flex flex-col gap-1">
-                        <div className="flex items-center justify-between gap-2 px-2.5 pb-2 pt-1.5 text-white transition duration-75 ease-in-out">
-                            <div className="flex items-center gap-2 font-medium">
-                                <Hexagon size={25} />
-                                <h1 className="uppercase">Prism</h1>
-                            </div>
-                            <button
-                                type="button"
-                                onClick={onCloseMobile}
-                                aria-label="Fechar menu lateral"
-                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.03] text-white/70 transition-colors hover:bg-white/[0.07] hover:text-white lg:hidden"
-                            >
-                                <X size={16} />
-                            </button>
-                        </div>
-                        <Divider />
-                        <NavSection />
-                        <FinanceSyncStatus />
-                    </div>
-                </section>
-            </aside>
-        );
-    } else if (!isMobileOpen) {
-        return (
-            <aside>
-                <section className="p-2 w-[240px] h-full min-h-[calc(100vh)] bg-zinc-950/70">
-                    <div className="sticky top-4 flex flex-col justify-between gap-1 h-full">
-                        <div className="lex flex-col gap-1 mt-2">
-                            <div className="pt-1.5 pb-2 px-2.5 flex gap-2 items-center transition duration-75 ease-in-out  text-white font-medium">
-                                <Hexagon size={25} />
-                                <h1 className="uppercase">Prism</h1>
-                            </div>
-                            <Divider />
-                            <NavSection />
-                        </div>
-                        <div>
-                            <FinanceSyncStatus />
-                        </div>
-                    </div>
-                </section>
-            </aside>
-        );
-    }
-}
-
-function Divider() {
     return (
-        <div className="px-2 w-full my-1">
-            <div className="w-full bg-zinc-500/20 h-px"></div>
-        </div>
+        <>
+            <AnimatePresence>
+                {isMobileOpen ? (
+                    <motion.aside initial="closed" animate="open" exit="closed" className="fixed inset-0 z-40 laptop:hidden">
+                        <motion.button
+                            type="button"
+                            aria-label="Fechar menu lateral"
+                            onClick={onCloseMobile}
+                            variants={{ closed: { opacity: 0 }, open: { opacity: 1 } }}
+                            transition={{ duration: 0.2, ease: "easeOut" }}
+                            className="absolute inset-0 bg-black/60"
+                        />
+                        <motion.section
+                            variants={{ closed: { x: "-100%" }, open: { x: 0 } }}
+                            transition={{ type: "spring", stiffness: 360, damping: 34 }}
+                            className="relative h-dvh w-[min(82vw,240px)] bg-zinc-950/95 p-2 shadow-2xl"
+                        >
+                            <SidebarContent variant="mobile" onClose={onCloseMobile} />
+                        </motion.section>
+                    </motion.aside>
+                ) : null}
+            </AnimatePresence>
+
+            <aside className="hidden shrink-0 transition-[width] duration-300 ease-out laptop:block laptop:w-[72px] desktop:w-[240px]">
+                <section className="elegant-scrollbar fixed inset-y-0 left-0 z-30 h-dvh overflow-y-auto bg-zinc-950/70 p-2 transition-[width] duration-300 ease-out laptop:w-[72px] desktop:w-[240px]">
+                    <SidebarContent variant="responsive" />
+                </section>
+            </aside>
+        </>
     );
 }
