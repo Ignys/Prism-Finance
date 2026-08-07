@@ -53,12 +53,7 @@ import {
     resolveCreditCardInvoiceCycle,
     resolveCreditCardInvoiceCycleFromCycleKey,
     resolveExpectedCreditCardInvoiceId,
-    resolveTransactionBeneficiaryId,
-    resolveTransactionCategoryId,
     resolveTransactionCreditCardId,
-    resolveTransactionDestinationWalletId,
-    resolveTransactionSourceWalletId,
-    resolveTransactionTitle,
     SYSTEM_EXPENSE_CARD_INVOICE_CATEGORY_ID,
 } from "../financeTypes";
 import type {
@@ -107,7 +102,13 @@ import { buildUserProfileData, type UserProfileData } from "../../lib/userProfil
 import { loadSupabaseFinanceData, saveSupabaseFinanceData, subscribeToFinanceRevisionChanges, type SupabaseFinanceData } from "../../supabase/finance";
 import { getFinanceClientId, publishFinanceRevisionToTabs, subscribeToFinanceRevisionMessages } from "./crossTabSync";
 import { mergeSupabaseFinanceData } from "./financeSyncMerge";
+import { ensureRecurringTransactionsHorizon } from "./recurringTransactions";
 import { toSupabaseFinanceData, useFinanceSyncQueue } from "./useFinanceSyncQueue";
+import {
+    persistTransactionSeriesSnapshotAtomically,
+    updateTransactionSeriesSnapshot,
+    validateTransactionSeriesUpdateInvariants,
+} from "./transactionSeries";
 
 function resolveFavoriteWalletId(candidate: unknown, wallets: Wallet[]): string {
     const normalizedCandidate = typeof candidate === "string" ? normalizeWalletId(candidate.trim()) : DEFAULT_WALLET_ID;
@@ -219,8 +220,6 @@ function compareCreditCardInvoicesByDueDate(a: CreditCardInvoice, b: CreditCardI
     }
     return a.dueDate.localeCompare(b.dueDate);
 }
-
-const RECURRING_MONTHS_HORIZON = 12;
 
 function normalizeSeriesScope(scope: TransactionSeriesScope | null | undefined): TransactionSeriesScope {
     if (scope === "all" || scope === "this_and_next") {
@@ -372,20 +371,6 @@ function addDaysToDateValue(dateValue: string, days: number): string {
     return `${shifted.getFullYear()}-${String(shifted.getMonth() + 1).padStart(2, "0")}-${String(shifted.getDate()).padStart(2, "0")}`;
 }
 
-function addMonthsToDateValue(dateValue: string, months: number): string {
-    const parsed = parseAppDate(dateValue);
-    if (!parsed || !Number.isFinite(months)) {
-        return dateValue;
-    }
-
-    const day = parsed.getDate();
-    const shiftedBase = new Date(parsed.getFullYear(), parsed.getMonth() + months, 1);
-    const lastDay = new Date(shiftedBase.getFullYear(), shiftedBase.getMonth() + 1, 0).getDate();
-    const targetDay = Math.min(day, lastDay);
-    const shifted = new Date(shiftedBase.getFullYear(), shiftedBase.getMonth(), targetDay);
-    return `${shifted.getFullYear()}-${String(shifted.getMonth() + 1).padStart(2, "0")}-${String(shifted.getDate()).padStart(2, "0")}`;
-}
-
 function normalizeIgnoredInstallmentsCount(value: unknown, installmentCount: number | null): number {
     if (!installmentCount || installmentCount < 2) {
         return 0;
@@ -421,170 +406,6 @@ function recalculateGroupTotals(groups: TransactionGroup[], transactions: Stored
             totalAmount: nextTotalAmount,
         };
     });
-}
-
-interface RecurrenceRuleView {
-    interval: number;
-    anchorDate: string;
-    amount: number;
-    tagIds: string[];
-    excludedDates: Set<string>;
-    notes: string | null;
-}
-
-function readRecurrenceRule(group: TransactionGroup, groupTransactions: StoredTransaction[], transactionTags: TransactionTag[], validTagIds: Set<string>): RecurrenceRuleView | null {
-    if (group.transactionMode !== "recurring") {
-        return null;
-    }
-
-    const [firstTransaction] = [...groupTransactions].sort((a, b) => {
-        if (a.scheduledDate === b.scheduledDate) {
-            return a.id.localeCompare(b.id);
-        }
-        return a.scheduledDate.localeCompare(b.scheduledDate);
-    });
-
-    if (!firstTransaction) {
-        return null;
-    }
-
-    const rule = group.recurrenceRule && typeof group.recurrenceRule === "object" ? group.recurrenceRule : null;
-    const rawInterval = rule && "interval" in rule ? Number(rule.interval) : Number.NaN;
-    const interval = Number.isInteger(rawInterval) && rawInterval > 0 ? rawInterval : 1;
-    const anchorDate = rule && typeof rule.anchorDate === "string" && parseAppDate(rule.anchorDate) ? rule.anchorDate : firstTransaction.scheduledDate;
-    const rawAmount = rule && "amount" in rule ? Number(rule.amount) : Number.NaN;
-    const amount = Number.isFinite(rawAmount) && rawAmount > 0 ? roundToCents(Math.abs(rawAmount)) : roundToCents(Math.abs(firstTransaction.amount));
-    const notes = rule && "notes" in rule && typeof rule.notes === "string" ? rule.notes : firstTransaction.notes ?? null;
-
-    const excludedDates = new Set<string>();
-    if (rule && "excludedDates" in rule && Array.isArray(rule.excludedDates)) {
-        for (const value of rule.excludedDates) {
-            if (typeof value === "string" && parseAppDate(value)) {
-                excludedDates.add(value);
-            }
-        }
-    }
-
-    const explicitTagIds: string[] = [];
-    if (rule && "tagIds" in rule && Array.isArray(rule.tagIds)) {
-        for (const value of rule.tagIds) {
-            if (typeof value === "string" && validTagIds.has(value)) {
-                explicitTagIds.push(value);
-            }
-        }
-    }
-
-    const fallbackTagIds = new Set<string>();
-    transactionTags.forEach((link) => {
-        if (link.transactionId === firstTransaction.id && validTagIds.has(link.tagId)) {
-            fallbackTagIds.add(link.tagId);
-        }
-    });
-
-    return {
-        interval,
-        anchorDate,
-        amount,
-        tagIds: explicitTagIds.length > 0 ? Array.from(new Set(explicitTagIds)) : Array.from(fallbackTagIds),
-        excludedDates,
-        notes,
-    };
-}
-
-function ensureRecurringTransactionsHorizon(params: {
-    groups: TransactionGroup[];
-    transactions: StoredTransaction[];
-    transactionTags: TransactionTag[];
-    tags: Tag[];
-}): { groups: TransactionGroup[]; transactions: StoredTransaction[]; transactionTags: TransactionTag[]; changed: boolean } {
-    const { groups, transactions, transactionTags, tags } = params;
-    const today = getTodayDate();
-    const horizonEndDate = addMonthsToDateValue(today, RECURRING_MONTHS_HORIZON - 1);
-    const validTagIds = new Set(tags.map((tag) => tag.id));
-    const nextTransactions = [...transactions];
-    const nextTransactionTags = [...transactionTags];
-    let changed = false;
-
-    const transactionsByGroupId = new Map<string, StoredTransaction[]>();
-    nextTransactions.forEach((transaction) => {
-        const groupTransactions = transactionsByGroupId.get(transaction.groupId) ?? [];
-        groupTransactions.push(transaction);
-        transactionsByGroupId.set(transaction.groupId, groupTransactions);
-    });
-
-    const nextGroups = groups.map((group) => {
-        if (group.transactionMode !== "recurring") {
-            return group;
-        }
-
-        const groupTransactions = transactionsByGroupId.get(group.id) ?? [];
-        const recurrence = readRecurrenceRule(group, groupTransactions, nextTransactionTags, validTagIds);
-        if (!recurrence) {
-            return group;
-        }
-
-        const effectiveEndDate =
-            group.recurrenceEndDate && parseAppDate(group.recurrenceEndDate)
-                ? compareDateValue(group.recurrenceEndDate, horizonEndDate) < 0
-                    ? group.recurrenceEndDate
-                    : horizonEndDate
-                : horizonEndDate;
-
-        if (compareDateValue(recurrence.anchorDate, effectiveEndDate) > 0) {
-            return group;
-        }
-
-        const existingDateSet = new Set(groupTransactions.map((transaction) => transaction.scheduledDate));
-        let cursor = recurrence.anchorDate;
-        while (compareDateValue(cursor, effectiveEndDate) <= 0) {
-            if (!existingDateSet.has(cursor) && !recurrence.excludedDates.has(cursor)) {
-                const recurringTransaction = normalizeStoredTransaction({
-                    id: createId("tx-recurring"),
-                    groupId: group.id,
-                    installmentNumber: null,
-                    amount: recurrence.amount,
-                    scheduledDate: cursor,
-                    status: "pending",
-                    paidAt: null,
-                    invoiceId: null,
-                    notes: recurrence.notes,
-                    createdAt: new Date().toISOString(),
-                });
-                nextTransactions.push(recurringTransaction);
-                existingDateSet.add(cursor);
-                changed = true;
-
-                recurrence.tagIds.forEach((tagId) => {
-                    if (!nextTransactionTags.some((item) => item.transactionId === recurringTransaction.id && item.tagId === tagId)) {
-                        nextTransactionTags.push({
-                            transactionId: recurringTransaction.id,
-                            tagId,
-                        });
-                    }
-                });
-            }
-
-            cursor = addMonthsToDateValue(cursor, recurrence.interval);
-        }
-
-        return group;
-    });
-
-    if (!changed) {
-        return {
-            groups: nextGroups,
-            transactions: nextTransactions,
-            transactionTags: nextTransactionTags,
-            changed: false,
-        };
-    }
-
-    return {
-        groups: recalculateGroupTotals(nextGroups, nextTransactions),
-        transactions: nextTransactions,
-        transactionTags: nextTransactionTags,
-        changed: true,
-    };
 }
 
 function syncCreditCardInvoices(params: {
@@ -3244,142 +3065,52 @@ export function useFinanceStore(): FinanceStoreValue {
             if (!transactionToUpdate) {
                 return;
             }
-
             const normalizedScope = normalizeSeriesScope(scope);
-            if (normalizedScope !== "single") {
-                await deleteTransactionWithScope(transaction, normalizedScope);
-                await addTransaction({
-                    ...draft,
-                    date: draft.date || transactionToUpdate.scheduledDate,
-                });
-                return;
-            }
-
-            const group = transactionGroupsRef.current.find((item) => item.id === transactionToUpdate.groupId) ?? null;
-            if (!group) {
-                await deleteTransactionWithScope(transaction, normalizedScope);
-                await addTransaction({
-                    ...draft,
-                    date: draft.date || transactionToUpdate.scheduledDate,
-                });
-                return;
-            }
-
-            const signedValue = Number(draft.amount ?? draft.value ?? transactionToUpdate.amount);
-            if (!Number.isFinite(signedValue) || signedValue === 0) {
-                return;
-            }
-
             const nowIso = new Date().toISOString();
-            const absoluteAmount = roundToCents(Math.abs(signedValue));
-            const scheduledDate = draft.scheduledDate || draft.date || transactionToUpdate.scheduledDate;
-            const nextStatus = normalizeTransactionStatus(draft.status);
-            const walletIds = new Set(walletsRef.current.map((wallet) => wallet.id));
-            const categoriesById = new Map(categoriesRef.current.map((category) => [category.id, category]));
-            const validTagIds = Array.from(new Set(draft.tagIds ?? [])).filter((tagId) => tagsRef.current.some((tag) => tag.id === tagId));
-
-            const requestedCategoryId = draft.categoryId?.trim() ?? "";
-            const requestedCategory = requestedCategoryId ? categoriesById.get(requestedCategoryId) ?? null : null;
-            const categoryPatch = requestedCategory && requestedCategory.type === toCategoryTypeFromGroupType(group.type) ? requestedCategory : null;
-            const categoryPatchId = categoryPatch?.id ?? resolveTransactionCategoryId(transactionToUpdate, group);
-            const requestedBeneficiaryId = draft.beneficiaryId?.trim() ?? "";
-            const beneficiaryPatch = requestedBeneficiaryId ? beneficiariesRef.current.find((beneficiary) => beneficiary.id === requestedBeneficiaryId) ?? null : null;
-            const beneficiaryPatchId = beneficiaryPatch?.id ?? resolveTransactionBeneficiaryId(transactionToUpdate, group);
-
-            const requestedCreditCardId = draft.creditCardId?.trim() ?? "";
-            const creditCardPatch =
-                group.type === "expense" && draft.paymentMethod === "credit_card" && requestedCreditCardId && creditCardsRef.current.some((card) => card.id === requestedCreditCardId)
-                    ? requestedCreditCardId
-                    : draft.paymentMethod === "wallet"
-                      ? null
-                      : resolveTransactionCreditCardId(transactionToUpdate, group);
-            const requestedSourceWalletId = ensureWalletId(normalizeWalletId(draft.inWallet || draft.walletId || resolveTransactionSourceWalletId(transactionToUpdate, group) || DEFAULT_WALLET_ID), walletsRef.current);
-            const requestedDestinationWalletId = draft.destinationWalletId ? ensureWalletId(normalizeWalletId(draft.destinationWalletId), walletsRef.current) : null;
-            const titlePatch = (draft.description || "").trim() || resolveTransactionTitle(transactionToUpdate, group);
-            const shouldPatchGroup = group.transactionMode === "single";
-            const patchedGroup = shouldPatchGroup
-                ? normalizeTransactionGroup(
-                      {
-                          ...group,
-                          ...resolveGroupCategoryFields(group, categoryPatch, categoriesById),
-                          ...resolveGroupBeneficiaryFields(group, beneficiaryPatch),
-                          title: titlePatch,
-                          notes: draft.notes ?? titlePatch,
-                          sourceWalletId: requestedSourceWalletId,
-                          destinationWalletId: requestedDestinationWalletId,
-                          creditCardId: creditCardPatch,
-                      },
-                      walletIds,
-                  )
-                : group;
-
-            const nextTransaction = normalizeStoredTransaction({
-                ...transactionToUpdate,
-                amount: absoluteAmount,
-                scheduledDate,
-                status: nextStatus,
-                paidAt: nextStatus === "paid" ? resolveLedgerEntryDateIso(scheduledDate, nowIso) : null,
-                invoiceId: draft.invoiceId ?? transactionToUpdate.invoiceId,
-                notes: draft.notes ?? titlePatch,
-                title: titlePatch === patchedGroup.title ? null : titlePatch,
-                categoryId: categoryPatchId === patchedGroup.categoryId ? null : categoryPatchId,
-                beneficiaryId: beneficiaryPatchId === patchedGroup.beneficiaryId ? null : beneficiaryPatchId,
-                sourceWalletId: requestedSourceWalletId === patchedGroup.sourceWalletId ? null : requestedSourceWalletId,
-                destinationWalletId: requestedDestinationWalletId === patchedGroup.destinationWalletId ? null : requestedDestinationWalletId,
-                creditCardId: creditCardPatch === patchedGroup.creditCardId ? null : creditCardPatch,
+            const beforeSnapshot = buildSnapshot();
+            const transformed = updateTransactionSeriesSnapshot({
+                snapshot: beforeSnapshot,
+                transactionId: transactionToUpdate.id,
+                draft,
+                scope: normalizedScope,
+                createGroupId: () => createId("group"),
+                now: nowIso,
             });
-
-            let nextGroups = transactionGroupsRef.current.map((item) => (item.id === patchedGroup.id ? patchedGroup : item));
-            if (group.transactionMode === "recurring" && scheduledDate !== transactionToUpdate.scheduledDate) {
-                nextGroups = nextGroups.map((item) => (item.id === group.id ? addRecurringExcludedDates(item, [transactionToUpdate.scheduledDate], walletIds) : item));
-            }
-
-            let nextTransactions = storedTransactionsRef.current.map((item) => (item.id === nextTransaction.id ? nextTransaction : item));
-            let nextTransactionTags = transactionTagsRef.current.filter((item) => item.transactionId !== nextTransaction.id);
-            validTagIds.forEach((tagId) => {
-                nextTransactionTags.push({ transactionId: nextTransaction.id, tagId });
-            });
-
-            nextGroups = recalculateGroupTotals(nextGroups, nextTransactions);
-
             const recurringHydration = ensureRecurringTransactionsHorizon({
-                groups: nextGroups,
-                transactions: nextTransactions,
-                transactionTags: nextTransactionTags,
-                tags: tagsRef.current,
+                groups: transformed.snapshot.transactionGroups,
+                transactions: transformed.snapshot.transactions,
+                transactionTags: transformed.snapshot.transactionTags,
+                tags: transformed.snapshot.tags,
             });
-
-            nextGroups = recalculateGroupTotals(recurringHydration.groups, recurringHydration.transactions);
-            nextTransactions = recurringHydration.transactions;
-            nextTransactionTags = recurringHydration.transactionTags;
-
             const syncedInvoices = syncCreditCardInvoices({
-                creditCards: creditCardsRef.current,
-                transactionGroups: nextGroups,
-                transactions: nextTransactions,
-                existingInvoices: creditCardInvoicesRef.current,
+                creditCards: transformed.snapshot.creditCards,
+                transactionGroups: recurringHydration.groups,
+                transactions: recurringHydration.transactions,
+                existingInvoices: transformed.snapshot.creditCardInvoices,
             });
-
-            nextGroups = recalculateGroupTotals(nextGroups, syncedInvoices.transactions);
-            nextTransactions = syncedInvoices.transactions;
-
-            const finalGroupsById = new Map(nextGroups.map((item) => [item.id, item]));
-            const finalTransaction = nextTransactions.find((item) => item.id === nextTransaction.id) ?? nextTransaction;
-            const finalGroup = finalGroupsById.get(finalTransaction.groupId) ?? group;
-            const nextLedgerEntries = ledgerEntriesRef.current.filter((item) => item.transactionId !== nextTransaction.id);
-            nextLedgerEntries.push(...createLedgerEntriesForPaidTransaction(finalTransaction, finalGroup));
-
             const snapshot = buildSnapshot({
-                transactionGroups: nextGroups,
-                transactions: nextTransactions,
+                transactionGroups: recalculateGroupTotals(recurringHydration.groups, syncedInvoices.transactions),
+                transactions: syncedInvoices.transactions,
                 creditCardInvoices: syncedInvoices.creditCardInvoices,
-                ledgerEntries: nextLedgerEntries,
-                transactionTags: nextTransactionTags,
+                ledgerEntries: transformed.snapshot.ledgerEntries,
+                transactionTags: recurringHydration.transactionTags,
             });
-            setSnapshotState(snapshot);
-            await persistFullSnapshot(snapshot);
+
+            validateTransactionSeriesUpdateInvariants({
+                before: beforeSnapshot,
+                after: snapshot,
+                affectedTransactionIds: transformed.affectedTransactionIds,
+                metadataOnly: transformed.metadataOnly,
+                preservePaidTransactions: normalizedScope !== "single",
+            });
+
+            await persistTransactionSeriesSnapshotAtomically({
+                snapshot,
+                persist: persistFullSnapshot,
+                commit: setSnapshotState,
+            });
         },
-        [addTransaction, buildSnapshot, deleteTransactionWithScope, persistFullSnapshot, setSnapshotState],
+        [buildSnapshot, persistFullSnapshot, setSnapshotState],
     );
 
     useEffect(() => {

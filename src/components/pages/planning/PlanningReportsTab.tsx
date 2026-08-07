@@ -1,5 +1,7 @@
+import { motion, useReducedMotion } from "framer-motion";
 import { useMemo } from "react";
 import { type CreditCardInvoice, type ReportPeriod, type Transaction, useFinanceBeneficiaries } from "../../../context/FinanceContext";
+import { REPORTS_ENTRANCE_CONTAINER_VARIANTS, REPORTS_ENTRANCE_GRID_VARIANTS, REPORTS_ENTRANCE_ITEM_VARIANTS } from "./planningReportsMotion";
 import { PlanningReportsCategoriesSection } from "./PlanningReportsCategoriesSection";
 import { PlanningReportsEmptyState } from "./PlanningReportsEmptyState";
 import { PlanningReportsFlowSection } from "./PlanningReportsFlowSection";
@@ -15,6 +17,7 @@ interface PlanningReportsTabProps {
 }
 
 export function PlanningReportsTab({ period, transactions, allTransactions, creditCardInvoices }: PlanningReportsTabProps) {
+    const shouldReduceMotion = useReducedMotion();
     const beneficiaries = useFinanceBeneficiaries();
     const { monthReports, categoryReports, incomeCategoryReports, beneficiaryReports, summary } = useMemo(
         () => buildReportsDataset(period, transactions, creditCardInvoices, allTransactions, beneficiaries),
@@ -22,22 +25,42 @@ export function PlanningReportsTab({ period, transactions, allTransactions, cred
     );
 
     return (
-        <section className="flex flex-1 flex-col gap-3 text-left">
+        <motion.section
+            variants={REPORTS_ENTRANCE_CONTAINER_VARIANTS}
+            initial={shouldReduceMotion ? false : "hidden"}
+            animate="visible"
+            className="flex flex-1 flex-col gap-3 text-left"
+        >
             {summary.transactionCount === 0 ? (
-                <PlanningReportsEmptyState />
+                <motion.div variants={REPORTS_ENTRANCE_ITEM_VARIANTS}>
+                    <PlanningReportsEmptyState />
+                </motion.div>
             ) : (
                 <>
-                    <PlanningReportsMetricsSection summary={summary} />
-                    <div className="grid min-h-0 gap-3 grid-cols-[minmax(0,1fr)_minmax(340px,1fr)] desktop:grid-cols-[minmax(0,1fr)_minmax(340px,1fr)_minmax(340px,0.7fr)]">
-                        <PlanningReportsCategoriesSection categoryReports={categoryReports} totalAmount={summary.spending} />
-                       
-                        <PlanningReportsCategoriesSection categoryReports={incomeCategoryReports} totalAmount={summary.income} kind="income" />
-                        
-                        <PlanningReportsFlowSection monthReports={monthReports} />
-                        <PlanningReportsRankingSection beneficiaryReports={beneficiaryReports} />
-                    </div>
+                    <motion.div variants={REPORTS_ENTRANCE_ITEM_VARIANTS}>
+                        <PlanningReportsMetricsSection summary={summary} />
+                    </motion.div>
+                    <motion.div
+                        variants={REPORTS_ENTRANCE_GRID_VARIANTS}
+                        className="grid min-h-0 gap-3 grid-cols-[minmax(0,1fr)_minmax(340px,1fr)] desktop:grid-cols-[minmax(0,1fr)_minmax(340px,1fr)_minmax(340px,0.7fr)]"
+                    >
+                        <motion.div variants={REPORTS_ENTRANCE_ITEM_VARIANTS} className="min-w-0">
+                            <PlanningReportsCategoriesSection categoryReports={categoryReports} totalAmount={summary.spending} />
+                        </motion.div>
+
+                        <motion.div variants={REPORTS_ENTRANCE_ITEM_VARIANTS} className="min-w-0">
+                            <PlanningReportsCategoriesSection categoryReports={incomeCategoryReports} totalAmount={summary.income} kind="income" />
+                        </motion.div>
+
+                        <motion.div variants={REPORTS_ENTRANCE_ITEM_VARIANTS} className="min-w-0">
+                            <PlanningReportsFlowSection monthReports={monthReports} />
+                        </motion.div>
+                        <motion.div variants={REPORTS_ENTRANCE_ITEM_VARIANTS} className="min-w-0">
+                            <PlanningReportsRankingSection beneficiaryReports={beneficiaryReports} />
+                        </motion.div>
+                    </motion.div>
                 </>
             )}
-        </section>
+        </motion.section>
     );
 }

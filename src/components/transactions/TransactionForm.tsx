@@ -7,6 +7,7 @@ import { MultiSelectCombobox } from "./MultiSelectCombobox";
 import { SingleSelectCombobox, type ComboboxOptionBase } from "./SingleSelectCombobox";
 import { BeneficiaryOptionContent, CategoryOptionContent, StatusField, TagOptionContent, TransactionHeader, WalletOptionContent } from "./TransactionFormParts";
 import { FIELD_INPUT_CLASS, FIELD_LABEL_CLASS } from "./transactionForm.constants";
+import { getTransactionSubmitErrorMessage } from "./transactionSubmitError";
 import { useTransactionForm } from "./useTransactionForm";
 
 interface WalletOption extends ComboboxOptionBase {
@@ -127,6 +128,7 @@ interface TransactionFormProps {
 export function TransactionForm({ type, transaction, mode = "default", prefill, onAdvancedOpenChange }: TransactionFormProps) {
     const { closeModal } = useModal();
     const [submitting, setSubmitting] = useState(false);
+    const [submitError, setSubmitError] = useState("");
     const [advancedOpen, setAdvancedOpen] = useState(false);
     const [shouldRenderAdvanced, setShouldRenderAdvanced] = useState(false);
     const form = useTransactionForm({ type, transaction, mode, prefill });
@@ -234,6 +236,7 @@ export function TransactionForm({ type, transaction, mode = "default", prefill, 
         }
 
         setSubmitting(true);
+        setSubmitError("");
 
         try {
             const success = await action();
@@ -247,6 +250,7 @@ export function TransactionForm({ type, transaction, mode = "default", prefill, 
             }
         } catch (error) {
             console.error("Failed to submit transaction form:", error);
+            setSubmitError(getTransactionSubmitErrorMessage(error));
         }
 
         setSubmitting(false);
@@ -268,6 +272,8 @@ export function TransactionForm({ type, transaction, mode = "default", prefill, 
                         <X size={15} />
                     </button>
                 </header>
+
+                {submitError && <p className="mt-3 rounded-xl border border-red-400/25 bg-red-500/10 px-3 py-2 text-sm text-red-100">{submitError}</p>}
 
                 <div className="mt-2 flex flex-col gap-3 lg:flex-row">
                     <section className="flex grow flex-col gap-3">

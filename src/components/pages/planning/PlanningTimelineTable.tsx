@@ -1,4 +1,6 @@
+import { motion, useReducedMotion } from "framer-motion";
 import { BALANCE_TONE_CLASS_NAMES, type MonthProjection, type PlanningPanel } from "./planningTimelineTypes";
+import { getPlanningMonthEntranceDelay, PLANNING_ENTRANCE_EASE } from "./planningEntranceMotion";
 import type { PlanningTimelineActionItem } from "./planningTimelineMonthSummary";
 import { buildPlanningTimelineMonthSummary } from "./planningTimelineMonthSummary";
 import { formatCurrency } from "./planningTimelineUtils";
@@ -12,11 +14,39 @@ interface PlanningTimelineTableProps {
 }
 
 export function PlanningTimelineTable({ months, selectedMonthKey, selectedPanel, compareMode, onSelectPanel }: PlanningTimelineTableProps) {
+    const shouldReduceMotion = useReducedMotion();
+
     return (
-        <article>
-            <table className="w-full table-fixed border-collapse text-left">
+        <motion.article
+            initial={
+                shouldReduceMotion
+                    ? false
+                    : {
+                          opacity: 0,
+                          y: 18,
+                          scale: 0.992,
+                          filter: "blur(7px)",
+                          clipPath: "inset(0 0 100% 0 round 8px)",
+                      }
+            }
+            animate={{
+                opacity: 1,
+                y: 0,
+                scale: 1,
+                filter: "blur(0px)",
+                clipPath: "inset(0 0 0% 0 round 8px)",
+            }}
+            transition={{ duration: 0.68, ease: PLANNING_ENTRANCE_EASE }}
+            className="relative isolate overflow-hidden"
+        >
+            <table className="relative z-10 w-full table-fixed border-collapse text-left">
                 <thead>
-                    <tr className="border-b border-white/[0.08] text-[10px] uppercase tracking-[0.1em] text-white/36">
+                    <motion.tr
+                        initial={shouldReduceMotion ? false : { opacity: 0, y: -8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.08, duration: 0.42, ease: PLANNING_ENTRANCE_EASE }}
+                        className="border-b border-white/[0.08] text-[10px] uppercase tracking-[0.1em] text-white/36"
+                    >
                         <th scope="col" className="w-28 px-2 pb-2 font-normal desktop:w-30">
                             DATA & <br />
                             Saldo Inicial
@@ -36,42 +66,57 @@ export function PlanningTimelineTable({ months, selectedMonthKey, selectedPanel,
                         <th scope="col" className="w-22 px-2 pb-2 text-right font-normal desktop:w-28 pr-3">
                             Saldo final
                         </th>
-                    </tr>
+                    </motion.tr>
                 </thead>
                 <tbody>
-                    {months.map((month) => (
+                    {months.map((month, index) => (
                         <PlanningTimelineTableRow
                             key={month.monthKey}
                             month={month}
+                            index={index}
                             compareMode={compareMode}
                             selectedPanel={selectedPanel}
                             isSelected={selectedMonthKey === month.monthKey}
+                            shouldReduceMotion={Boolean(shouldReduceMotion)}
                             onSelectPanel={onSelectPanel}
                         />
                     ))}
                 </tbody>
             </table>
-        </article>
+        </motion.article>
     );
 }
 
 function PlanningTimelineTableRow({
     month,
+    index,
     compareMode,
     selectedPanel,
     isSelected,
+    shouldReduceMotion,
     onSelectPanel,
 }: {
     month: MonthProjection;
+    index: number;
     compareMode: boolean;
     selectedPanel: PlanningPanel;
     isSelected: boolean;
+    shouldReduceMotion: boolean;
     onSelectPanel: (monthKey: string, panel: PlanningPanel) => void;
 }) {
     const { actionItems, footerBalanceTone, visibleAccumulated, visibleMonthBalance } = buildPlanningTimelineMonthSummary(month, compareMode);
 
     return (
-        <tr className="border-b border-white/[0.06] last:border-b-0">
+        <motion.tr
+            initial={shouldReduceMotion ? false : { opacity: 0, y: 14 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{
+                delay: shouldReduceMotion ? 0 : getPlanningMonthEntranceDelay(index),
+                duration: 0.46,
+                ease: PLANNING_ENTRANCE_EASE,
+            }}
+            className="border-b border-white/[0.06] last:border-b-0"
+        >
             <th scope="row" className="px-2 py-2.5 align-middle font-normal">
                 <div className="flex flex-col">
                     <span className="text-sm font-semibold uppercase text-white desktop:text-base">{`${month.shortMonthLabel}/${month.year}`}</span>
@@ -85,7 +130,7 @@ function PlanningTimelineTableRow({
             <td className={`px-2 py-2.5 text-right text-sm font-semibold desktop:pr-3 desktop:text-lg ${visibleAccumulated < 0 ? "text-red-300" : "text-white"}`}>
                 {formatCurrency(visibleAccumulated)}
             </td>
-        </tr>
+        </motion.tr>
     );
 }
 

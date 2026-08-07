@@ -4,7 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { type Tag as FinanceTag, useFinanceActions, useFinanceTags } from "../../../context/FinanceContext";
 import { useModal } from "../../../context/ModalContext";
 import { AddTag } from "../../modal/AddTag";
-import { RegistrySectionActions } from "./RegistrySectionActions";
+import { RegistryListItemEntrance } from "./RegistryListItemEntrance";
+import { RegistrySectionHeader } from "./RegistrySectionHeader";
 
 export function RegistryTagsSection() {
     const tags = useFinanceTags();
@@ -28,31 +29,29 @@ export function RegistryTagsSection() {
 
     return (
         <section className="flex h-full min-h-0 flex-col">
-            <div className="mt-2 mb-3 ml-1 flex flex-wrap items-center justify-between gap-3">
-                <div className="flex items-center gap-2">
-                    <p className="text-lg uppercase tracking-[0.07em] text-white/80">Suas tags</p>
-                    <span className="rounded-full bg-white/10 px-2 py-0.5 text-xs text-white/60 border border-white/10">
-                        {visibleCount}
-                    </span>
-                </div>
-                <RegistrySectionActions
-                    isShowingInactive={showInactive}
-                    showLabel="Mostrar inativos"
-                    hideLabel="Ocultar inativos"
-                    createLabel="Nova tag"
-                    onToggleInactive={() => setShowInactive((current) => !current)}
-                    onCreate={() => openModal(<AddTag mode="create" />)}
-                />
-            </div>
+            <RegistrySectionHeader
+                title="Suas tags"
+                visibleCount={visibleCount}
+                isShowingInactive={showInactive}
+                showLabel="Mostrar inativos"
+                hideLabel="Ocultar inativos"
+                createLabel="Nova tag"
+                onToggleInactive={() => setShowInactive((current) => !current)}
+                onCreate={() => openModal(<AddTag mode="create" />)}
+            />
 
             <div className="elegant-scrollbar min-h-0 flex-1 overflow-y-auto overflow-x-hidden pr-2">
                 {orderedTags.length < 1 ? (
-                    <div className="rounded-lg border border-white/6 bg-white/[0.02] p-3 text-sm text-white/45">Nenhuma tag para os filtros atuais.</div>
+                    <RegistryListItemEntrance index={0}>
+                        <div className="rounded-lg border border-white/6 bg-white/[0.02] p-3 text-sm text-white/45">Nenhuma tag para os filtros atuais.</div>
+                    </RegistryListItemEntrance>
                 ) : (
                     <Reorder.Group axis="y" values={orderedTags} onReorder={setOrderedTags} className="space-y-2">
-                        {orderedTags.map((tag) => (
+                        {orderedTags.map((tag, index) => (
                             <Reorder.Item key={tag.id} value={tag} onDragEnd={commitOrder} className="list-none">
-                                <TagCard tag={tag} onEdit={() => openModal(<AddTag mode="edit" tagId={tag.id} />)} />
+                                <RegistryListItemEntrance index={index}>
+                                    <TagCard tag={tag} onEdit={() => openModal(<AddTag mode="edit" tagId={tag.id} />)} />
+                                </RegistryListItemEntrance>
                             </Reorder.Item>
                         ))}
                     </Reorder.Group>

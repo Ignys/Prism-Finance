@@ -12,8 +12,6 @@ export interface IncomeItem {
     label: string;
     amount: number;
     iconName: string | null;
-    iconColor: string | null;
-    iconAlt: string;
     isDisabled: boolean;
 }
 
@@ -35,8 +33,6 @@ export interface InheritedExpenseItem {
     label: string;
     amount: number;
     iconName: string | null;
-    iconColor: string | null;
-    iconAlt: string;
     isDisabled: boolean;
 }
 

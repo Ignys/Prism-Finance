@@ -12,10 +12,11 @@ interface PlanningTimelinePanelProps {
 }
 
 export function PlanningTimelinePanel({ months, selectedMonthKey, selectedPanel, compareMode, horizontalMode, onSelectPanel }: PlanningTimelinePanelProps) {
+   // LINHAS
     if (!horizontalMode) {
         return (
             <section className="flex min-w-0 pt-1 w-full flex-col text-left">
-                <div className="elegant-scrollbar grow -mx-1 overflow-auto px-1 pb-1">
+                <div className="elegant-scrollbar grow -mx-1 overflow-y-auto overflow-x-clip px-1 pb-1">
                     <PlanningTimelineTable
                         months={months}
                         selectedMonthKey={selectedMonthKey}
@@ -28,13 +29,15 @@ export function PlanningTimelinePanel({ months, selectedMonthKey, selectedPanel,
         );
     }
 
+    // COLUNAS
     return (
         <section className="flex min-w-0 w-full flex-col text-left">
-            <div className="elegant-scrollbar grow -mx-1 flex gap-2 overflow-auto px-1 pb-1">
-                {months.map((month) => (
+            <div className="elegant-scrollbar grow -mx-1 flex gap-2 overflow-x-auto overflow-y-clip px-1 pb-1">
+                {months.map((month, index) => (
                     <PlanningMonthCard
                         key={month.monthKey}
                         month={month}
+                        index={index}
                         compareMode={compareMode}
                         isSelected={selectedMonthKey === month.monthKey}
                         selectedPanel={selectedPanel}

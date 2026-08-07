@@ -101,6 +101,10 @@ function isIncludedStatus(status: Transaction["status"]): boolean {
     return status === "paid" || status === "pending";
 }
 
+function getTransactionDisplayName(transaction: Transaction): string {
+    return transaction.description.trim() || "Sem descrição";
+}
+
 function getMonthStartTime(monthKey: string): number {
     return parseMonthKey(monthKey)?.getTime() ?? Date.now();
 }
@@ -192,7 +196,6 @@ function getMonthReality(params: {
 }): MonthReality {
     const { monthKey, wallets, creditCards, creditCardInvoices, transactions, disabledInheritedExpenseIds, disabledIncomeIds } = params;
     const activeWalletIds = new Set(wallets.filter((wallet) => wallet.isActive).map((wallet) => wallet.id));
-    const walletById = new Map(wallets.map((wallet) => [wallet.id, wallet]));
     const activeCardIds = new Set(creditCards.filter((card) => card.isActive).map((card) => card.id));
     const cardNameById = new Map(creditCards.map((card) => [card.id, card.name]));
 
@@ -208,16 +211,13 @@ function getMonthReality(params: {
 
         if (transaction.type === "income") {
             if (activeWalletIds.has(transaction.inWallet)) {
-                const wallet = walletById.get(transaction.inWallet);
                 income += transaction.value;
                 incomeItems.push({
                     id: `income-transaction:${transaction.id}`,
                     transactionId: transaction.id,
-                    label: transaction.category.label,
+                    label: getTransactionDisplayName(transaction),
                     amount: roundToCents(transaction.value),
-                    iconName: wallet?.icon ?? null,
-                    iconColor: wallet?.color ?? null,
-                    iconAlt: wallet?.name ?? "Carteira",
+                    iconName: transaction.category.icon,
                     isDisabled: disabledIncomeIds.has(`income-transaction:${transaction.id}`),
                 });
             }
@@ -225,17 +225,14 @@ function getMonthReality(params: {
         }
 
         if (transaction.type === "spending" && transaction.paymentMethod !== "credit_card" && activeWalletIds.has(transaction.inWallet)) {
-            const wallet = walletById.get(transaction.inWallet);
             walletSpendings += transaction.value;
             inheritedItems.push({
                 id: `transaction:${transaction.id}`,
                 source: "transaction",
                 transactionId: transaction.id,
-                label: transaction.category.label,
+                label: getTransactionDisplayName(transaction),
                 amount: roundToCents(transaction.value),
-                iconName: wallet?.icon ?? null,
-                iconColor: wallet?.color ?? null,
-                iconAlt: wallet?.name ?? "Carteira",
+                iconName: transaction.category.icon,
                 isDisabled: disabledInheritedExpenseIds.has(`transaction:${transaction.id}`),
             });
         }
@@ -260,8 +257,6 @@ function getMonthReality(params: {
             label: `Fatura ${cardNameById.get(invoice.creditCardId) ?? "cartao"}`,
             amount: openAmount,
             iconName: null,
-            iconColor: null,
-            iconAlt: "Cartao",
             isDisabled: disabledInheritedExpenseIds.has(`invoice:${invoice.id}`),
         });
     }

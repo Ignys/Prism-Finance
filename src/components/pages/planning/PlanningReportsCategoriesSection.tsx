@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { AnimatePresence, motion, type Variants } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { REPORT_CATEGORY_CONTENT_VARIANTS } from "./planningReportsMotion";
 import { PlanningReportsCategoryChartPanel } from "./PlanningReportsCategoryChartPanel";
 import { PlanningReportsCategoryDetailsPanel } from "./PlanningReportsCategoryDetailsPanel";
 import { PlanningReportsCategoryTabs } from "./PlanningReportsCategoryTabs";
@@ -27,13 +28,8 @@ const SECTION_COPY: Record<CategorySectionKind, { title: string; datasetLabel: s
     },
 };
 
-const CONTENT_VARIANTS: Variants = {
-    initial: (direction: number) => ({ opacity: 0, x: direction * 28 }),
-    animate: { opacity: 1, x: 0 },
-    exit: (direction: number) => ({ opacity: 0, x: direction * -28 }),
-};
-
 export function PlanningReportsCategoriesSection({ categoryReports, totalAmount, kind = "spending" }: PlanningReportsCategoriesSectionProps) {
+    const shouldReduceMotion = useReducedMotion();
     const [activeView, setActiveView] = useState<CategoryReportView>("chart");
     const [slideDirection, setSlideDirection] = useState(1);
     const copy = SECTION_COPY[kind];
@@ -53,24 +49,25 @@ export function PlanningReportsCategoriesSection({ categoryReports, totalAmount,
                 </div>
                 <PlanningReportsCategoryTabs activeView={activeView} layoutId={`planning-report-category-tab-${kind}`} onChange={handleViewChange} />
             </div>
-            <AnimatePresence custom={slideDirection} initial={false} mode="wait">
-                <motion.div
-                    key={activeView}
-                    custom={slideDirection}
-                    variants={CONTENT_VARIANTS}
-                    initial="initial"
-                    animate="animate"
-                    exit="exit"
-                    transition={{ duration: 0.24, ease: "easeOut" }}
-                    className="overflow-hidden"
-                >
-                    {activeView === "chart" ? (
-                        <PlanningReportsCategoryChartPanel categoryReports={categoryReports} datasetLabel={copy.datasetLabel} emptyChartLabel={copy.emptyChartLabel} totalAmount={totalAmount} />
-                    ) : (
-                        <PlanningReportsCategoryDetailsPanel categoryReports={categoryReports} emptyListLabel={copy.emptyListLabel} kind={kind} totalAmount={totalAmount} />
-                    )}
-                </motion.div>
-            </AnimatePresence>
+            <div className="relative min-h-[315px] overflow-hidden">
+                <AnimatePresence custom={slideDirection} initial={false} mode="popLayout">
+                    <motion.div
+                        key={activeView}
+                        custom={slideDirection}
+                        variants={REPORT_CATEGORY_CONTENT_VARIANTS}
+                        initial={shouldReduceMotion ? false : "initial"}
+                        animate="animate"
+                        exit={shouldReduceMotion ? undefined : "exit"}
+                        className="w-full"
+                    >
+                        {activeView === "chart" ? (
+                            <PlanningReportsCategoryChartPanel categoryReports={categoryReports} datasetLabel={copy.datasetLabel} emptyChartLabel={copy.emptyChartLabel} totalAmount={totalAmount} />
+                        ) : (
+                            <PlanningReportsCategoryDetailsPanel categoryReports={categoryReports} emptyListLabel={copy.emptyListLabel} kind={kind} totalAmount={totalAmount} />
+                        )}
+                    </motion.div>
+                </AnimatePresence>
+            </div>
         </section>
     );
 }

@@ -5,10 +5,12 @@ import { type Category, useFinanceActions, useFinanceCategories } from "../../..
 import { useModal } from "../../../context/ModalContext";
 import { getCategoryIconComponent } from "../../../lib/categoryIcons";
 import { AddCategory } from "../../modal/AddCategory";
-import { RegistrySectionActions } from "./RegistrySectionActions";
+import { RegistryListItemEntrance } from "./RegistryListItemEntrance";
+import { RegistrySectionHeader } from "./RegistrySectionHeader";
 
 interface CategoryColumnProps {
     title: string;
+    index: number;
     items: Category[];
     childrenByParent: Map<string, Category[]>;
     onEdit: (categoryId: string) => void;
@@ -63,32 +65,26 @@ export function RegistryCategoriesSection() {
 
     return (
         <section className="row-span-2 flex h-full min-h-0 flex-col">
-            <div className="mt-2 mb-3 ml-1 flex flex-wrap items-center justify-between gap-3">
-                <div className="flex items-center gap-2">
-                    <p className="text-lg uppercase tracking-[0.07em] text-white/80">Suas categorias</p>
-                    <span className="rounded-full bg-white/10 px-2 py-0.5 text-xs text-white/60 border border-white/10">
-                        {visibleCount}
-                    </span>
-                </div>
-                <RegistrySectionActions
-                    isShowingInactive={showInactive}
-                    showLabel="Mostrar inativos"
-                    hideLabel="Ocultar inativos"
-                    createLabel="Nova categoria"
-                    onToggleInactive={() => setShowInactive((current) => !current)}
-                    onCreate={() => openModal(<AddCategory mode="create" />)}
-                />
-            </div>
+            <RegistrySectionHeader
+                title="Suas categorias"
+                visibleCount={visibleCount}
+                isShowingInactive={showInactive}
+                showLabel="Mostrar inativos"
+                hideLabel="Ocultar inativos"
+                createLabel="Nova categoria"
+                onToggleInactive={() => setShowInactive((current) => !current)}
+                onCreate={() => openModal(<AddCategory mode="create" />)}
+            />
 
             <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-2">
-                <CategoryColumn title="Despesas" items={groupedCategories.expense} childrenByParent={groupedCategories.childrenByParent} onEdit={handleEdit} onReorder={handleReorder} />
-                <CategoryColumn title="Receitas" items={groupedCategories.income} childrenByParent={groupedCategories.childrenByParent} onEdit={handleEdit} onReorder={handleReorder} />
+                <CategoryColumn index={0} title="Despesas" items={groupedCategories.expense} childrenByParent={groupedCategories.childrenByParent} onEdit={handleEdit} onReorder={handleReorder} />
+                <CategoryColumn index={1} title="Receitas" items={groupedCategories.income} childrenByParent={groupedCategories.childrenByParent} onEdit={handleEdit} onReorder={handleReorder} />
             </div>
         </section>
     );
 }
 
-function CategoryColumn({ title, items, childrenByParent, onEdit, onReorder }: CategoryColumnProps) {
+function CategoryColumn({ title, index, items, childrenByParent, onEdit, onReorder }: CategoryColumnProps) {
     const [orderedRoots, setOrderedRoots] = useState(items);
 
     useEffect(() => {
@@ -100,21 +96,25 @@ function CategoryColumn({ title, items, childrenByParent, onEdit, onReorder }: C
     };
 
     return (
-        <div className="elegant-scrollbar h-full min-h-0 overflow-y-auto overflow-x-hidden rounded-lg border border-white/6 bg-white/[0.02] p-3 pr-2">
-            <p className="mb-2 text-xs uppercase tracking-[0.12em] text-white/45">{title}</p>
+        <RegistryListItemEntrance index={index} className="h-full min-h-0">
+            <div className="elegant-scrollbar h-full min-h-0 overflow-y-auto overflow-x-hidden rounded-lg border border-white/6 bg-white/[0.02] p-3 pr-2">
+                <p className="mb-2 text-xs uppercase tracking-[0.12em] text-white/45">{title}</p>
 
-            {orderedRoots.length < 1 ? (
-                <p className="text-sm text-white/45">Nenhuma categoria deste tipo.</p>
-            ) : (
-                <Reorder.Group axis="y" values={orderedRoots} onReorder={setOrderedRoots} className="space-y-2">
-                    {orderedRoots.map((category) => (
-                        <Reorder.Item key={category.id} value={category} onDragEnd={commitOrder} className="list-none">
-                            <CategoryItem category={category} children={childrenByParent.get(category.id) ?? []} onEdit={onEdit} onReorder={onReorder} />
-                        </Reorder.Item>
-                    ))}
-                </Reorder.Group>
-            )}
-        </div>
+                {orderedRoots.length < 1 ? (
+                    <p className="text-sm text-white/45">Nenhuma categoria deste tipo.</p>
+                ) : (
+                    <Reorder.Group axis="y" values={orderedRoots} onReorder={setOrderedRoots} className="space-y-2">
+                        {orderedRoots.map((category, itemIndex) => (
+                            <Reorder.Item key={category.id} value={category} onDragEnd={commitOrder} className="list-none">
+                                <RegistryListItemEntrance index={itemIndex}>
+                                    <CategoryItem category={category} children={childrenByParent.get(category.id) ?? []} onEdit={onEdit} onReorder={onReorder} />
+                                </RegistryListItemEntrance>
+                            </Reorder.Item>
+                        ))}
+                    </Reorder.Group>
+                )}
+            </div>
+        </RegistryListItemEntrance>
     );
 }
 

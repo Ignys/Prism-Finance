@@ -120,7 +120,7 @@ export function PlanningReportPeriodSelector({ period, onPeriodChange }: Plannin
             </button>
 
             {isOpen ? (
-                <div className="absolute right-0 top-[calc(100%+0.5rem)] z-40 w-[300px] overflow-hidden rounded-2xl border border-white/[0.12] bg-[#0e0e0e]/95 p-3 shadow-[0_30px_70px_-36px_rgba(0,0,0,0.95)] backdrop-blur-xl">
+                <div className="absolute right-0 top-[calc(100%+0.5rem)] z-40 w-[300px] overflow-hidden rounded-2xl border border-white/[0.12] bg-[#0e0e0e]/80 p-3 shadow-[0_30px_70px_-36px_rgba(0,0,0,0.95)] backdrop-blur-xl">
                     <div className="flex items-center justify-between gap-2">
                         <button type="button" onClick={() => setPickerYear((current) => current - 1)} className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/[0.12] bg-white/[0.02] text-white/75 hover:border-white/[0.24] hover:bg-white/[0.06]" aria-label="Ano anterior">
                             <ChevronLeft size={15} />

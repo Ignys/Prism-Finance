@@ -556,7 +556,7 @@ export function PlanningPage() {
                 {isReportsTab ? (
                     <PlanningReportsTab period={reportPeriod} transactions={reportScopedTransactions} allTransactions={transactions} creditCardInvoices={creditCardInvoices} />
                 ) : (
-                    <div className="flex max-h-[calc(100vh-11rem)] flex-1 flex-col gap-2 xl:flex-row">
+                    <div className="flex max-h-[calc(100vh-11rem)] flex-1 flex-col gap-2 xl:flex-row overflow-clip">
                         <PlanningTimelinePanel
                             months={projection.months}
                             selectedMonthKey={selectedMonth?.monthKey ?? null}

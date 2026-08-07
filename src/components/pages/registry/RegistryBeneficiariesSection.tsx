@@ -5,7 +5,8 @@ import { type Beneficiary, useFinanceActions, useFinanceBeneficiaries } from "..
 import { useModal } from "../../../context/ModalContext";
 import { BeneficiaryAvatar } from "../../common/BeneficiaryAvatar";
 import { AddBeneficiary } from "../../modal/AddBeneficiary";
-import { RegistrySectionActions } from "./RegistrySectionActions";
+import { RegistryListItemEntrance } from "./RegistryListItemEntrance";
+import { RegistrySectionHeader } from "./RegistrySectionHeader";
 
 const BENEFICIARY_TYPE_LABELS: Record<string, string> = {
     person: "Pessoa",
@@ -36,32 +37,32 @@ export function RegistryBeneficiariesSection() {
 
     return (
         <section className="flex h-full min-h-0 flex-col rounded-xl">
-            <div className="mt-2 mb-3 ml-1 flex flex-wrap items-center justify-between gap-3">
-                <div className="flex items-center gap-2">
-                    <p className="text-lg uppercase tracking-[0.07em] text-white/80">Seus beneficiários</p>
-                    <span className="rounded-full bg-white/10 px-2 py-0.5 text-xs text-white/60 border border-white/10">{visibleCount}</span>
-                </div>
-                <RegistrySectionActions
-                    isShowingInactive={showInactive}
-                    showLabel="Mostrar inativos"
-                    hideLabel="Ocultar inativos"
-                    createLabel="Novo beneficiário"
-                    onToggleInactive={() => setShowInactive((current) => !current)}
-                    onCreate={() => openModal(<AddBeneficiary mode="create" />)}
-                />
-            </div>
+            <RegistrySectionHeader
+                title="Seus beneficiários"
+                visibleCount={visibleCount}
+                isShowingInactive={showInactive}
+                showLabel="Mostrar inativos"
+                hideLabel="Ocultar inativos"
+                createLabel="Novo beneficiário"
+                onToggleInactive={() => setShowInactive((current) => !current)}
+                onCreate={() => openModal(<AddBeneficiary mode="create" />)}
+            />
 
             <div className="elegant-scrollbar min-h-0 flex-1 overflow-y-auto overflow-x-hidden pr-2">
                 {orderedBeneficiaries.length < 1 ? (
-                    <div className="rounded-lg border border-white/6 bg-white/[0.02] p-3 text-sm text-white/45">Nenhum beneficiário para os filtros atuais.</div>
+                    <RegistryListItemEntrance index={0}>
+                        <div className="rounded-lg border border-white/6 bg-white/[0.02] p-3 text-sm text-white/45">Nenhum beneficiário para os filtros atuais.</div>
+                    </RegistryListItemEntrance>
                 ) : (
                     <Reorder.Group axis="y" values={orderedBeneficiaries} onReorder={setOrderedBeneficiaries} className="space-y-2">
-                        {orderedBeneficiaries.map((beneficiary) => (
+                        {orderedBeneficiaries.map((beneficiary, index) => (
                             <Reorder.Item key={beneficiary.id} value={beneficiary} onDragEnd={commitOrder} className="list-none">
-                                <BeneficiaryCard
-                                    beneficiary={beneficiary}
-                                    onEdit={beneficiary.source === "family_shared" ? undefined : () => openModal(<AddBeneficiary mode="edit" beneficiaryId={beneficiary.id} />)}
-                                />
+                                <RegistryListItemEntrance index={index}>
+                                    <BeneficiaryCard
+                                        beneficiary={beneficiary}
+                                        onEdit={beneficiary.source === "family_shared" ? undefined : () => openModal(<AddBeneficiary mode="edit" beneficiaryId={beneficiary.id} />)}
+                                    />
+                                </RegistryListItemEntrance>
                             </Reorder.Item>
                         ))}
                     </Reorder.Group>

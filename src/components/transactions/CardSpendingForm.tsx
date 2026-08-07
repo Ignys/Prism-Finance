@@ -27,6 +27,7 @@ import { DateField } from "./DateField";
 import { MultiSelectCombobox } from "./MultiSelectCombobox";
 import { SingleSelectCombobox, type ComboboxOptionBase } from "./SingleSelectCombobox";
 import { FIELD_LABEL_CLASS } from "./transactionForm.constants";
+import { getTransactionSubmitErrorMessage } from "./transactionSubmitError";
 import { formatCurrencyBRL } from "./transactionView";
 import { FooterButton } from "./TransactionForm";
 
@@ -473,6 +474,7 @@ export function CardSpendingForm({ transaction = null, prefill, onAdvancedOpenCh
     }, [sourceGroup, transactions]);
 
     const [submitting, setSubmitting] = useState(false);
+    const [submitError, setSubmitError] = useState("");
     const [advancedOpen, setAdvancedOpen] = useState(false);
     const [installmentPreviewOpen, setInstallmentPreviewOpen] = useState(false);
     const [amountInput, setAmountInputState] = useState(() => (transaction ? formatAmountInputFromValue(transaction.value) : "R$ 0,00"));
@@ -991,6 +993,7 @@ export function CardSpendingForm({ transaction = null, prefill, onAdvancedOpenCh
         }
 
         setSubmitting(true);
+        setSubmitError("");
 
         try {
             const success = await action();
@@ -1000,6 +1003,7 @@ export function CardSpendingForm({ transaction = null, prefill, onAdvancedOpenCh
             }
         } catch (error) {
             console.error("Failed to submit card spending form:", error);
+            setSubmitError(getTransactionSubmitErrorMessage(error));
         }
 
         setSubmitting(false);
@@ -1062,6 +1066,8 @@ export function CardSpendingForm({ transaction = null, prefill, onAdvancedOpenCh
                             </button>
                         </div>
                     </header>
+
+                    {submitError && <p className="mt-3 rounded-xl border border-red-400/25 bg-red-500/10 px-3 py-2 text-sm text-red-100">{submitError}</p>}
 
                     <div className={`mt-2 flex justify-between gap-3`}>
                         <section className="flex flex-col gap-3 grow">

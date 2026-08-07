@@ -1,5 +1,7 @@
+import { motion, useReducedMotion } from "framer-motion";
 import type { LucideIcon } from "lucide-react";
 import { BarChart3, TrendingUp } from "lucide-react";
+import { PLANNING_ENTRANCE_EASE } from "./planningEntranceMotion";
 import type { PlanningReportsToolbarProps } from "./PlanningReportsToolbar";
 import { PlanningReportsToolbar } from "./PlanningReportsToolbar";
 import type { PlanningTimelineToolbarProps } from "./PlanningTimelineToolbar";
@@ -65,8 +67,15 @@ function PlanningHeaderTabButton({ tab, isActive, onTabChange }: PlanningHeaderT
 }
 
 export function PlanningPageHeader({ activePlanningTab, onTabChange, reportsToolbarProps, timelineToolbarProps }: PlanningPageHeaderProps) {
+    const shouldReduceMotion = useReducedMotion();
+
     return (
-        <header className="flex flex-wrap items-center justify-between gap-3 text-left">
+        <motion.header
+            initial={shouldReduceMotion ? false : { opacity: 0, y: -12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.48, ease: PLANNING_ENTRANCE_EASE }}
+            className="relative z-10 flex flex-wrap items-center justify-between gap-3 text-left"
+        >
             <div className="inline-flex gap-2">
                 {PLANNING_TAB_CONFIGS.map((tab) => (
                     <PlanningHeaderTabButton key={tab.id} tab={tab} isActive={activePlanningTab === tab.id} onTabChange={onTabChange} />
@@ -74,6 +83,6 @@ export function PlanningPageHeader({ activePlanningTab, onTabChange, reportsTool
             </div>
 
             {activePlanningTab === "reports" ? <PlanningReportsToolbar {...reportsToolbarProps} /> : <PlanningTimelineToolbar {...timelineToolbarProps} />}
-        </header>
+        </motion.header>
     );
 }

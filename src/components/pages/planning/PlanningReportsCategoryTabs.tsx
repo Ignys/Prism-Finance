@@ -25,7 +25,7 @@ export function PlanningReportsCategoryTabs({ activeView, layoutId, onChange }: 
                         type="button"
                         aria-pressed={isActive}
                         onClick={() => onChange(value)}
-                        className="relative inline-flex h-5 min-w-24 items-center justify-center gap-1.5 rounded-full px-3 text-[11px] font-medium uppercase tracking-[0.08em] transition-colors"
+                        className="relative isolate inline-flex h-5 min-w-24 items-center justify-center gap-1.5 rounded-full px-3 text-[11px] font-medium uppercase tracking-[0.08em] transition-colors"
                     >
                         {isActive ? (
                             <motion.span

@@ -1,9 +1,11 @@
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import type { ReactNode } from "react";
 import { CreditCard, LayoutGrid, Tag, UserRound, Wallet } from "lucide-react";
 import { type AppPage, usePage } from "../../context/PageContext";
 import { RegistryBeneficiariesSection } from "./registry/RegistryBeneficiariesSection";
 import { RegistryCategoriesSection } from "./registry/RegistryCategoriesSection";
 import { RegistryCreditCardsSection } from "./registry/RegistryCreditCardsSection";
+import { REGISTRY_ENTRANCE_EASE } from "./registry/registryMotion";
 import { RegistryTagsSection } from "./registry/RegistryTagsSection";
 import { RegistryWalletsSection } from "./registry/RegistryWalletsSection";
 
@@ -41,11 +43,17 @@ function renderRegistrySection(page: RegistryTabPage) {
 export function RegistryPage() {
     const { currentPage, goToPage } = usePage();
     const activeTab = currentPage === "registry" ? "wallets" : isRegistryTabPage(currentPage) ? currentPage : "wallets";
+    const shouldReduceMotion = useReducedMotion();
 
     return (
         <div className="flex min-h-[calc(100vh-8rem)] justify-center overflow-visible lg:h-[calc(95vh-5rem)] lg:min-h-0 lg:overflow-hidden">
             <section className="flex min-h-0 w-full flex-col space-y-3 overflow-visible lg:h-full lg:overflow-hidden">
-                <div className="flex flex-wrap gap-2">
+                <motion.div
+                    initial={shouldReduceMotion ? false : { opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.42, ease: REGISTRY_ENTRANCE_EASE }}
+                    className="flex flex-wrap gap-2"
+                >
                     {REGISTRY_TABS.map((tab) => {
                         const isActive = tab.page === activeTab;
 
@@ -54,20 +62,42 @@ export function RegistryPage() {
                                 key={tab.page}
                                 type="button"
                                 onClick={() => goToPage(tab.page)}
-                                className={`inline-flex items-center gap-2 rounded-full border px-3 py-2 text-sm transition-colors ${
+                                className={`relative isolate inline-flex items-center gap-2 rounded-full border px-3 py-2 text-sm transition-colors ${
                                     isActive
-                                        ? "border-white/20 bg-white/[0.08] text-white"
+                                        ? "border-white/20 text-white"
                                         : "border-white/[0.08] bg-white/[0.02] text-white/65 hover:border-white/[0.16] hover:bg-white/[0.04] hover:text-white"
                                 }`}
                             >
-                                {tab.icon}
-                                <span>{tab.label}</span>
+                                {isActive ? (
+                                    <motion.span
+                                        layoutId="registry-active-tab"
+                                        transition={{ type: "spring", stiffness: 440, damping: 38 }}
+                                        className="pointer-events-none absolute inset-0 rounded-full bg-white/[0.08]"
+                                    />
+                                ) : null}
+                                <span className="relative z-10 inline-flex items-center gap-2">
+                                    {tab.icon}
+                                    <span>{tab.label}</span>
+                                </span>
                             </button>
                         );
                     })}
-                </div>
+                </motion.div>
 
-                <div className="min-h-0 flex-1 overflow-visible lg:overflow-hidden">{renderRegistrySection(activeTab)}</div>
+                <div className="relative min-h-0 flex-1 overflow-visible lg:overflow-hidden">
+                    <AnimatePresence initial={false} mode="wait">
+                        <motion.div
+                            key={activeTab}
+                            initial={shouldReduceMotion ? false : { opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={shouldReduceMotion ? undefined : { opacity: 0, y: -6 }}
+                            transition={{ duration: 0.24, ease: REGISTRY_ENTRANCE_EASE }}
+                            className="h-full min-h-0"
+                        >
+                            {renderRegistrySection(activeTab)}
+                        </motion.div>
+                    </AnimatePresence>
+                </div>
             </section>
         </div>
     );

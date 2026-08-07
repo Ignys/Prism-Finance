@@ -1,122 +1,103 @@
-import { motion } from "framer-motion";
-import { CreditCard, Pencil, Star } from "lucide-react";
 import { useMemo, useState } from "react";
-import { useFinanceActions, useFinanceCreditCards, useFinanceFavoriteCreditCard } from "../../../context/FinanceContext";
+import {
+    useFinanceCreditCardInvoices,
+    useFinanceCreditCards,
+    useFinanceFavoriteCreditCard,
+    useFinanceStoredTransactions,
+    useFinanceTransactionGroups,
+} from "../../../context/FinanceContext";
 import { useModal } from "../../../context/ModalContext";
-import { WalletAvatar } from "../../common/WalletAvatar";
 import { CreditCardModal } from "../../modal/CreditCardModal";
-import { RegistrySectionActions } from "./RegistrySectionActions";
-
-const currencyFormatter = new Intl.NumberFormat("pt-BR", {
-    style: "currency",
-    currency: "BRL",
-    minimumFractionDigits: 2,
-});
+import { RegistryAssetCard } from "./RegistryAssetCard";
+import { RegistryAssetContextMenu } from "./RegistryAssetContextMenu";
+import { RegistryListItemEntrance } from "./RegistryListItemEntrance";
+import { RegistrySectionHeader } from "./RegistrySectionHeader";
+import { hasCreditCardActivity } from "./registryAssetActivity";
+import { buildRegistryAssetActions } from "./registryAssetTypes";
+import { formatRegistryCurrency } from "./registryFormatters";
+import { useRegistryAssetActionHandler } from "./useRegistryAssetActionHandler";
+import { useRegistryAssetMenu } from "./useRegistryAssetMenu";
 
 export function RegistryCreditCardsSection() {
     const creditCards = useFinanceCreditCards();
+    const invoices = useFinanceCreditCardInvoices();
+    const transactionGroups = useFinanceTransactionGroups();
+    const transactions = useFinanceStoredTransactions();
     const favoriteCreditCardId = useFinanceFavoriteCreditCard();
-    const { setFavoriteCreditCard } = useFinanceActions();
     const { openModal } = useModal();
     const [showArchivedCreditCards, setShowArchivedCreditCards] = useState(false);
+    const { menuState, openMenu, closeMenu } = useRegistryAssetMenu();
+    const handleAssetAction = useRegistryAssetActionHandler("creditCard");
 
     const visibleCreditCards = useMemo(() => creditCards.filter((card) => showArchivedCreditCards || card.isActive), [creditCards, showArchivedCreditCards]);
+    const activityByCreditCardId = useMemo(
+        () => new Map(creditCards.map((card) => [card.id, hasCreditCardActivity(card.id, transactionGroups, transactions, invoices)])),
+        [creditCards, invoices, transactionGroups, transactions],
+    );
+    const selectedCreditCard = menuState ? creditCards.find((card) => card.id === menuState.assetId) ?? null : null;
+    const selectedActions = selectedCreditCard
+        ? buildRegistryAssetActions({
+              kind: "creditCard",
+              isActive: selectedCreditCard.isActive,
+              isFavorite: selectedCreditCard.id === favoriteCreditCardId,
+              hasActivity: activityByCreditCardId.get(selectedCreditCard.id) ?? false,
+          })
+        : [];
     const activeCount = creditCards.filter((card) => card.isActive).length;
     const visibleCount = showArchivedCreditCards ? creditCards.length : activeCount;
 
     return (
         <section className="flex h-full min-h-0 flex-col">
-            <div className="mt-2 mb-3 ml-1 flex flex-wrap items-center justify-between gap-3">
-                <div className="flex items-center gap-2">
-                    {" "}
-                    <p className="text-lg uppercase tracking-[0.07em] text-white/80">Seus cartões de crédito</p>
-                    <span className="rounded-full bg-white/10 px-2 py-0.5 text-xs text-white/60 border border-white/10">{visibleCount}</span>
-                </div>
-                <RegistrySectionActions
-                    isShowingInactive={showArchivedCreditCards}
-                    showLabel="Mostrar arquivados"
-                    hideLabel="Ocultar arquivados"
-                    createLabel="Novo cartão"
-                    onToggleInactive={() => setShowArchivedCreditCards((current) => !current)}
-                    onCreate={() => openModal(<CreditCardModal mode="create" />)}
-                />
-            </div>
+            <RegistrySectionHeader
+                title="Seus cartões de crédito"
+                visibleCount={visibleCount}
+                isShowingInactive={showArchivedCreditCards}
+                showLabel="Mostrar arquivados"
+                hideLabel="Ocultar arquivados"
+                createLabel="Novo cartão"
+                onToggleInactive={() => setShowArchivedCreditCards((current) => !current)}
+                onCreate={() => openModal(<CreditCardModal mode="create" />)}
+            />
 
             <div className="elegant-scrollbar min-h-0 flex-1 overflow-y-auto overflow-x-hidden pr-2">
                 {visibleCreditCards.length < 1 ? (
-                    <div className="rounded-lg border border-white/6 bg-white/[0.02] p-3 text-sm text-white/45">Nenhum cartão para os filtros atuais.</div>
+                    <RegistryListItemEntrance index={0}>
+                        <div className="rounded-xl border border-white/[0.07] bg-white/[0.02] p-4 text-sm text-white/45">Nenhum cartão para os filtros atuais.</div>
+                    </RegistryListItemEntrance>
                 ) : (
-                    <div className="space-y-2">
-                        {visibleCreditCards.map((creditCard, index) => {
-                            const isFavorite = creditCard.id === favoriteCreditCardId;
-
-                            return (
-                                <motion.article
-                                    key={creditCard.id}
-                                    initial={{ opacity: 0, y: 14 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    transition={{ duration: 0.22, delay: index * 0.03, ease: "easeOut" }}
-                                    className={`flex flex-col gap-3 rounded-xl border p-3 md:flex-row md:items-center md:justify-between ${
-                                        creditCard.isActive ? "border-white/[0.06] bg-white/[0.02]" : "border-white/[0.08] bg-white/[0.01] opacity-70"
-                                    }`}
-                                >
-                                    <div className="flex min-w-0 items-center gap-3">
-                                        <WalletAvatar wallet={creditCard} className="h-14 w-14 rounded-xl border border-white/10" iconSize={30} iconStrokeWidth={1.7} />
-
-                                        <div className="min-w-0 text-left">
-                                            <div className="flex flex-wrap items-center gap-2">
-                                                <p className="truncate text-[15px] font-medium text-white">{creditCard.name}</p>
-                                                {!creditCard.isActive && (
-                                                    <span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] text-white/55">
-                                                        Arquivado
-                                                    </span>
-                                                )}
-                                            </div>
-                                            <div className="mt-1 flex flex-wrap gap-1">
-                                                <p className="rounded-full border border-white/10 bg-neutral-200/5 px-2.5 py-0.5 text-xs text-white/45">
-                                                    Limite: {currencyFormatter.format(creditCard.limit)}
-                                                </p>
-                                                <p className="rounded-full border border-white/10 bg-neutral-200/5 px-2.5 py-0.5 text-xs text-white/45">Fechamento: {creditCard.closingDay}</p>
-                                                <p className="rounded-full border border-white/10 bg-neutral-200/5 px-2.5 py-0.5 text-xs text-white/45">Vencimento: {creditCard.dueDay}</p>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div className="flex flex-wrap items-center gap-2">
-                                        <button
-                                            type="button"
-                                            onClick={() => openModal(<CreditCardModal mode="edit" creditCardId={creditCard.id} />)}
-                                            className="inline-flex items-center gap-2 rounded-full border border-white/[0.12] bg-white/[0.03] px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.04em] text-white/70 transition-all hover:border-white/[0.2] hover:text-white"
-                                        >
-                                            <Pencil size={14} />
-                                            Editar
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                if (creditCard.isActive) {
-                                                    void setFavoriteCreditCard(creditCard.id);
-                                                }
-                                            }}
-                                            disabled={!creditCard.isActive}
-                                            className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.04em] transition-all ${
-                                                isFavorite
-                                                    ? "border-amber-200/35 bg-amber-300/10 text-amber-200"
-                                                    : creditCard.isActive
-                                                      ? "border-white/[0.12] bg-white/[0.03] text-white/70 hover:border-white/[0.2] hover:text-white"
-                                                      : "border-white/[0.1] bg-white/[0.02] text-white/40"
-                                            }`}
-                                        >
-                                            <Star size={14} className={isFavorite ? "fill-amber-200 text-amber-200" : ""} />
-                                            {isFavorite ? "Favorito" : "Marcar favorito"}
-                                        </button>
-                                    </div>
-                                </motion.article>
-                            );
-                        })}
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                        {visibleCreditCards.map((creditCard, index) => (
+                            <RegistryAssetCard
+                                key={creditCard.id}
+                                asset={creditCard}
+                                assetTypeLabel="Cartão de crédito"
+                                archivedLabel="Arquivado"
+                                index={index}
+                                isActive={creditCard.isActive}
+                                isFavorite={creditCard.id === favoriteCreditCardId}
+                                metrics={[
+                                    { label: "Limite", value: formatRegistryCurrency(creditCard.limit), emphasis: true, wide: true },
+                                    { label: "Fechamento", value: `Dia ${creditCard.closingDay}` },
+                                    { label: "Vencimento", value: `Dia ${creditCard.dueDay}` },
+                                ]}
+                                onOpenContextMenu={(x, y) => openMenu(creditCard.id, x, y)}
+                            />
+                        ))}
                     </div>
                 )}
             </div>
+
+            <RegistryAssetContextMenu
+                state={menuState}
+                actions={selectedActions}
+                onClose={closeMenu}
+                onSelect={(action) => {
+                    if (selectedCreditCard) {
+                        handleAssetAction(selectedCreditCard, action);
+                    }
+                    closeMenu();
+                }}
+            />
         </section>
     );
 }
