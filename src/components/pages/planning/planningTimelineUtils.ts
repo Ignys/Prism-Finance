@@ -17,6 +17,7 @@ import {
     DEFAULT_TIMELINE_MONTHS,
     TIMELINE_MONTH_OPTIONS,
     type BalanceTone,
+    type InheritedExpenseItem,
     type MonthReality,
     type SimulatedExpenseItem,
     type SimulatedIncomeItem,
@@ -25,6 +26,12 @@ import {
 } from "./planningTimelineTypes";
 
 const MONTH_KEY_FORMAT = "yyyy-MM";
+const TRANSFER_ICON_NAME = "arrow-right-left";
+const INHERITED_EXPENSE_SOURCE_ORDER: Record<InheritedExpenseItem["source"], number> = {
+    transaction: 0,
+    transfer: 1,
+    invoice: 2,
+};
 
 const currencyFormatter = new Intl.NumberFormat("pt-BR", {
     style: "currency",
@@ -214,11 +221,41 @@ function getMonthReality(params: {
                 income += transaction.value;
                 incomeItems.push({
                     id: `income-transaction:${transaction.id}`,
+                    source: "transaction",
                     transactionId: transaction.id,
                     label: getTransactionDisplayName(transaction),
                     amount: roundToCents(transaction.value),
                     iconName: transaction.category.icon,
                     isDisabled: disabledIncomeIds.has(`income-transaction:${transaction.id}`),
+                });
+            }
+            continue;
+        }
+
+        if (transaction.type === "transfer") {
+            if (transaction.destinationWalletId !== null && activeWalletIds.has(transaction.destinationWalletId)) {
+                income += transaction.value;
+                incomeItems.push({
+                    id: `income-transfer:${transaction.id}`,
+                    source: "transfer",
+                    transactionId: transaction.id,
+                    label: getTransactionDisplayName(transaction),
+                    amount: roundToCents(transaction.value),
+                    iconName: TRANSFER_ICON_NAME,
+                    isDisabled: disabledIncomeIds.has(`income-transfer:${transaction.id}`),
+                });
+            }
+
+            if (activeWalletIds.has(transaction.inWallet)) {
+                walletSpendings += transaction.value;
+                inheritedItems.push({
+                    id: `transfer:${transaction.id}`,
+                    source: "transfer",
+                    transactionId: transaction.id,
+                    label: getTransactionDisplayName(transaction),
+                    amount: roundToCents(transaction.value),
+                    iconName: TRANSFER_ICON_NAME,
+                    isDisabled: disabledInheritedExpenseIds.has(`transfer:${transaction.id}`),
                 });
             }
             continue;
@@ -264,7 +301,7 @@ function getMonthReality(params: {
     incomeItems.sort((a, b) => a.label.localeCompare(b.label, "pt-BR", { sensitivity: "base" }));
     inheritedItems.sort((a, b) => {
         if (a.source !== b.source) {
-            return a.source === "invoice" ? 1 : -1;
+            return INHERITED_EXPENSE_SOURCE_ORDER[a.source] - INHERITED_EXPENSE_SOURCE_ORDER[b.source];
         }
         return a.label.localeCompare(b.label, "pt-BR", { sensitivity: "base" });
     });

@@ -74,9 +74,9 @@ import {
     getTodayDate,
     resolveGroupType,
     roundToCents,
-    splitAmountAcrossInstallments,
     toCategoryTypeFromGroupType,
 } from "./helpers";
+import { buildInstallmentSchedule, resolveNewTransactionMode } from "./installmentTransactions";
 import {
     collectCategoryDescendantIds,
     findUncategorizedRootCategory,
@@ -2413,19 +2413,8 @@ export function useFinanceStore(): FinanceStoreValue {
             const transactionId = newTransaction.id && newTransaction.id.trim() ? newTransaction.id.trim() : createId("tx");
             const groupId = newTransaction.groupId && newTransaction.groupId.trim() ? newTransaction.groupId.trim() : `group-${transactionId}`;
             const existingGroup = transactionGroupsRef.current.find((group) => group.id === groupId);
-            const requestedMode = newTransaction.transactionMode;
-            const normalizedRequestedMode: TransactionMode =
-                requestedMode === "recurring" || requestedMode === "installment" || requestedMode === "single" ? requestedMode : "single";
-
             const transactionMode: TransactionMode =
-                existingGroup?.transactionMode ??
-                (groupType === "transfer"
-                    ? "single"
-                    : normalizedRequestedMode === "installment" && groupType === "expense"
-                      ? "installment"
-                      : normalizedRequestedMode === "recurring"
-                        ? "recurring"
-                        : "single");
+                existingGroup?.transactionMode ?? resolveNewTransactionMode(groupType, newTransaction.transactionMode);
 
             const resolvedGroupCreditCardId = existingGroup?.creditCardId ?? (groupType === "expense" ? resolvedCreditCard?.id ?? null : null);
             const rawInstallmentCount = Number(newTransaction.installmentCount ?? existingGroup?.installmentCount ?? 0);
@@ -2544,18 +2533,24 @@ export function useFinanceStore(): FinanceStoreValue {
 
             const createdTransactions: StoredTransaction[] = [];
             if (group.transactionMode === "installment" && installmentCount) {
-                const installmentAmounts = splitAmountAcrossInstallments(absoluteAmount, installmentCount);
-                installmentAmounts.forEach((installmentAmount, index) => {
-                    const transactionStatus = index < ignoredInstallmentsCount ? "skipped" : index === ignoredInstallmentsCount ? status : "pending";
+                const installmentSchedule = buildInstallmentSchedule({
+                    totalAmount: absoluteAmount,
+                    installmentCount,
+                    startDate: scheduledDate,
+                    initialStatus: status,
+                    ignoredInstallmentsCount,
+                    advanceDatesMonthly: !group.creditCardId,
+                });
+                installmentSchedule.forEach((installment, index) => {
                     const transaction = normalizeStoredTransaction({
                         id: index === 0 ? transactionId : createId("tx"),
                         groupId,
-                        installmentNumber: index + 1,
-                        amount: installmentAmount,
-                        scheduledDate,
-                        status: transactionStatus,
-                        paidAt: transactionStatus === "paid" ? resolveLedgerEntryDateIso(scheduledDate, nowIso) : null,
-                        invoiceId: resolveTransactionInvoiceId({ dateValue: scheduledDate, allowRequestedInvoice: false, installmentOffset: index }),
+                        installmentNumber: installment.installmentNumber,
+                        amount: installment.amount,
+                        scheduledDate: installment.scheduledDate,
+                        status: installment.status,
+                        paidAt: installment.status === "paid" ? resolveLedgerEntryDateIso(installment.scheduledDate, nowIso) : null,
+                        invoiceId: resolveTransactionInvoiceId({ dateValue: installment.scheduledDate, allowRequestedInvoice: false, installmentOffset: index }),
                         notes: newTransaction.notes || null,
                         createdAt: nowIso,
                     });

@@ -66,6 +66,10 @@ export function getScopedTransactions(
             return true;
         }
 
+        if (transaction.type === "transfer" && transaction.destinationWalletId !== null && selectedWalletIdSet.has(transaction.destinationWalletId)) {
+            return true;
+        }
+
         return transaction.creditCardId !== null && scopedCreditCardIds.has(transaction.creditCardId);
     });
 }

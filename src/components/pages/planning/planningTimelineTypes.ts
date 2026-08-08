@@ -8,6 +8,7 @@ export type PlanningTab = "timeline" | "reports";
 
 export interface IncomeItem {
     id: string;
+    source: "transaction" | "transfer";
     transactionId: string;
     label: string;
     amount: number;
@@ -27,7 +28,7 @@ export interface SimulatedIncomeItem {
 
 export interface InheritedExpenseItem {
     id: string;
-    source: "transaction" | "invoice";
+    source: "transaction" | "transfer" | "invoice";
     transactionId?: string;
     invoiceId?: string;
     label: string;

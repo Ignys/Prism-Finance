@@ -54,6 +54,7 @@ export interface TransactionFormState {
     date: string;
     resolvedType: TransactionType;
     transactionMode: TransactionMode;
+    installmentCountInput: string;
     editScope: TransactionSeriesScope;
     availableCategories: ReturnType<typeof useFinanceCategories>;
     rootCategories: ReturnType<typeof useFinanceCategories>;
@@ -73,6 +74,7 @@ export interface TransactionFormState {
     setDate: (value: string) => void;
     setDateOffset: (offsetInDays: number) => void;
     setTransactionMode: (value: TransactionMode) => void;
+    setInstallmentCountInput: (value: string) => void;
     setEditScope: (value: TransactionSeriesScope) => void;
     toggleTag: (tagId: string) => void;
     submit: () => Promise<boolean>;
@@ -207,7 +209,10 @@ export function useTransactionForm({ type, transaction, mode = "default", prefil
     const [beneficiaryId, setBeneficiaryId] = useState(transaction?.beneficiaryId ?? "");
     const [selectedTagIds, setSelectedTagIds] = useState<string[]>(transaction?.tagIds ?? []);
     const [date, setDate] = useState(transaction?.date ?? resolveInitialDate(prefill?.initialDate));
-    const [transactionMode, setTransactionModeState] = useState<TransactionMode>(() => (sourceGroup?.transactionMode === "recurring" ? "recurring" : "single"));
+    const [transactionMode, setTransactionModeState] = useState<TransactionMode>(() => sourceGroup?.transactionMode ?? "single");
+    const [installmentCountInput, setInstallmentCountInput] = useState(() =>
+        sourceGroup?.transactionMode === "installment" && sourceGroup.installmentCount ? String(sourceGroup.installmentCount) : "2",
+    );
     const [editScope, setEditScopeState] = useState<TransactionSeriesScope>("single");
     const [hydratedTransactionId, setHydratedTransactionId] = useState<string | null>(null);
     const [hydratedPrefillCategoryId, setHydratedPrefillCategoryId] = useState<string | null>(null);
@@ -287,10 +292,11 @@ export function useTransactionForm({ type, transaction, mode = "default", prefil
         setBeneficiaryId(transaction.beneficiaryId ?? "");
         setSelectedTagIds(transaction.tagIds ?? []);
         setDate(transaction.date ?? getLocalTodayDate());
-        setTransactionModeState(sourceGroup?.transactionMode === "recurring" ? "recurring" : "single");
+        setTransactionModeState(sourceGroup?.transactionMode ?? "single");
+        setInstallmentCountInput(sourceGroup?.transactionMode === "installment" && sourceGroup.installmentCount ? String(sourceGroup.installmentCount) : "2");
         setEditScopeState("single");
         setHydratedTransactionId(null);
-    }, [favoriteWalletId, sourceGroup?.transactionMode, transaction?.id]);
+    }, [favoriteWalletId, sourceGroup?.installmentCount, sourceGroup?.transactionMode, transaction?.id]);
 
     useEffect(() => {
         if (!transaction) {
@@ -406,7 +412,7 @@ export function useTransactionForm({ type, transaction, mode = "default", prefil
     };
 
     const setTransactionMode = (value: TransactionMode) => {
-        setTransactionModeState(value === "recurring" ? "recurring" : "single");
+        setTransactionModeState(value === "installment" || value === "recurring" ? value : "single");
     };
 
     const setEditScope = (value: TransactionSeriesScope) => {
@@ -429,9 +435,19 @@ export function useTransactionForm({ type, transaction, mode = "default", prefil
         const resolvedTransactionMode: TransactionMode =
             isTransfer
                 ? "single"
+                : transactionMode === "installment"
+                  ? "installment"
                 : transactionMode === "recurring"
-                    ? "recurring"
-                    : "single";
+                  ? "recurring"
+                  : "single";
+        const parsedInstallmentCount = Number(installmentCountInput);
+        const resolvedInstallmentCount =
+            resolvedTransactionMode === "installment" && Number.isInteger(parsedInstallmentCount) && parsedInstallmentCount >= 2
+                ? parsedInstallmentCount
+                : null;
+        if (resolvedTransactionMode === "installment" && !resolvedInstallmentCount) {
+            return null;
+        }
 
         const finalStatus = statusOverride ?? status;
 
@@ -449,7 +465,7 @@ export function useTransactionForm({ type, transaction, mode = "default", prefil
             status: finalStatus,
             notes: trimmedDescription || undefined,
             transactionMode: resolvedTransactionMode,
-            installmentCount: null,
+            installmentCount: resolvedInstallmentCount,
             recurrenceRule:
                 resolvedTransactionMode === "recurring"
                     ? {
@@ -588,6 +604,7 @@ export function useTransactionForm({ type, transaction, mode = "default", prefil
         date,
         resolvedType,
         transactionMode,
+        installmentCountInput,
         editScope,
         availableCategories,
         rootCategories,
@@ -607,6 +624,7 @@ export function useTransactionForm({ type, transaction, mode = "default", prefil
         setDate,
         setDateOffset,
         setTransactionMode,
+        setInstallmentCountInput,
         setEditScope,
         toggleTag,
         saveAndContinue,

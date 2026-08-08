@@ -1,5 +1,5 @@
 import { motion, useReducedMotion } from "framer-motion";
-import { ArrowDownRight, ArrowUpRight, Columns3Cog, CreditCard as CreditCardIcon, Gift, Plus } from "lucide-react";
+import { ArrowDownRight, ArrowRightLeft, ArrowUpRight, Columns3Cog, CreditCard as CreditCardIcon, Gift, Plus } from "lucide-react";
 import { useEffect, useMemo, useState, type MouseEvent } from "react";
 import type { PlanningWishlistSelection, WishItem } from "../../../context/FinanceContext";
 import { PLANNING_ENTRANCE_EASE } from "./planningEntranceMotion";
@@ -105,13 +105,14 @@ export function PlanningDetailsAside({
         const isActive = target.itemType === "wishlist" ? target.isActive : !target.item.isDisabled;
         const isNormalItem = target.itemType !== "wishlist" && target.variant === "normal";
         const isNormalExpenseInvoice = isNormalItem && target.itemType === "expense" && target.item.source === "invoice";
+        const isNormalTransfer = isNormalItem && target.item.source === "transfer";
 
         return buildPlanningProjectionContextActions({
             itemType: target.itemType,
             isActive,
             canEdit: !isNormalExpenseInvoice,
             canRemove: !isNormalItem && target.itemType !== "wishlist",
-            editLabel: isNormalItem ? (target.itemType === "income" ? "Abrir receita" : "Abrir despesa") : undefined,
+            editLabel: isNormalItem ? (isNormalTransfer ? "Abrir transferência" : target.itemType === "income" ? "Abrir receita" : "Abrir despesa") : undefined,
         });
     }, [contextMenuState]);
 
@@ -216,6 +217,7 @@ export function PlanningDetailsAside({
                             amount={item.amount}
                             iconName={item.iconName}
                             iconTone="income"
+                            customIcon={item.source === "transfer" ? ArrowRightLeft : undefined}
                             active={!item.isDisabled}
                             onToggle={onToggleIncome}
                             onContextMenu={(event) =>
@@ -245,7 +247,7 @@ export function PlanningDetailsAside({
                             iconTone="expense"
                             active={!item.isDisabled}
                             onToggle={onToggleInheritedExpense}
-                            customIcon={item.source === "invoice" ? CreditCardIcon : undefined}
+                            customIcon={item.source === "invoice" ? CreditCardIcon : item.source === "transfer" ? ArrowRightLeft : undefined}
                             onContextMenu={(event) =>
                                 handleProjectionContextMenu(event, {
                                     itemType: "expense",

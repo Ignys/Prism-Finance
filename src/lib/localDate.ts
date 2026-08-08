@@ -49,3 +49,15 @@ export function getLocalDateFromOffset(offsetInDays: number, referenceDate = new
     targetDate.setDate(targetDate.getDate() + offsetInDays);
     return formatLocalDateInput(targetDate);
 }
+
+export function addMonthsToLocalDate(value: string, months: number): string {
+    const parsed = parseAppDate(value);
+    if (!parsed || !Number.isFinite(months)) {
+        return value;
+    }
+
+    const shiftedMonth = new Date(parsed.getFullYear(), parsed.getMonth() + Math.trunc(months), 1);
+    const lastDayOfShiftedMonth = new Date(shiftedMonth.getFullYear(), shiftedMonth.getMonth() + 1, 0).getDate();
+    const shiftedDate = new Date(shiftedMonth.getFullYear(), shiftedMonth.getMonth(), Math.min(parsed.getDate(), lastDayOfShiftedMonth));
+    return formatLocalDateInput(shiftedDate);
+}

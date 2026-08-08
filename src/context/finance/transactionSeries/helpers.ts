@@ -14,17 +14,6 @@ export function addDays(dateValue: string, days: number): string {
     return `${shifted.getFullYear()}-${String(shifted.getMonth() + 1).padStart(2, "0")}-${String(shifted.getDate()).padStart(2, "0")}`;
 }
 
-export function addMonths(dateValue: string, months: number): string {
-    const parsed = parseAppDate(dateValue);
-    if (!parsed) {
-        return dateValue;
-    }
-    const shiftedMonth = new Date(parsed.getFullYear(), parsed.getMonth() + months, 1);
-    const day = Math.min(parsed.getDate(), new Date(shiftedMonth.getFullYear(), shiftedMonth.getMonth() + 1, 0).getDate());
-    const shifted = new Date(shiftedMonth.getFullYear(), shiftedMonth.getMonth(), day);
-    return `${shifted.getFullYear()}-${String(shifted.getMonth() + 1).padStart(2, "0")}-${String(shifted.getDate()).padStart(2, "0")}`;
-}
-
 export function monthDistance(fromDate: string, toDate: string): number {
     const from = parseAppDate(fromDate);
     const to = parseAppDate(toDate);

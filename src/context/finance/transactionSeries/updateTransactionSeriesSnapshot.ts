@@ -1,4 +1,4 @@
-import { parseAppDate } from "../../../lib/localDate";
+import { addMonthsToLocalDate, parseAppDate } from "../../../lib/localDate";
 import {
     createLedgerEntriesForPaidTransaction,
     normalizeTransactionStatus,
@@ -15,7 +15,7 @@ import {
     type TransactionGroup,
     type TransactionSeriesScope,
 } from "../../financeTypes";
-import { addDays, addMonths, compareSeriesTransactions, isAtOrAfter, monthDistance, recalculateGroupTotals, replaceTransactionTags, resolveCategoryFields, roundToCents } from "./helpers";
+import { addDays, compareSeriesTransactions, isAtOrAfter, monthDistance, recalculateGroupTotals, replaceTransactionTags, resolveCategoryFields, roundToCents } from "./helpers";
 import { validateTransactionSeriesUpdateInvariants } from "./invariants";
 
 export interface TransactionSeriesUpdateResult {
@@ -184,7 +184,7 @@ function resolveAllScopeAnchor(group: TransactionGroup, selected: StoredTransact
     if (resolvedDate === selected.scheduledDate) {
         return oldAnchor;
     }
-    return addMonths(resolvedDate, -monthDistance(oldAnchor, selected.scheduledDate));
+    return addMonthsToLocalDate(resolvedDate, -monthDistance(oldAnchor, selected.scheduledDate));
 }
 
 function transactionFinancialSignature(transaction: StoredTransaction, group: TransactionGroup): string {
@@ -267,7 +267,7 @@ function buildSeriesTransaction(params: {
     const { transaction, oldGroup, nextGroup, resolved, shouldMove, shouldShiftDate, selected, now, structuralChanges } = params;
     const canChangeFinancialFields = transaction.status === "pending";
     const scheduledDate = canChangeFinancialFields && structuralChanges.scheduledDate && shouldShiftDate
-        ? addMonths(resolved.scheduledDate, monthDistance(selected.scheduledDate, transaction.scheduledDate))
+        ? addMonthsToLocalDate(resolved.scheduledDate, monthDistance(selected.scheduledDate, transaction.scheduledDate))
         : transaction.scheduledDate;
     const nextStatus = canChangeFinancialFields && structuralChanges.status ? resolved.status : transaction.status;
     const oldSourceWalletId = resolveTransactionSourceWalletId(transaction, oldGroup);
@@ -307,7 +307,7 @@ function addChangedDateExclusions(params: {
     }
     params.transactions.forEach((transaction) => {
         if (transaction.status !== "pending") {
-            excluded.add(addMonths(params.resolvedDate, monthDistance(params.selected.scheduledDate, transaction.scheduledDate)));
+            excluded.add(addMonthsToLocalDate(params.resolvedDate, monthDistance(params.selected.scheduledDate, transaction.scheduledDate)));
         }
     });
     return Array.from(excluded);

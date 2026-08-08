@@ -1,4 +1,4 @@
-import { parseAppDate } from "../../lib/localDate";
+import { addMonthsToLocalDate, parseAppDate } from "../../lib/localDate";
 import { normalizeStoredTransaction, type StoredTransaction, type Tag, type TransactionGroup, type TransactionTag } from "../financeTypes";
 import { createId, getTodayDate, roundToCents } from "./helpers";
 
@@ -14,17 +14,6 @@ interface RecurrenceRuleView {
     sourceWalletId: string | null;
     destinationWalletId: string | null;
     creditCardId: string | null;
-}
-
-function addMonths(dateValue: string, months: number): string {
-    const parsed = parseAppDate(dateValue);
-    if (!parsed || !Number.isFinite(months)) {
-        return dateValue;
-    }
-    const shiftedBase = new Date(parsed.getFullYear(), parsed.getMonth() + months, 1);
-    const targetDay = Math.min(parsed.getDate(), new Date(shiftedBase.getFullYear(), shiftedBase.getMonth() + 1, 0).getDate());
-    const shifted = new Date(shiftedBase.getFullYear(), shiftedBase.getMonth(), targetDay);
-    return `${shifted.getFullYear()}-${String(shifted.getMonth() + 1).padStart(2, "0")}-${String(shifted.getDate()).padStart(2, "0")}`;
 }
 
 function recalculateGroupTotals(groups: TransactionGroup[], transactions: StoredTransaction[]): TransactionGroup[] {
@@ -91,7 +80,7 @@ export function ensureRecurringTransactionsHorizon(params: {
 }): { groups: TransactionGroup[]; transactions: StoredTransaction[]; transactionTags: TransactionTag[]; changed: boolean } {
     const today = params.today ?? getTodayDate();
     const now = params.now ?? new Date().toISOString();
-    const horizonEndDate = addMonths(today, RECURRING_MONTHS_HORIZON - 1);
+    const horizonEndDate = addMonthsToLocalDate(today, RECURRING_MONTHS_HORIZON - 1);
     const validTagIds = new Set(params.tags.map((tag) => tag.id));
     const nextTransactions = [...params.transactions];
     const nextTransactionTags = [...params.transactionTags];
@@ -138,7 +127,7 @@ export function ensureRecurringTransactionsHorizon(params: {
                 recurrence.tagIds.forEach((tagId) => nextTransactionTags.push({ transactionId: transaction.id, tagId }));
                 changed = true;
             }
-            cursor = addMonths(cursor, recurrence.interval);
+            cursor = addMonthsToLocalDate(cursor, recurrence.interval);
         }
     });
 

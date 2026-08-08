@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowRight, CircleX, Copy, Layers3, ReceiptText, Repeat, SlidersHorizontal, SquareSlash, Trash2, X } from "lucide-react";
-import type { Beneficiary, Category, Tag, Transaction, TransactionMode, TransactionSeriesScope, TransactionType, Wallet } from "../../context/FinanceContext";
+import { ArrowRight, CircleX, Copy, Layers3, ReceiptText, SlidersHorizontal, SquareSlash, Trash2, X } from "lucide-react";
+import type { Beneficiary, Category, Tag, Transaction, TransactionSeriesScope, TransactionType, Wallet } from "../../context/FinanceContext";
 import { useModal } from "../../context/ModalContext";
 import { DateField } from "./DateField";
 import { MultiSelectCombobox } from "./MultiSelectCombobox";
 import { SingleSelectCombobox, type ComboboxOptionBase } from "./SingleSelectCombobox";
 import { BeneficiaryOptionContent, CategoryOptionContent, StatusField, TagOptionContent, TransactionHeader, WalletOptionContent } from "./TransactionFormParts";
 import { FIELD_INPUT_CLASS, FIELD_LABEL_CLASS } from "./transactionForm.constants";
+import { TransactionModeField } from "./TransactionModeField";
 import { getTransactionSubmitErrorMessage } from "./transactionSubmitError";
 import { useTransactionForm } from "./useTransactionForm";
 
@@ -29,32 +30,10 @@ interface TagOption extends ComboboxOptionBase {
     tag: Tag;
 }
 
-interface TransactionModeOption extends ComboboxOptionBase {
-    mode: TransactionMode;
-    icon: typeof ReceiptText;
-}
-
 interface EditScopeOption extends ComboboxOptionBase {
     scope: TransactionSeriesScope;
     icon: typeof ReceiptText;
 }
-
-const TRANSACTION_MODE_OPTIONS: TransactionModeOption[] = [
-    {
-        id: "single",
-        label: "Unica",
-        searchText: "unica avulsa single",
-        mode: "single",
-        icon: ReceiptText,
-    },
-    {
-        id: "recurring",
-        label: "Fixa mensal",
-        searchText: "fixa mensal recorrente recurring",
-        mode: "recurring",
-        icon: Repeat,
-    },
-];
 
 const EDIT_SCOPE_OPTIONS: EditScopeOption[] = [
     {
@@ -79,19 +58,6 @@ const EDIT_SCOPE_OPTIONS: EditScopeOption[] = [
         icon: Layers3,
     },
 ];
-
-function TransactionModeOptionContent({ option }: { option: TransactionModeOption }) {
-    const Icon = option.icon;
-
-    return (
-        <div className="flex items-center gap-2">
-            <span className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-white/[0.12] bg-white/[0.04] text-white/80">
-                <Icon size={14} />
-            </span>
-            <span className="truncate">{option.label}</span>
-        </div>
-    );
-}
 
 function EditScopeOptionContent({ option }: { option: EditScopeOption }) {
     const Icon = option.icon;
@@ -393,24 +359,12 @@ export function TransactionForm({ type, transaction, mode = "default", prefill, 
                                     labelClassName={FIELD_LABEL_CLASS}
                                 />
 
-                                <SingleSelectCombobox
-                                    disableSearch
-                                    label="Tipo"
-                                    value={form.transactionMode === "recurring" ? "recurring" : "single"}
-                                    placeholder="Selecione um modo"
-                                    emptyMessage="Nenhum modo encontrado."
-                                    options={TRANSACTION_MODE_OPTIONS}
-                                    onChange={(value) => {
-                                        if (value === "recurring" || value === "single") {
-                                            form.setTransactionMode(value);
-                                            return;
-                                        }
-
-                                        form.setTransactionMode("single");
-                                    }}
-                                    renderOptionContent={(option) => <TransactionModeOptionContent option={option} />}
-                                    labelClassName={FIELD_LABEL_CLASS}
-                                    disabled={form.isInvoicePaymentEdit || form.isTransfer}
+                                <TransactionModeField
+                                    mode={form.transactionMode}
+                                    installmentCountInput={form.installmentCountInput}
+                                    onModeChange={form.setTransactionMode}
+                                    onInstallmentCountChange={form.setInstallmentCountInput}
+                                    disabled={form.isInvoicePaymentEdit || form.isTransfer || form.isEditing}
                                 />
                             </aside>
                         </>
