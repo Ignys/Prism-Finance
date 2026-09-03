@@ -99,9 +99,25 @@ import {
     PLANNING_LOCAL_PREFERENCES_SECTION,
 } from "../../lib/planningLocalPreferences";
 import { buildUserProfileData, type UserProfileData } from "../../lib/userProfile";
-import { loadSupabaseFinanceData, saveSupabaseFinanceData, subscribeToFinanceRevisionChanges, type SupabaseFinanceData } from "../../supabase/finance";
+import {
+    createEmptySupabaseFinanceData,
+    loadSupabaseFinanceData,
+    loadSupabaseFinanceIncrementally,
+    saveSupabaseFinanceData,
+    subscribeToFinanceRevisionChanges,
+    type SupabaseFinanceData,
+} from "../../supabase/finance";
+import {
+    acceptSupabaseFamilyInvite,
+    createSupabaseFamily,
+    createSupabaseFamilyInvite,
+    loadCurrentFamilyContext,
+    removeSupabaseFamilyMember,
+    subscribeToFamilyShareRevisionChanges,
+} from "../../supabase/family";
 import { getFinanceClientId, publishFinanceRevisionToTabs, subscribeToFinanceRevisionMessages } from "./crossTabSync";
 import { mergeSupabaseFinanceData } from "./financeSyncMerge";
+import { buildInvoiceSettlement } from "./invoiceSettlement";
 import { ensureRecurringTransactionsHorizon } from "./recurringTransactions";
 import { toSupabaseFinanceData, useFinanceSyncQueue } from "./useFinanceSyncQueue";
 import {
@@ -799,7 +815,7 @@ export function useFinanceStore(): FinanceStoreValue {
                 profile: params.profile,
             });
             const localSnapshot = applyLocalPlanningPreferences(preparedFinance.snapshot, user?.uid);
-            const acknowledgedData = toSupabaseFinanceData(preparedFinance.snapshot, preparedFinance.favoriteWalletId);
+            const acknowledgedData = params.financeData ?? createEmptySupabaseFinanceData();
 
             currentRevisionRef.current = params.revision;
             lastAcknowledgedDataRef.current = acknowledgedData;
@@ -807,7 +823,6 @@ export function useFinanceStore(): FinanceStoreValue {
             setProfile(params.profile);
             setSnapshotState(localSnapshot);
             setFavoriteWalletId(preparedFinance.favoriteWalletId);
-            setFamilyState(null, []);
             saveLocalSnapshotBackup(localSnapshot, params.trigger, preparedFinance.favoriteWalletId);
 
             return {
@@ -823,13 +838,23 @@ export function useFinanceStore(): FinanceStoreValue {
 
     const applyConfirmedRevision = useCallback(
         (financeData: SupabaseFinanceData, revision: number) => {
-            currentRevisionRef.current = revision;
-            lastAcknowledgedDataRef.current = financeData;
+            const resolvedProfile = profileRef.current ?? (user ? buildUserProfileData(user) : null);
+            if (resolvedProfile) {
+                applySupabaseFinanceData({
+                    financeData,
+                    revision,
+                    profile: resolvedProfile,
+                    trigger: "sync-accepted",
+                });
+            } else {
+                currentRevisionRef.current = revision;
+                lastAcknowledgedDataRef.current = financeData;
+            }
             if (user) {
                 publishFinanceRevisionToTabs(user.uid, revision, financeClientId);
             }
         },
-        [financeClientId, user],
+        [applySupabaseFinanceData, financeClientId, user],
     );
 
     const mergeAndPrepareFinanceData = useCallback(
@@ -871,7 +896,6 @@ export function useFinanceStore(): FinanceStoreValue {
             setProfile(resolvedProfile);
             setSnapshotState(localSnapshot);
             setFavoriteWalletId(preparedFinance.favoriteWalletId);
-            setFamilyState(null, []);
             saveLocalSnapshotBackup(localSnapshot, "revision-conflict-merge", preparedFinance.favoriteWalletId);
         },
         [saveLocalSnapshotBackup, setFamilyState, setSnapshotState, user],
@@ -893,37 +917,33 @@ export function useFinanceStore(): FinanceStoreValue {
         retrySync: retryFinanceSync,
     } = financeSync;
 
-    const syncCurrentUserFamilyBeneficiary = useCallback(
-        async (familyId: string, snapshotOverride?: FinanceSnapshot, profileOverride?: UserProfileData | null) => {
-            void familyId;
-            void snapshotOverride;
-            void profileOverride;
-            return null;
-        },
-        [],
-    );
-
-    const syncCurrentUserSharedWishlist = useCallback(
-        async (familyId: string, snapshotOverride?: FinanceSnapshot) => {
-            void familyId;
-            void snapshotOverride;
-            return null;
-        },
-        [],
-    );
-
     const refreshFamilyState = useCallback(
-        async (rawUserData?: unknown) => {
-            void rawUserData;
-            setFamilyState(null, []);
-            return {
-                family: null,
-                sharedWishlists: [],
-                sharedBeneficiaries: [],
-            };
+        async () => {
+            if (!user) {
+                setFamilyState(null, []);
+                return;
+            }
+
+            const familyContext = await loadCurrentFamilyContext();
+            setFamilyState(familyContext.family, familyContext.sharedWishlists);
         },
-        [setFamilyState],
+        [setFamilyState, user],
     );
+
+    useEffect(() => {
+        const familyId = family?.id;
+        if (!familyId || !user) {
+            return;
+        }
+
+        return subscribeToFamilyShareRevisionChanges(familyId, (change) => {
+            if (change.updatedBy !== user.uid) {
+                void refreshFamilyState().catch((error) => {
+                    console.error("Failed to refresh shared family data:", error);
+                });
+            }
+        });
+    }, [family?.id, refreshFamilyState, user]);
 
     useEffect(() => {
         let isActive = true;
@@ -952,12 +972,7 @@ export function useFinanceStore(): FinanceStoreValue {
                 }
                 const pendingSyncFinance = getPendingSyncData();
                 const supabaseFinance = await loadSupabaseFinanceData(user.uid);
-                const remotePreparedFinance = prepareFinanceSnapshot({
-                    financeSource: supabaseFinance.data,
-                    userId: user.uid,
-                    profile,
-                });
-                const remoteAcknowledgedData = toSupabaseFinanceData(remotePreparedFinance.snapshot, remotePreparedFinance.favoriteWalletId);
+                const remoteAcknowledgedData = supabaseFinance.data ?? createEmptySupabaseFinanceData();
                 const financeSource = pendingSyncFinance ?? supabaseFinance.data;
                 const preparedFinance = prepareFinanceSnapshot({
                     financeSource,
@@ -965,6 +980,10 @@ export function useFinanceStore(): FinanceStoreValue {
                     profile,
                 });
                 const localSnapshot = applyLocalPlanningPreferences(preparedFinance.snapshot, user.uid);
+                const familyContext = await loadCurrentFamilyContext().catch((error) => {
+                    console.error("Failed to load family data:", error);
+                    return { family: null, sharedWishlists: [] };
+                });
 
                 if (!isActive) {
                     return;
@@ -975,7 +994,7 @@ export function useFinanceStore(): FinanceStoreValue {
                 favoriteWalletIdRef.current = preparedFinance.favoriteWalletId;
                 setSnapshotState(localSnapshot);
                 setFavoriteWalletId(preparedFinance.favoriteWalletId);
-                setFamilyState(null, []);
+                setFamilyState(familyContext.family, familyContext.sharedWishlists);
                 saveLocalSnapshotBackup(localSnapshot, "load-success", preparedFinance.favoriteWalletId);
 
                 if (!pendingSyncFinance && (!supabaseFinance.data || preparedFinance.changed)) {
@@ -1009,7 +1028,7 @@ export function useFinanceStore(): FinanceStoreValue {
         return () => {
             isActive = false;
         };
-    }, [enqueueFinanceSync, getPendingSyncData, profileVersion, refreshFamilyState, saveLocalSnapshotBackup, setFamilyState, setSnapshotState, syncCurrentUserFamilyBeneficiary, user]);
+    }, [enqueueFinanceSync, getPendingSyncData, profileVersion, refreshFamilyState, saveLocalSnapshotBackup, setFamilyState, setSnapshotState, user]);
 
     const refreshFromConfirmedRevision = useCallback(
         async (revision: number, trigger: string, updatedBy: string | null) => {
@@ -1028,8 +1047,18 @@ export function useFinanceStore(): FinanceStoreValue {
             }
 
             try {
-                const loadedFinance = await loadSupabaseFinanceData(user.uid);
+                const acknowledgedData = lastAcknowledgedDataRef.current;
+                const incremental = acknowledgedData
+                    ? await loadSupabaseFinanceIncrementally(acknowledgedData, currentRevisionRef.current)
+                    : null;
+                const loadedFinance = !incremental || incremental.requiresFullReload
+                    ? await loadSupabaseFinanceData(user.uid)
+                    : { data: incremental.data, revision: incremental.revision, tombstones: [] };
                 if (loadedFinance.revision <= currentRevisionRef.current) {
+                    return;
+                }
+                if (getPendingSyncData()) {
+                    retryFinanceSync();
                     return;
                 }
 
@@ -1045,7 +1074,7 @@ export function useFinanceStore(): FinanceStoreValue {
                 console.error("Failed to refresh finance data after revision update:", error);
             }
         },
-        [applySupabaseFinanceData, financeClientId, hasPendingFinanceSync, retryFinanceSync, user],
+        [applySupabaseFinanceData, financeClientId, getPendingSyncData, hasPendingFinanceSync, retryFinanceSync, user],
     );
 
     useEffect(() => {
@@ -1156,30 +1185,40 @@ export function useFinanceStore(): FinanceStoreValue {
 
     const createFamily = useCallback(
         async (familyName?: string) => {
-            void familyName;
-            throw new Error("Familia ainda nao foi migrada para Supabase.");
+            await createSupabaseFamily(familyName);
+            await refreshFamilyState();
         },
-        [],
+        [refreshFamilyState],
     );
 
     const generateFamilyInvite = useCallback(async () => {
-        throw new Error("Familia ainda nao foi migrada para Supabase.");
-    }, []);
+        const familyId = familyRef.current?.id;
+        if (!familyId) {
+            throw new Error("Crie ou entre em uma familia antes de gerar um convite.");
+        }
+        const invite = await createSupabaseFamilyInvite(familyId);
+        await refreshFamilyState();
+        return invite;
+    }, [refreshFamilyState]);
 
     const joinFamilyByCode = useCallback(
         async (code: string) => {
-            void code;
-            throw new Error("Familia ainda nao foi migrada para Supabase.");
+            await acceptSupabaseFamilyInvite(code);
+            await refreshFamilyState();
         },
-        [],
+        [refreshFamilyState],
     );
 
     const removeFamilyMember = useCallback(
         async (memberUid: string) => {
-            void memberUid;
-            throw new Error("Familia ainda nao foi migrada para Supabase.");
+            const familyId = familyRef.current?.id;
+            if (!familyId) {
+                return;
+            }
+            await removeSupabaseFamilyMember(familyId, memberUid);
+            await refreshFamilyState();
         },
-        [],
+        [refreshFamilyState],
     );
 
     const updateFinance = useCallback(
@@ -1192,12 +1231,8 @@ export function useFinanceStore(): FinanceStoreValue {
             }).snapshot;
             setSnapshotState(normalized);
             await persistFullSnapshot(normalized);
-            if (familyRef.current?.id) {
-                await syncCurrentUserSharedWishlist(familyRef.current.id, normalized);
-                await syncCurrentUserFamilyBeneficiary(familyRef.current.id, normalized);
-            }
         },
-        [persistFullSnapshot, setSnapshotState, syncCurrentUserFamilyBeneficiary, syncCurrentUserSharedWishlist, user],
+        [persistFullSnapshot, setSnapshotState, user],
     );
 
     const updatePlanningState = useCallback(
@@ -1617,6 +1652,7 @@ export function useFinanceStore(): FinanceStoreValue {
                 status: "paid",
                 paidAt: ledgerDateIso,
                 invoiceId: null,
+                paymentForInvoiceId: invoice.id,
                 notes: invoicePaymentNote,
                 createdAt: nowIso,
             });
@@ -1669,46 +1705,26 @@ export function useFinanceStore(): FinanceStoreValue {
 
     const setCreditCardInvoicesPaidState = useCallback(
         async ({ invoiceIds, markAsPaid }: SetCreditCardInvoicesPaidStateDraft) => {
-            const requestedInvoiceIds = new Set(invoiceIds.map((invoiceId) => invoiceId.trim()).filter(Boolean));
-            if (requestedInvoiceIds.size < 1) {
-                return;
-            }
-
-            const nowIso = new Date().toISOString();
-            let changed = false;
-
-            const nextInvoices = creditCardInvoicesRef.current.map((invoice) => {
-                if (!requestedInvoiceIds.has(invoice.id)) {
-                    return invoice;
-                }
-
-                const nextPaidAmount = markAsPaid ? invoice.totalAmount : 0;
-                const nextStatus = markAsPaid && invoice.totalAmount > 0 ? "paid" : "open";
-                const nextPaidAt = markAsPaid && invoice.totalAmount > 0 ? nowIso : null;
-
-                if (invoice.paidAmount === nextPaidAmount && invoice.status === nextStatus && invoice.paidAt === nextPaidAt) {
-                    return invoice;
-                }
-
-                changed = true;
-                return normalizeCreditCardInvoice(
-                    {
-                        ...invoice,
-                        paidAmount: nextPaidAmount,
-                        status: nextStatus,
-                        paidAt: nextPaidAt,
-                        updatedAt: nowIso,
-                    },
-                    new Set(creditCardsRef.current.map((card) => card.id)),
-                );
+            const settlement = buildInvoiceSettlement({
+                invoiceIds,
+                markAsPaid,
+                userId: user?.uid ?? null,
+                invoices: creditCardInvoicesRef.current,
+                transactionGroups: transactionGroupsRef.current,
+                transactions: storedTransactionsRef.current,
+                ledgerEntries: ledgerEntriesRef.current,
+                beneficiaries: beneficiariesRef.current,
+                categories: categoriesRef.current,
             });
-
-            if (!changed) {
+            if (!settlement.changed) {
                 return;
             }
 
             const snapshot = buildSnapshot({
-                creditCardInvoices: nextInvoices,
+                creditCardInvoices: settlement.invoices,
+                transactionGroups: settlement.transactionGroups,
+                transactions: settlement.transactions,
+                ledgerEntries: settlement.ledgerEntries,
             });
 
             setSnapshotState(snapshot);
@@ -1808,11 +1824,8 @@ export function useFinanceStore(): FinanceStoreValue {
             const snapshot = buildSnapshot({ beneficiaries: nextBeneficiaries });
             setSnapshotState(snapshot);
             await persistFinanceFields({ beneficiaries: snapshot.beneficiaries, beneficiaryOrder: snapshot.beneficiaries.map((beneficiary) => beneficiary.id) });
-            if (beneficiary.isSelfProfile && familyRef.current?.id) {
-                await syncCurrentUserFamilyBeneficiary(familyRef.current.id, snapshot);
-            }
         },
-        [buildSnapshot, persistFinanceFields, setSnapshotState, syncCurrentUserFamilyBeneficiary, user?.uid],
+        [buildSnapshot, persistFinanceFields, setSnapshotState, user?.uid],
     );
 
     const addCategory = useCallback(
@@ -1892,11 +1905,8 @@ export function useFinanceStore(): FinanceStoreValue {
             const snapshot = buildSnapshot({ wishItems: nextWishItems });
             setSnapshotState(snapshot);
             await persistFinanceFields({ wishItems: snapshot.wishItems });
-            if (familyRef.current?.id) {
-                await syncCurrentUserSharedWishlist(familyRef.current.id, snapshot);
-            }
         },
-        [buildSnapshot, persistFinanceFields, setSnapshotState, syncCurrentUserSharedWishlist, user?.uid],
+        [buildSnapshot, persistFinanceFields, setSnapshotState, user?.uid],
     );
 
     const removeWishItem = useCallback(
@@ -1909,11 +1919,8 @@ export function useFinanceStore(): FinanceStoreValue {
             const snapshot = buildSnapshot({ wishItems: nextWishItems });
             setSnapshotState(snapshot);
             await persistFinanceFields({ wishItems: snapshot.wishItems });
-            if (familyRef.current?.id) {
-                await syncCurrentUserSharedWishlist(familyRef.current.id, snapshot);
-            }
         },
-        [buildSnapshot, persistFinanceFields, setSnapshotState, syncCurrentUserSharedWishlist],
+        [buildSnapshot, persistFinanceFields, setSnapshotState],
     );
 
     const reorderBeneficiaries = useCallback(
@@ -2107,12 +2114,14 @@ export function useFinanceStore(): FinanceStoreValue {
                 beneficiaryId,
                 beneficiaries: nextBeneficiaries,
                 transactionGroups: transactionGroupsRef.current,
+                transactions: storedTransactionsRef.current,
                 fallbackBeneficiary,
             });
 
             const snapshot = buildSnapshot({
                 beneficiaries: deleted.beneficiaries.sort(compareBySortOrderNameAndId),
                 transactionGroups: deleted.transactionGroups,
+                transactions: deleted.transactions,
             });
             setSnapshotState(snapshot);
             await persistFullSnapshot(snapshot);
@@ -2207,12 +2216,16 @@ export function useFinanceStore(): FinanceStoreValue {
                 categoryId,
                 categories: categoriesRef.current,
                 transactionGroups: transactionGroupsRef.current,
+                transactions: storedTransactionsRef.current,
+                wishItems: wishItemsRef.current,
                 fallbackCategory,
             });
 
             const snapshot = buildSnapshot({
                 categories: [...nextCategories].sort(compareCategoriesByTypeParentSort),
                 transactionGroups: deleted.transactionGroups,
+                transactions: deleted.transactions,
+                wishItems: deleted.wishItems,
             });
             setSnapshotState(snapshot);
             await persistFullSnapshot(snapshot);
@@ -2647,7 +2660,7 @@ export function useFinanceStore(): FinanceStoreValue {
             setSnapshotState(snapshot);
             await persistFullSnapshot(snapshot);
         },
-        [buildSnapshot, persistFullSnapshot, setSnapshotState],
+        [buildSnapshot, persistFullSnapshot, setSnapshotState, user?.uid],
     );
 
     const setTransactionStatus = useCallback(

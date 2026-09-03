@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { formatLocalDateInput, getLocalDateFromOffset, parseDateOnlyToLocalDate } from "../../lib/localDate";
+import { AnchoredOverlay } from "./AnchoredOverlay";
 import { FIELD_INPUT_CLASS, FIELD_LABEL_CLASS } from "./transactionForm.constants";
 
 const DATE_MONTH_LABEL_FORMATTER = new Intl.DateTimeFormat("pt-BR", {
@@ -62,6 +63,8 @@ export function DateField({
         return new Date(referenceDate.getFullYear(), referenceDate.getMonth(), 1);
     });
     const containerRef = useRef<HTMLDivElement | null>(null);
+    const triggerRef = useRef<HTMLButtonElement | null>(null);
+    const overlayRef = useRef<HTMLDivElement | null>(null);
 
     const dateShortcuts = useMemo(
         () =>
@@ -109,7 +112,7 @@ export function DateField({
         }
 
         const handleOutsideClick = (event: MouseEvent) => {
-            if (!containerRef.current || containerRef.current.contains(event.target as Node)) {
+            if (!containerRef.current || containerRef.current.contains(event.target as Node) || overlayRef.current?.contains(event.target as Node)) {
                 return;
             }
 
@@ -119,6 +122,7 @@ export function DateField({
         const handleEscapeKey = (event: KeyboardEvent) => {
             if (event.key === "Escape") {
                 setIsOpen(false);
+                triggerRef.current?.focus();
             }
         };
 
@@ -130,6 +134,12 @@ export function DateField({
             document.removeEventListener("keydown", handleEscapeKey);
         };
     }, [isOpen]);
+
+    useEffect(() => {
+        if (disabled) {
+            setIsOpen(false);
+        }
+    }, [disabled]);
 
     const monthLabel = capitalizeLabel(DATE_MONTH_LABEL_FORMATTER.format(visibleMonth));
     const calendarDays = useMemo(() => {
@@ -166,6 +176,7 @@ export function DateField({
         <div ref={containerRef} className={`relative flex flex-col gap-1.5 ${className}`.trim()}>
             <span className={labelClassName}>{label}</span>
             <button
+                ref={triggerRef}
                 type="button"
                 onClick={() => setIsOpen((current) => !current)}
                 className="flex h-[50px] w-full items-center justify-between rounded-xl border border-white/[0.1] bg-black/35 px-3 text-left text-sm text-white transition-colors hover:border-white/[0.2] focus-visible:border-white/[0.26] focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-60"
@@ -180,8 +191,7 @@ export function DateField({
                 <ChevronDown size={15} className={`shrink-0 text-white/65 transition-transform ${isOpen ? "rotate-180" : ""}`} />
             </button>
 
-            {isOpen && !disabled && (
-                <div className="absolute left-0 right-0 top-full z-30 mt-2 rounded-xl border border-white/[0.12] bg-[#141414] p-2 shadow-[0_20px_50px_-26px_rgba(0,0,0,0.95)]">
+            <AnchoredOverlay anchorRef={triggerRef} overlayRef={overlayRef} isOpen={isOpen && !disabled} preferredMaxHeight={430} className="rounded-xl border border-white/[0.12] bg-[#141414] p-2 shadow-[0_20px_50px_-26px_rgba(0,0,0,0.95)]">
                     <div className="flex items-center justify-between">
                         <button
                             type="button"
@@ -270,8 +280,7 @@ export function DateField({
                             onChange={(event) => onChange(event.target.value)}
                         />
                     </label>
-                </div>
-            )}
+            </AnchoredOverlay>
         </div>
     );
 }

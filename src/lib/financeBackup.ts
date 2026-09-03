@@ -1,8 +1,13 @@
 import type { FinanceSnapshot } from "../context/financeTypes";
+import {
+    readFinanceBackupsFromIndexedDb,
+    replaceFinanceBackupsInIndexedDb,
+} from "./financeBackupStorage";
 
 const FINANCE_BACKUP_KIND = "prism-finance-backup";
 const FINANCE_BACKUP_VERSION = 1;
 const MAX_LOCAL_FINANCE_BACKUPS = 8;
+const backupSaveOperations = new Map<string, Promise<void>>();
 
 export interface FinanceBackupStats {
     wallets: number;
@@ -101,15 +106,9 @@ function readLocalFinanceBackupsFromStorage(uid: string): LocalFinanceBackupReco
     }
 }
 
-function writeLocalFinanceBackupsToStorage(uid: string, backups: LocalFinanceBackupRecord[]): void {
-    if (typeof window === "undefined" || !window.localStorage) {
-        return;
-    }
-
-    try {
-        window.localStorage.setItem(getLocalFinanceBackupStorageKey(uid), JSON.stringify(backups));
-    } catch (error) {
-        console.error("Failed to persist local finance backup:", error);
+function removeLegacyFinanceBackups(uid: string): void {
+    if (typeof window !== "undefined") {
+        window.localStorage?.removeItem(getLocalFinanceBackupStorageKey(uid));
     }
 }
 
@@ -167,29 +166,58 @@ export function saveLocalFinanceBackup(params: SaveLocalFinanceBackupParams): vo
         trigger: params.trigger.trim() || "manual",
     };
 
-    const currentBackups = readLocalFinanceBackupsFromStorage(params.uid);
-    const latestBackup = currentBackups[0] ?? null;
-    const nextSignature = JSON.stringify({
-        favoriteWalletId: nextBackup.preferences.favoriteWalletId,
-        finance: nextBackup.finance,
-    });
+    const previous = backupSaveOperations.get(params.uid) ?? Promise.resolve();
+    const current = previous
+        .catch(() => undefined)
+        .then(async () => {
+            const currentBackups = await listLocalFinanceBackups(params.uid);
+            const latestBackup = currentBackups[0] ?? null;
+            const nextSignature = JSON.stringify({
+                favoriteWalletId: nextBackup.preferences.favoriteWalletId,
+                finance: nextBackup.finance,
+            });
+            const latestSignature = latestBackup
+                ? JSON.stringify({
+                      favoriteWalletId: latestBackup.preferences.favoriteWalletId,
+                      finance: latestBackup.finance,
+                  })
+                : null;
 
-    const latestSignature = latestBackup
-        ? JSON.stringify({
-              favoriteWalletId: latestBackup.preferences.favoriteWalletId,
-              finance: latestBackup.finance,
-          })
-        : null;
-
-    if (latestSignature === nextSignature) {
-        return;
-    }
-
-    writeLocalFinanceBackupsToStorage(params.uid, [nextBackup, ...currentBackups].slice(0, MAX_LOCAL_FINANCE_BACKUPS));
+            if (latestSignature !== nextSignature) {
+                await replaceFinanceBackupsInIndexedDb(
+                    params.uid,
+                    [nextBackup, ...currentBackups].slice(0, MAX_LOCAL_FINANCE_BACKUPS),
+                );
+                removeLegacyFinanceBackups(params.uid);
+            }
+        });
+    backupSaveOperations.set(params.uid, current);
+    void current
+        .catch((error) => console.error("Failed to persist local finance backup in IndexedDB:", error))
+        .finally(() => {
+            if (backupSaveOperations.get(params.uid) === current) {
+                backupSaveOperations.delete(params.uid);
+            }
+        });
 }
 
-export function listLocalFinanceBackups(uid: string): LocalFinanceBackupRecord[] {
-    return readLocalFinanceBackupsFromStorage(uid);
+export async function listLocalFinanceBackups(uid: string): Promise<LocalFinanceBackupRecord[]> {
+    try {
+        const indexedBackups = await readFinanceBackupsFromIndexedDb(uid);
+        if (indexedBackups.length > 0) {
+            return indexedBackups;
+        }
+
+        const legacyBackups = readLocalFinanceBackupsFromStorage(uid);
+        if (legacyBackups.length > 0) {
+            await replaceFinanceBackupsInIndexedDb(uid, legacyBackups);
+            removeLegacyFinanceBackups(uid);
+        }
+        return legacyBackups;
+    } catch (error) {
+        console.error("Failed to read local finance backups from IndexedDB:", error);
+        return readLocalFinanceBackupsFromStorage(uid);
+    }
 }
 
 export function parseFinanceBackupFile(raw: unknown): FinanceBackupFile {
@@ -225,8 +253,8 @@ export function parseFinanceBackupFile(raw: unknown): FinanceBackupFile {
         preferences: {
             favoriteWalletId: asOptionalString(preferences.favoriteWalletId),
         },
-        stats: summarizeFinanceSnapshot(finance as FinanceSnapshot),
-        finance: finance as FinanceSnapshot,
+        stats: summarizeFinanceSnapshot(finance as unknown as FinanceSnapshot),
+        finance: finance as unknown as FinanceSnapshot,
     };
 }
 

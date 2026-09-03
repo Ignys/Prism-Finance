@@ -16,7 +16,7 @@ import {
     useFinanceTransactionGroups,
     useFinanceWallets,
 } from "../../context/FinanceContext";
-import { findCurrentUserSelfBeneficiary, normalizeComparisonText } from "../../context/finance/helpers";
+import { createId, findCurrentUserSelfBeneficiary, normalizeComparisonText } from "../../context/finance/helpers";
 import { getLocalDateFromOffset, getLocalTodayDate, parseDateOnlyToLocalDate } from "../../lib/localDate";
 import { extractCurrencyDigits, formatCurrencyFromDigits, parseCurrencyDigitsToNumber } from "../../lib/currencyMask";
 
@@ -43,6 +43,7 @@ export interface TransactionFormState {
     isTransfer: boolean;
     isSeriesTransaction: boolean;
     sourceTransaction: Transaction | null;
+    transactionId: string;
     amountInput: string;
     status: TransactionStatus;
     description: string;
@@ -76,6 +77,7 @@ export interface TransactionFormState {
     setTransactionMode: (value: TransactionMode) => void;
     setInstallmentCountInput: (value: string) => void;
     setEditScope: (value: TransactionSeriesScope) => void;
+    prepareNextSubmission: () => void;
     toggleTag: (tagId: string) => void;
     submit: () => Promise<boolean>;
     saveAndContinue: () => Promise<boolean>;
@@ -214,6 +216,7 @@ export function useTransactionForm({ type, transaction, mode = "default", prefil
         sourceGroup?.transactionMode === "installment" && sourceGroup.installmentCount ? String(sourceGroup.installmentCount) : "2",
     );
     const [editScope, setEditScopeState] = useState<TransactionSeriesScope>("single");
+    const [draftTransactionId, setDraftTransactionId] = useState(() => createId("tx"));
     const [hydratedTransactionId, setHydratedTransactionId] = useState<string | null>(null);
     const [hydratedPrefillCategoryId, setHydratedPrefillCategoryId] = useState<string | null>(null);
     const activeWallets = useMemo(() => wallets.filter((wallet) => wallet.isActive), [wallets]);
@@ -452,6 +455,7 @@ export function useTransactionForm({ type, transaction, mode = "default", prefil
         const finalStatus = statusOverride ?? status;
 
         return {
+            id: transaction ? undefined : draftTransactionId,
             type: transaction?.type ?? resolvedType,
             value: numericValue,
             date: date || getLocalTodayDate(),
@@ -587,12 +591,19 @@ export function useTransactionForm({ type, transaction, mode = "default", prefil
         return true;
     };
 
+    const prepareNextSubmission = () => {
+        if (!transaction) {
+            setDraftTransactionId(createId("tx"));
+        }
+    };
+
     return {
         isEditing,
         isInvoicePaymentEdit,
         isTransfer,
         isSeriesTransaction,
         sourceTransaction: transaction ?? null,
+        transactionId: transaction?.id ?? draftTransactionId,
         amountInput,
         status,
         description,
@@ -626,6 +637,7 @@ export function useTransactionForm({ type, transaction, mode = "default", prefil
         setTransactionMode,
         setInstallmentCountInput,
         setEditScope,
+        prepareNextSubmission,
         toggleTag,
         saveAndContinue,
         submit,

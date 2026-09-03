@@ -30,16 +30,6 @@ function parseMonthKey(monthKey: string): { year: number; monthIndex: number } |
     return monthIndex >= 0 && monthIndex <= 11 ? { year, monthIndex } : null;
 }
 
-function shiftMonth(monthKey: string, offset: number): string {
-    const parsedMonth = parseMonthKey(monthKey);
-    if (!parsedMonth) {
-        return getCurrentMonthKey();
-    }
-
-    const shifted = new Date(parsedMonth.year, parsedMonth.monthIndex + offset, 1);
-    return `${shifted.getFullYear()}-${padMonth(shifted.getMonth() + 1)}`;
-}
-
 function formatMonth(monthKey: string): string {
     const parsedMonth = parseMonthKey(monthKey);
     if (!parsedMonth) {
@@ -60,7 +50,6 @@ export function PlanningReportPeriodSelector({ period, onPeriodChange }: Plannin
     const pickerRef = useRef<HTMLDivElement | null>(null);
     const currentMonth = getCurrentMonthKey();
     const periodLabel = useMemo(() => formatPeriod(period), [period]);
-    const canMoveForward = shiftMonth(period.endMonth, 1) <= currentMonth;
 
     useEffect(() => {
         if (!isOpen) {
@@ -87,13 +76,6 @@ export function PlanningReportPeriodSelector({ period, onPeriodChange }: Plannin
             window.removeEventListener("keydown", handleEscape);
         };
     }, [isOpen, period.endMonth]);
-
-    const movePeriod = (offset: number) => {
-        const nextPeriod = { startMonth: shiftMonth(period.startMonth, offset), endMonth: shiftMonth(period.endMonth, offset) };
-        if (nextPeriod.endMonth <= currentMonth) {
-            onPeriodChange(nextPeriod);
-        }
-    };
 
     const selectMonth = (monthKey: string) => {
         if (!selectionStart) {

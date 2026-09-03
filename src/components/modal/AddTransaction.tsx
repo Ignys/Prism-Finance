@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { TransactionType } from "../../context/FinanceContext";
 import { TransactionForm, type TransactionFormPrefill } from "../transactions/TransactionForm";
+import { TransactionFormTabs, type TransactionFormTab } from "../transactions/TransactionFormTabs";
 import { ModalStructure } from "./ModalStructure";
 
 interface AddTransactionModalProps {
@@ -9,11 +10,15 @@ interface AddTransactionModalProps {
 }
 
 export function AddTransactionModal({ type, prefill }: AddTransactionModalProps) {
-    const [advancedOpen, setAdvancedOpen] = useState(false);
+    const [activeTab, setActiveTab] = useState<TransactionFormTab>("simple");
 
     return (
-        <ModalStructure height="auto" width={advancedOpen ? "1000px" : "700px"}>
-            <TransactionForm type={type} prefill={prefill} onAdvancedOpenChange={setAdvancedOpen} />
+        <ModalStructure
+            height="650px"
+            width="720px"
+            topContent={<TransactionFormTabs activeTab={activeTab} onChange={setActiveTab} />}
+        >
+            <TransactionForm type={type} prefill={prefill} activeTab={activeTab} />
         </ModalStructure>
     );
 }

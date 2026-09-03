@@ -1,5 +1,5 @@
 import { Reorder } from "framer-motion";
-import { FolderKanban, GripVertical } from "lucide-react";
+import { GripVertical } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { type Category, useFinanceActions, useFinanceCategories } from "../../../context/FinanceContext";
 import { useModal } from "../../../context/ModalContext";

@@ -1,4 +1,4 @@
-import { parseInvoicePaymentNote, type Beneficiary, type Category, type CreditCard, type CreditCardInvoice, type LedgerEntry, type StoredTransaction, type Tag, type TransactionGroup, type TransactionTag, type Wallet } from "./financeCore";
+import { parseInvoicePaymentNote, type Beneficiary, type Category, type CreditCard, type CreditCardInvoice, type LedgerEntry, type StoredTransaction, type Tag, type TransactionGroup, type TransactionTag, type Wallet, type WishItem } from "./financeCore";
 
 interface TransactionPruneParams {
     transactionGroups: TransactionGroup[];
@@ -40,6 +40,7 @@ interface PermanentlyDeleteBeneficiaryParams {
     beneficiaryId: string;
     beneficiaries: Beneficiary[];
     transactionGroups: TransactionGroup[];
+    transactions: StoredTransaction[];
     fallbackBeneficiary: Beneficiary;
 }
 
@@ -47,6 +48,8 @@ interface PermanentlyDeleteCategoryParams {
     categoryId: string;
     categories: Category[];
     transactionGroups: TransactionGroup[];
+    transactions: StoredTransaction[];
+    wishItems: WishItem[];
     fallbackCategory: Category;
 }
 
@@ -74,10 +77,7 @@ function pruneTransactionsAndRelatedData(params: TransactionPruneParams): Transa
     );
 
     const nextTransactions = params.transactions.filter((transaction) => !removedTransactionIds.has(transaction.id));
-    const groupsWithTransactions = new Set(nextTransactions.map((transaction) => transaction.groupId));
-    const nextTransactionGroups = params.transactionGroups.filter(
-        (group) => !targetGroupIds.has(group.id) && groupsWithTransactions.has(group.id),
-    );
+    const nextTransactionGroups = params.transactionGroups.filter((group) => !targetGroupIds.has(group.id));
 
     return {
         transactionGroups: nextTransactionGroups,
@@ -117,6 +117,8 @@ export function permanentlyDeleteWalletData(params: PermanentlyDeleteWalletParam
         transactionTags: params.transactionTags,
         ledgerEntries: params.ledgerEntries,
         shouldRemoveGroup: (group) => group.sourceWalletId === params.walletId || group.destinationWalletId === params.walletId,
+        shouldRemoveTransaction: (transaction) =>
+            transaction.sourceWalletId === params.walletId || transaction.destinationWalletId === params.walletId,
     });
 
     return {
@@ -125,12 +127,17 @@ export function permanentlyDeleteWalletData(params: PermanentlyDeleteWalletParam
         transactionGroups: pruned.transactionGroups,
         transactions: pruned.transactions,
         transactionTags: pruned.transactionTags,
-        ledgerEntries: pruned.ledgerEntries,
+        ledgerEntries: pruned.ledgerEntries.filter((entry) => entry.walletId !== params.walletId),
     };
 }
 
 export function permanentlyDeleteCreditCardData(params: PermanentlyDeleteCreditCardParams) {
     const nextCreditCards = params.creditCards.filter((card) => card.id !== params.creditCardId);
+    const removedInvoiceIds = new Set(
+        params.creditCardInvoices
+            .filter((invoice) => invoice.creditCardId === params.creditCardId)
+            .map((invoice) => invoice.id),
+    );
     const nextCreditCardInvoices = params.creditCardInvoices.filter((invoice) => invoice.creditCardId !== params.creditCardId);
     const pruned = pruneTransactionsAndRelatedData({
         transactionGroups: params.transactionGroups,
@@ -138,7 +145,12 @@ export function permanentlyDeleteCreditCardData(params: PermanentlyDeleteCreditC
         transactionTags: params.transactionTags,
         ledgerEntries: params.ledgerEntries,
         shouldRemoveGroup: (group) => group.creditCardId === params.creditCardId,
-        shouldRemoveTransaction: (transaction) => parseInvoicePaymentNote(transaction.notes)?.creditCardId === params.creditCardId,
+        shouldRemoveTransaction: (transaction) =>
+            transaction.creditCardId === params.creditCardId ||
+            (transaction.paymentForInvoiceId !== null &&
+                transaction.paymentForInvoiceId !== undefined &&
+                removedInvoiceIds.has(transaction.paymentForInvoiceId)) ||
+            parseInvoicePaymentNote(transaction.notes)?.creditCardId === params.creditCardId,
     });
 
     return {
@@ -164,10 +176,16 @@ export function permanentlyDeleteBeneficiaryData(params: PermanentlyDeleteBenefi
             beneficiaryName: params.fallbackBeneficiary.name,
         };
     });
+    const nextTransactions = params.transactions.map((transaction) =>
+        transaction.beneficiaryId === params.beneficiaryId
+            ? { ...transaction, beneficiaryId: params.fallbackBeneficiary.id }
+            : transaction,
+    );
 
     return {
         beneficiaries: nextBeneficiaries,
         transactionGroups: nextTransactionGroups,
+        transactions: nextTransactions,
     };
 }
 
@@ -188,10 +206,22 @@ export function permanentlyDeleteCategoryData(params: PermanentlyDeleteCategoryP
             subcategoryName: null,
         };
     });
+    const nextTransactions = params.transactions.map((transaction) =>
+        transaction.categoryId && affectedCategoryIds.has(transaction.categoryId)
+            ? { ...transaction, categoryId: params.fallbackCategory.id }
+            : transaction,
+    );
+    const nextWishItems = params.wishItems.map((wishItem) =>
+        affectedCategoryIds.has(wishItem.categoryId)
+            ? { ...wishItem, categoryId: params.fallbackCategory.id }
+            : wishItem,
+    );
 
     return {
         categories: nextCategories,
         transactionGroups: nextTransactionGroups,
+        transactions: nextTransactions,
+        wishItems: nextWishItems,
     };
 }
 

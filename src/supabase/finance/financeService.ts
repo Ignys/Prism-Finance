@@ -1,5 +1,4 @@
-import type { SupabaseClient } from "@supabase/supabase-js";
-import { createFinanceSnapshot, type FinanceSnapshot, type PlanningState } from "../../context/financeTypes";
+import { createFinanceSnapshot, DEFAULT_PLANNING_STATE, type FinanceSnapshot, type PlanningState } from "../../context/financeTypes";
 import { getSupabaseClient } from "../supabaseClient";
 import {
     fromBeneficiaryRow,
@@ -13,27 +12,13 @@ import {
     fromTransactionTagRow,
     fromWalletRow,
     fromWishItemRow,
-    toBeneficiaryRow,
-    toCategoryRow,
-    toCreditCardInvoiceRow,
-    toCreditCardRow,
-    toLedgerEntryRow,
-    toPreferenceRow,
-    toTagRow,
-    toTransactionGroupRow,
-    toTransactionRow,
-    toTransactionTagRow,
-    toWalletRow,
-    toWishItemRow,
 } from "./financeRowMappers";
 import {
-    FINANCE_TABLES,
     type BeneficiaryRow,
     type CategoryRow,
     type CreditCardInvoiceRow,
     type CreditCardRow,
     type FinancePreferenceRow,
-    type FinanceSyncStateRow,
     type LedgerEntryRow,
     type TagRow,
     type TransactionGroupRow,
@@ -42,6 +27,12 @@ import {
     type WalletRow,
     type WishItemRow,
 } from "./financeTables";
+import { buildFinanceChangesPayload } from "./financeChanges";
+import { drainAttachmentDeletionQueue } from "./attachmentCleanupService";
+import {
+    applySupabaseFinanceChangesPage,
+    type SupabaseFinanceChangesPage,
+} from "./financeIncrementalService";
 
 export interface SupabaseFinanceData extends FinanceSnapshot {
     favoriteWalletId: string | null;
@@ -50,23 +41,36 @@ export interface SupabaseFinanceData extends FinanceSnapshot {
 export interface SupabaseFinanceLoadResult {
     data: SupabaseFinanceData | null;
     revision: number;
+    tombstones: FinanceTombstone[];
+}
+
+export interface FinanceTombstone {
+    entity_type: string;
+    entity_id: string;
+    related_id: string;
+    version: number | string;
+    deleted_at: string;
+    deleted_by: string | null;
 }
 
 export interface SaveSupabaseFinanceDataParams {
     userId: string;
     financeData: SupabaseFinanceData;
+    baseData: SupabaseFinanceData;
     baseRevision: number;
     clientId: string;
 }
 
 export interface SupabaseFinanceSaveResult {
     revision: number;
+    data: SupabaseFinanceData;
 }
 
-type FinanceTableName = (typeof FINANCE_TABLES)[keyof typeof FINANCE_TABLES];
-
-interface UserScopedRow {
-    user_id: string;
+export function createEmptySupabaseFinanceData(): SupabaseFinanceData {
+    return {
+        ...createFinanceSnapshot([], [], [], null, [], [], [], [], [], [], [], [], DEFAULT_PLANNING_STATE),
+        favoriteWalletId: null,
+    };
 }
 
 export class FinanceRevisionConflictError extends Error {
@@ -79,28 +83,6 @@ export class FinanceRevisionConflictError extends Error {
     }
 }
 
-async function throwIfError<T>(result: { data: T | null; error: Error | null }): Promise<T> {
-    if (result.error) {
-        throw result.error;
-    }
-
-    return result.data as T;
-}
-
-async function selectByUser<T>(client: SupabaseClient, tableName: FinanceTableName, userId: string): Promise<T[]> {
-    const data = await throwIfError<T[]>(await client.from(tableName).select("*").eq("user_id", userId));
-    return data ?? [];
-}
-
-async function selectPreferences(client: SupabaseClient, userId: string): Promise<FinancePreferenceRow | null> {
-    const result = await client.from(FINANCE_TABLES.preferences).select("*").eq("user_id", userId).maybeSingle();
-    if (result.error) {
-        throw result.error;
-    }
-
-    return (result.data as FinancePreferenceRow | null) ?? null;
-}
-
 function readPlanning(value: unknown): PlanningState {
     return (typeof value === "object" && value !== null ? value : {}) as PlanningState;
 }
@@ -110,35 +92,30 @@ function toRevision(value: number | string | null | undefined): number {
     return Number.isFinite(revision) && revision >= 0 ? revision : 0;
 }
 
-async function selectFinanceRevision(client: SupabaseClient, userId: string): Promise<number> {
-    const result = await client.from(FINANCE_TABLES.syncState).select("revision").eq("user_id", userId).maybeSingle();
-    if (result.error) {
-        throw result.error;
-    }
-
-    return toRevision((result.data as Pick<FinanceSyncStateRow, "revision"> | null)?.revision);
+interface AtomicFinanceSnapshotRow {
+    error?: string;
+    revision?: number | string;
+    tombstones?: FinanceTombstone[];
+    data?: {
+        preferences?: FinancePreferenceRow | null;
+        wallets?: WalletRow[];
+        credit_cards?: CreditCardRow[];
+        credit_card_invoices?: CreditCardInvoiceRow[];
+        beneficiaries?: BeneficiaryRow[];
+        categories?: CategoryRow[];
+        tags?: TagRow[];
+        wish_items?: WishItemRow[];
+        transaction_groups?: TransactionGroupRow[];
+        transactions?: TransactionRow[];
+        ledger_entries?: LedgerEntryRow[];
+        transaction_tags?: TransactionTagRow[];
+    } | null;
 }
 
-function buildFinanceSnapshotPayload(userId: string, financeData: SupabaseFinanceData): Record<string, unknown> {
-    return {
-        preferences: toPreferenceRow({
-            userId,
-            favoriteWalletId: financeData.favoriteWalletId,
-            favoriteCreditCardId: financeData.favoriteCreditCardId,
-            planning: financeData.planning,
-        }),
-        wallets: financeData.wallets.map((wallet) => toWalletRow(userId, wallet)),
-        credit_cards: financeData.creditCards.map((card) => toCreditCardRow(userId, card)),
-        beneficiaries: financeData.beneficiaries.map((beneficiary) => toBeneficiaryRow(userId, beneficiary)),
-        categories: financeData.categories.map((category) => toCategoryRow(userId, category)),
-        tags: financeData.tags.map((tag) => toTagRow(userId, tag)),
-        wish_items: financeData.wishItems.map((wishItem) => toWishItemRow(userId, wishItem)),
-        transaction_groups: financeData.transactionGroups.map((group) => toTransactionGroupRow(userId, group)),
-        credit_card_invoices: financeData.creditCardInvoices.map((invoice) => toCreditCardInvoiceRow(userId, invoice)),
-        transactions: financeData.transactions.map((transaction) => toTransactionRow(userId, transaction)),
-        ledger_entries: financeData.ledgerEntries.map((entry) => toLedgerEntryRow(userId, entry)),
-        transaction_tags: financeData.transactionTags.map((link) => toTransactionTagRow(userId, link)),
-    };
+interface ApplyFinanceChangesResult {
+    revision?: number | string;
+    snapshot?: AtomicFinanceSnapshotRow;
+    changes?: SupabaseFinanceChangesPage;
 }
 
 function parseRevisionConflict(error: Error): FinanceRevisionConflictError | null {
@@ -155,36 +132,24 @@ export function isFinanceRevisionConflictError(error: unknown): error is Finance
     return error instanceof FinanceRevisionConflictError;
 }
 
-export async function loadSupabaseFinanceData(userId: string, client = getSupabaseClient()): Promise<SupabaseFinanceLoadResult> {
-    const [
-        revision,
-        preferences,
-        walletRows,
-        creditCardRows,
-        invoiceRows,
-        beneficiaryRows,
-        categoryRows,
-        tagRows,
-        wishItemRows,
-        groupRows,
-        transactionRows,
-        ledgerEntryRows,
-        transactionTagRows,
-    ] = await Promise.all([
-        selectFinanceRevision(client, userId),
-        selectPreferences(client, userId),
-        selectByUser<WalletRow>(client, FINANCE_TABLES.wallets, userId),
-        selectByUser<CreditCardRow>(client, FINANCE_TABLES.creditCards, userId),
-        selectByUser<CreditCardInvoiceRow>(client, FINANCE_TABLES.creditCardInvoices, userId),
-        selectByUser<BeneficiaryRow>(client, FINANCE_TABLES.beneficiaries, userId),
-        selectByUser<CategoryRow>(client, FINANCE_TABLES.categories, userId),
-        selectByUser<TagRow>(client, FINANCE_TABLES.tags, userId),
-        selectByUser<WishItemRow>(client, FINANCE_TABLES.wishItems, userId),
-        selectByUser<TransactionGroupRow>(client, FINANCE_TABLES.transactionGroups, userId),
-        selectByUser<TransactionRow>(client, FINANCE_TABLES.transactions, userId),
-        selectByUser<LedgerEntryRow>(client, FINANCE_TABLES.ledgerEntries, userId),
-        selectByUser<TransactionTagRow>(client, FINANCE_TABLES.transactionTags, userId),
-    ]);
+function fromAtomicFinanceSnapshot(atomicSnapshot: AtomicFinanceSnapshotRow): SupabaseFinanceLoadResult {
+    if (atomicSnapshot.error) {
+        throw new Error(atomicSnapshot.error);
+    }
+    const revision = toRevision(atomicSnapshot.revision);
+    const rows = atomicSnapshot.data;
+    const preferences = rows?.preferences ?? null;
+    const walletRows = rows?.wallets ?? [];
+    const creditCardRows = rows?.credit_cards ?? [];
+    const invoiceRows = rows?.credit_card_invoices ?? [];
+    const beneficiaryRows = rows?.beneficiaries ?? [];
+    const categoryRows = rows?.categories ?? [];
+    const tagRows = rows?.tags ?? [];
+    const wishItemRows = rows?.wish_items ?? [];
+    const groupRows = rows?.transaction_groups ?? [];
+    const transactionRows = rows?.transactions ?? [];
+    const ledgerEntryRows = rows?.ledger_entries ?? [];
+    const transactionTagRows = rows?.transaction_tags ?? [];
 
     const hasFinanceRows =
         walletRows.length > 0 ||
@@ -203,6 +168,7 @@ export async function loadSupabaseFinanceData(userId: string, client = getSupaba
         return {
             data: null,
             revision,
+            tombstones: atomicSnapshot.tombstones ?? [],
         };
     }
 
@@ -228,13 +194,24 @@ export async function loadSupabaseFinanceData(userId: string, client = getSupaba
             favoriteWalletId: preferences?.favorite_wallet_id ?? null,
         },
         revision,
+        tombstones: atomicSnapshot.tombstones ?? [],
     };
 }
 
-export async function saveSupabaseFinanceData({ userId, financeData, baseRevision, clientId }: SaveSupabaseFinanceDataParams, client = getSupabaseClient()): Promise<SupabaseFinanceSaveResult> {
-    const result = await client.rpc("save_finance_snapshot", {
+export async function loadSupabaseFinanceData(userId: string, client = getSupabaseClient()): Promise<SupabaseFinanceLoadResult> {
+    void userId;
+    const result = await client.rpc("load_finance_snapshot");
+    if (result.error) {
+        throw result.error;
+    }
+
+    return fromAtomicFinanceSnapshot((result.data ?? {}) as AtomicFinanceSnapshotRow);
+}
+
+export async function saveSupabaseFinanceData({ userId, financeData, baseData, baseRevision, clientId }: SaveSupabaseFinanceDataParams, client = getSupabaseClient()): Promise<SupabaseFinanceSaveResult> {
+    const result = await client.rpc("apply_finance_changes", {
         expected_revision: baseRevision,
-        payload: buildFinanceSnapshotPayload(userId, financeData),
+        changes: buildFinanceChangesPayload(userId, baseData, financeData),
         client_id: clientId,
     });
 
@@ -242,7 +219,44 @@ export async function saveSupabaseFinanceData({ userId, financeData, baseRevisio
         throw parseRevisionConflict(result.error) ?? result.error;
     }
 
+    const commit = (result.data ?? {}) as ApplyFinanceChangesResult;
+    const committedRevision = toRevision(commit.revision);
+    let canonicalData: SupabaseFinanceData;
+
+    if (commit.changes) {
+        const changeRevision = toRevision(commit.changes.until_revision);
+        if (commit.changes.requires_full_reload || changeRevision !== committedRevision) {
+            const fallback = await loadSupabaseFinanceData(userId, client);
+            if (!fallback.data || fallback.revision < committedRevision) {
+                throw new Error("FINANCE_COMMIT_RESPONSE_INVALID");
+            }
+            canonicalData = fallback.data;
+        } else {
+            canonicalData = applySupabaseFinanceChangesPage(financeData, commit.changes);
+        }
+    } else if (commit.snapshot) {
+        // Compatibility with database revisions prior to migration 015.
+        const canonical = fromAtomicFinanceSnapshot(commit.snapshot);
+        if (!canonical.data) {
+            throw new Error("FINANCE_COMMIT_SNAPSHOT_MISSING");
+        }
+        if (committedRevision !== canonical.revision) {
+            throw new Error("FINANCE_COMMIT_REVISION_MISMATCH");
+        }
+        canonicalData = canonical.data;
+    } else {
+        throw new Error("FINANCE_COMMIT_RESPONSE_INVALID");
+    }
+
+    try {
+        await drainAttachmentDeletionQueue(client);
+    } catch (error) {
+        // The durable queue keeps the path for the next successful sync.
+        console.error("Failed to drain attachment deletion queue:", error);
+    }
+
     return {
-        revision: toRevision(result.data as number | string | null),
+        revision: committedRevision,
+        data: canonicalData,
     };
 }

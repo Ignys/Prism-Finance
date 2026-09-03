@@ -1,4 +1,4 @@
-import { CalendarDays, ExternalLink, Flag, Gift, Plus, Search, UserRound } from "lucide-react";
+import { ExternalLink, Flag, Gift, Plus, Search, UserRound } from "lucide-react";
 import { useEffect, useMemo, useState, type MouseEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import type { SharedWishlistSnapshot, WishItem } from "../../context/FinanceContext";

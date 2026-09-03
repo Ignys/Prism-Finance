@@ -1,6 +1,6 @@
 import type { KeyboardEvent, MouseEvent } from "react";
 import { motion, useReducedMotion } from "framer-motion";
-import { MousePointer2, Star } from "lucide-react";
+import { Star } from "lucide-react";
 import type { Wallet } from "../../../context/FinanceContext";
 import { WalletAvatar } from "../../common/WalletAvatar";
 import { getRegistryItemEntranceDelay, REGISTRY_ENTRANCE_EASE, REGISTRY_ITEM_ANIMATE, REGISTRY_ITEM_INITIAL } from "./registryMotion";

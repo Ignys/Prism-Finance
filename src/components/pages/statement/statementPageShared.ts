@@ -169,7 +169,8 @@ function resolveDefaultStatementMonth(creditCard: CreditCard, invoices: CreditCa
         return getMonthKeyFromDateValue(firstPendingInvoice.dueDate);
     }
 
-    const mostRecentInvoice = [...invoices].sort(compareInvoicesByDueDate).at(-1);
+    const sortedInvoices = [...invoices].sort(compareInvoicesByDueDate);
+    const mostRecentInvoice = sortedInvoices[sortedInvoices.length - 1];
     return mostRecentInvoice ? getMonthKeyFromDateValue(mostRecentInvoice.dueDate) : fallbackMonth;
 }
 

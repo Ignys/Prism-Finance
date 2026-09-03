@@ -8,6 +8,12 @@ import {
     type SupabaseFinanceLoadResult,
     type SupabaseFinanceSaveResult,
 } from "../../supabase/finance";
+import {
+    readPendingFinanceSync,
+    removePendingFinanceSync,
+    writePendingFinanceSync,
+    type PendingFinanceSync,
+} from "./pendingFinanceSyncStorage";
 
 export type FinanceSyncStatus = "syncing" | "synced" | "error";
 
@@ -18,18 +24,6 @@ export interface FinanceSyncValue {
     lastError: string | null;
     hasPendingSync: boolean;
     retrySync: () => void;
-}
-
-interface PendingFinanceSync {
-    queuedAt: string;
-    baseRevision: number;
-    baseData: SupabaseFinanceData;
-    targetData: SupabaseFinanceData;
-}
-
-interface StoredPendingFinanceSync extends PendingFinanceSync {
-    version: 2;
-    userId: string;
 }
 
 interface EnqueueFinanceSyncContext {
@@ -61,111 +55,6 @@ interface UseFinanceSyncQueueValue extends FinanceSyncValue {
 
 const RETRY_DELAYS_MS = [2000, 5000, 10000, 30000];
 let lastPendingSyncQueuedAtMs = 0;
-
-function getPendingSyncStorageKey(userId: string): string {
-    return `prism.finance.pending-sync.${userId}`;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-    return typeof value === "object" && value !== null;
-}
-
-function toRevision(value: unknown): number {
-    const revision = Number(value);
-    return Number.isFinite(revision) && revision >= 0 ? revision : 0;
-}
-
-function parsePendingSyncRecord(raw: unknown, userId: string): PendingFinanceSync | null {
-    if (!isRecord(raw) || raw.userId !== userId || typeof raw.queuedAt !== "string") {
-        return null;
-    }
-
-    if (raw.version === 2 && isRecord(raw.baseData) && isRecord(raw.targetData)) {
-        return {
-            queuedAt: raw.queuedAt,
-            baseRevision: toRevision(raw.baseRevision),
-            baseData: raw.baseData as unknown as SupabaseFinanceData,
-            targetData: raw.targetData as unknown as SupabaseFinanceData,
-        };
-    }
-
-    if (raw.version === 1 && isRecord(raw.data)) {
-        const data = raw.data as unknown as SupabaseFinanceData;
-        return {
-            queuedAt: raw.queuedAt,
-            baseRevision: 0,
-            baseData: data,
-            targetData: data,
-        };
-    }
-
-    return null;
-}
-
-function readPendingSyncFromStorage(userId: string): PendingFinanceSync | null {
-    if (typeof window === "undefined" || !window.localStorage) {
-        return null;
-    }
-
-    try {
-        const raw = window.localStorage.getItem(getPendingSyncStorageKey(userId));
-        if (!raw) {
-            return null;
-        }
-
-        return parsePendingSyncRecord(JSON.parse(raw), userId);
-    } catch {
-        return null;
-    }
-}
-
-function writePendingSyncToStorage(userId: string, pendingSync: PendingFinanceSync): void {
-    if (typeof window === "undefined" || !window.localStorage) {
-        return;
-    }
-
-    const record: StoredPendingFinanceSync = {
-        version: 2,
-        userId,
-        queuedAt: pendingSync.queuedAt,
-        baseRevision: pendingSync.baseRevision,
-        baseData: pendingSync.baseData,
-        targetData: pendingSync.targetData,
-    };
-
-    try {
-        window.localStorage.setItem(getPendingSyncStorageKey(userId), JSON.stringify(record));
-    } catch (error) {
-        console.error("Failed to store pending finance sync:", error);
-    }
-}
-
-function comparePendingSyncQueuedAt(a: string, b: string): number {
-    if (a === b) {
-        return 0;
-    }
-
-    return a < b ? -1 : 1;
-}
-
-function removePendingSyncFromStorage(userId: string, queuedAt?: string): void {
-    if (typeof window === "undefined" || !window.localStorage) {
-        return;
-    }
-
-    try {
-        if (queuedAt) {
-            const storedPendingSync = readPendingSyncFromStorage(userId);
-            if (storedPendingSync && storedPendingSync.queuedAt !== queuedAt) {
-                return;
-            }
-        }
-
-        window.localStorage.removeItem(getPendingSyncStorageKey(userId));
-    } catch (error) {
-        console.error("Failed to clear pending finance sync:", error);
-    }
-}
 
 function createQueuedAt(): string {
     const nowMs = Date.now();
@@ -219,6 +108,10 @@ function logFinanceSyncError(params: { error: unknown; pendingSync: PendingFinan
         userId: params.userId,
         dataSummary: summarizeFinanceSyncData(params.pendingSync.targetData),
     });
+}
+
+function logPendingStorageError(error: unknown): void {
+    console.error("Failed to persist the pending finance sync in IndexedDB:", error);
 }
 
 export function useFinanceSyncQueue({
@@ -325,7 +218,7 @@ export function useFinanceSyncQueue({
             });
 
             pendingSyncRef.current = mergedPendingSync;
-            writePendingSyncToStorage(activeUserId, mergedPendingSync);
+            await writePendingFinanceSync(activeUserId, clientIdRef.current, mergedPendingSync);
             retryAttemptRef.current = 0;
             onConflictMergedRef.current(mergedData, remoteData, remoteFinance.revision);
             setStatus("syncing");
@@ -355,6 +248,7 @@ export function useFinanceSyncQueue({
             .current({
                 userId: activeUserId,
                 financeData: pendingSync.targetData,
+                baseData: pendingSync.baseData,
                 baseRevision: pendingSync.baseRevision,
                 clientId: clientIdRef.current,
             })
@@ -366,9 +260,9 @@ export function useFinanceSyncQueue({
                 const currentPendingSync = pendingSyncRef.current;
                 if (currentPendingSync?.queuedAt === pendingSync.queuedAt) {
                     pendingSyncRef.current = null;
-                    removePendingSyncFromStorage(activeUserId, pendingSync.queuedAt);
+                    void removePendingFinanceSync(activeUserId, clientIdRef.current, pendingSync.queuedAt).catch(logPendingStorageError);
                     retryAttemptRef.current = 0;
-                    onSyncAcceptedRef.current(pendingSync.targetData, result.revision);
+                    onSyncAcceptedRef.current(result.data, result.revision);
                     setStatus("synced");
                     setPendingCount(0);
                     setLastSyncedAt(new Date().toISOString());
@@ -458,72 +352,36 @@ export function useFinanceSyncQueue({
             return;
         }
 
-        const storedPendingSync = readPendingSyncFromStorage(userId);
-        pendingSyncRef.current = storedPendingSync;
-
-        if (storedPendingSync) {
-            setStatus("syncing");
-            setPendingCount(1);
-            setLastError(null);
-            flushSyncRef.current();
-            return;
-        }
-
-        setStatus("synced");
-        setPendingCount(0);
-        setLastError(null);
-    }, [clearRetryTimer, userId]);
-
-    useEffect(() => {
-        if (typeof window === "undefined") {
-            return;
-        }
-
-        const handleStorage = (event: StorageEvent) => {
-            const activeUserId = userIdRef.current;
-            if (!activeUserId || event.key !== getPendingSyncStorageKey(activeUserId)) {
-                return;
-            }
-
-            if (!event.newValue) {
-                if (!inFlightRef.current) {
-                    pendingSyncRef.current = null;
-                    setStatus("synced");
-                    setPendingCount(0);
-                    setLastError(null);
+        let cancelled = false;
+        void readPendingFinanceSync(userId, clientIdRef.current)
+            .then((storedPendingSync) => {
+                if (cancelled || userIdRef.current !== userId || pendingSyncRef.current) {
+                    return;
                 }
-                return;
-            }
+                pendingSyncRef.current = storedPendingSync;
+                if (storedPendingSync) {
+                    setStatus("syncing");
+                    setPendingCount(1);
+                    setLastError(null);
+                    flushSyncRef.current();
+                    return;
+                }
 
-            let storedPendingSync: PendingFinanceSync | null = null;
-            try {
-                storedPendingSync = parsePendingSyncRecord(JSON.parse(event.newValue), activeUserId);
-            } catch {
-                return;
-            }
+                setStatus("synced");
+                setPendingCount(0);
+                setLastError(null);
+            })
+            .catch((error) => {
+                if (!cancelled) {
+                    logPendingStorageError(error);
+                    setLastError(resolveErrorMessage(error));
+                }
+            });
 
-            if (!storedPendingSync) {
-                return;
-            }
-
-            const currentPendingSync = pendingSyncRef.current;
-            if (currentPendingSync && comparePendingSyncQueuedAt(storedPendingSync.queuedAt, currentPendingSync.queuedAt) <= 0) {
-                return;
-            }
-
-            pendingSyncRef.current = storedPendingSync;
-            setStatus("syncing");
-            setPendingCount(1);
-            setLastError(null);
-
-            if (!inFlightRef.current) {
-                flushSyncRef.current();
-            }
+        return () => {
+            cancelled = true;
         };
-
-        window.addEventListener("storage", handleStorage);
-        return () => window.removeEventListener("storage", handleStorage);
-    }, []);
+    }, [clearRetryTimer, userId]);
 
     useEffect(() => {
         const handleOnline = () => {
@@ -560,11 +418,12 @@ export function useFinanceSyncQueue({
         const currentPendingSync = pendingSyncRef.current;
         const pendingSync = currentPendingSync ? replacePendingTargetData(currentPendingSync, financeData) : createPendingSync(financeData, context);
         pendingSyncRef.current = pendingSync;
-        writePendingSyncToStorage(activeUserId, pendingSync);
         setStatus("syncing");
         setPendingCount(1);
         setLastError(null);
-        flushSyncRef.current();
+        void writePendingFinanceSync(activeUserId, clientIdRef.current, pendingSync)
+            .catch(logPendingStorageError)
+            .finally(() => flushSyncRef.current());
     }, []);
 
     const retrySync = useCallback(() => {

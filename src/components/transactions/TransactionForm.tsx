@@ -1,80 +1,14 @@
-import { useEffect, useMemo, useState } from "react";
-import { ArrowRight, CircleX, Copy, Layers3, ReceiptText, SlidersHorizontal, SquareSlash, Trash2, X } from "lucide-react";
-import type { Beneficiary, Category, Tag, Transaction, TransactionSeriesScope, TransactionType, Wallet } from "../../context/FinanceContext";
+import { useState } from "react";
+import { CircleX, Copy, SquareSlash, Trash2, X } from "lucide-react";
+import { type Transaction, type TransactionType, useFinanceSession } from "../../context/FinanceContext";
 import { useModal } from "../../context/ModalContext";
-import { DateField } from "./DateField";
-import { MultiSelectCombobox } from "./MultiSelectCombobox";
-import { SingleSelectCombobox, type ComboboxOptionBase } from "./SingleSelectCombobox";
-import { BeneficiaryOptionContent, CategoryOptionContent, StatusField, TagOptionContent, TransactionHeader, WalletOptionContent } from "./TransactionFormParts";
-import { FIELD_INPUT_CLASS, FIELD_LABEL_CLASS } from "./transactionForm.constants";
-import { TransactionModeField } from "./TransactionModeField";
+import { AnimatedTransactionFormPanel } from "./AnimatedTransactionFormPanel";
+import { TransactionFormFields } from "./TransactionFormFields";
+import { TransactionHeader } from "./TransactionFormParts";
+import type { TransactionFormTab } from "./TransactionFormTabs";
 import { getTransactionSubmitErrorMessage } from "./transactionSubmitError";
+import { useTransactionDetails } from "./useTransactionDetails";
 import { useTransactionForm } from "./useTransactionForm";
-
-interface WalletOption extends ComboboxOptionBase {
-    wallet: Wallet;
-}
-
-interface CategoryOption extends ComboboxOptionBase {
-    category: Category;
-    level: 0 | 1;
-    rootCategoryId: string;
-    categoryId: string;
-}
-
-interface BeneficiaryOption extends ComboboxOptionBase {
-    beneficiary: Beneficiary;
-}
-
-interface TagOption extends ComboboxOptionBase {
-    tag: Tag;
-}
-
-interface EditScopeOption extends ComboboxOptionBase {
-    scope: TransactionSeriesScope;
-    icon: typeof ReceiptText;
-}
-
-const EDIT_SCOPE_OPTIONS: EditScopeOption[] = [
-    {
-        id: "single",
-        label: "Apenas essa transacao",
-        searchText: "apenas essa ocorrencia single",
-        scope: "single",
-        icon: ReceiptText,
-    },
-    {
-        id: "this_and_next",
-        label: "Essa e as proximas",
-        searchText: "essa e as proximas this and next",
-        scope: "this_and_next",
-        icon: ArrowRight,
-    },
-    {
-        id: "all",
-        label: "Toda a serie",
-        searchText: "toda a serie all",
-        scope: "all",
-        icon: Layers3,
-    },
-];
-
-function EditScopeOptionContent({ option }: { option: EditScopeOption }) {
-    const Icon = option.icon;
-
-    return (
-        <div className="flex items-center gap-2">
-            <span className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-white/[0.12] bg-white/[0.04] text-white/80">
-                <Icon size={14} />
-            </span>
-            <span className="truncate">{option.label}</span>
-        </div>
-    );
-}
-
-function EditScopeSelectedContent({ option }: { option: EditScopeOption }) {
-    return <span className="truncate">{option.label}</span>;
-}
 
 export interface TransactionFormPrefill {
     initialDate?: string;
@@ -88,365 +22,113 @@ interface TransactionFormProps {
     transaction?: Transaction | null;
     mode?: "default" | "invoice_payment_edit";
     prefill?: TransactionFormPrefill;
-    onAdvancedOpenChange?: (isOpen: boolean) => void;
+    activeTab?: TransactionFormTab;
 }
 
-export function TransactionForm({ type, transaction, mode = "default", prefill, onAdvancedOpenChange }: TransactionFormProps) {
+type SuccessfulCompletion = "close" | "continue";
+
+export function TransactionForm({ type, transaction, mode = "default", prefill, activeTab = "simple" }: TransactionFormProps) {
     const { closeModal } = useModal();
+    const { user } = useFinanceSession();
     const [submitting, setSubmitting] = useState(false);
     const [submitError, setSubmitError] = useState("");
-    const [advancedOpen, setAdvancedOpen] = useState(false);
-    const [shouldRenderAdvanced, setShouldRenderAdvanced] = useState(false);
+    const [pendingDetailsCompletion, setPendingDetailsCompletion] = useState<SuccessfulCompletion | null>(null);
     const form = useTransactionForm({ type, transaction, mode, prefill });
+    const details = useTransactionDetails({ transactionId: form.transactionId, userId: user?.uid, loadExisting: form.isEditing });
 
-    const walletOptions = useMemo<WalletOption[]>(
-        () =>
-            form.wallets.map((wallet) => ({
-                id: wallet.id,
-                label: wallet.name,
-                searchText: wallet.name,
-                wallet,
-            })),
-        [form.wallets],
-    );
-
-    const categoryOptions = useMemo<CategoryOption[]>(() => {
-        const subCategoriesByRoot = new Map<string, Category[]>();
-
-        for (const category of form.availableCategories) {
-            if (!category.parentId) {
-                continue;
-            }
-            const rootCategories = subCategoriesByRoot.get(category.parentId) ?? [];
-            rootCategories.push(category);
-            subCategoriesByRoot.set(category.parentId, rootCategories);
-        }
-
-        return form.rootCategories.flatMap((rootCategory) => {
-            const rootOption: CategoryOption = {
-                id: `root:${rootCategory.id}`,
-                label: rootCategory.name,
-                searchText: rootCategory.name,
-                category: rootCategory,
-                level: 0,
-                rootCategoryId: rootCategory.id,
-                categoryId: rootCategory.id,
-            };
-
-            const subCategoryOptions = (subCategoriesByRoot.get(rootCategory.id) ?? []).map((subCategory) => ({
-                id: `sub:${subCategory.id}`,
-                label: subCategory.name,
-                searchText: `${subCategory.name} ${rootCategory.name}`,
-                category: subCategory,
-                level: 1 as const,
-                rootCategoryId: rootCategory.id,
-                categoryId: subCategory.id,
-            }));
-
-            return [rootOption, ...subCategoryOptions];
-        });
-    }, [form.availableCategories, form.rootCategories]);
-
-    const selectedCategoryOptionId = form.subCategoryId ? `sub:${form.subCategoryId}` : form.rootCategoryId ? `root:${form.rootCategoryId}` : "";
-
-    const beneficiaryOptions = useMemo<BeneficiaryOption[]>(
-        () =>
-            form.beneficiaries
-                .filter((beneficiary) => beneficiary.isActive || beneficiary.id === form.beneficiaryId)
-                .map((beneficiary) => ({
-                    id: beneficiary.id,
-                    label: beneficiary.name,
-                    searchText: beneficiary.name,
-                    beneficiary,
-                })),
-        [form.beneficiaries, form.beneficiaryId],
-    );
-    const tagOptions = useMemo<TagOption[]>(
-        () =>
-            form.tags.map((tag) => ({
-                id: tag.id,
-                label: tag.name,
-                searchText: tag.name,
-                tag,
-            })),
-        [form.tags],
-    );
-
-    const handleCategorySelect = (optionId: string) => {
-        const selectedOption = categoryOptions.find((option) => option.id === optionId);
-        if (!selectedOption) {
+    const finishSuccessfulAction = (completion: SuccessfulCompletion) => {
+        setPendingDetailsCompletion(null);
+        if (completion === "continue") {
+            form.prepareNextSubmission();
+            setSubmitting(false);
             return;
         }
-
-        form.setRootCategoryId(selectedOption.rootCategoryId);
-        form.setSubCategoryId(optionId.startsWith("sub:") ? selectedOption.categoryId : "");
+        closeModal();
     };
 
-    useEffect(() => {
-        onAdvancedOpenChange?.(advancedOpen);
-    }, [advancedOpen, onAdvancedOpenChange]);
-
-    useEffect(() => {
-        if (advancedOpen) {
-            setShouldRenderAdvanced(true);
-            return;
-        }
-
-        const timeoutId = window.setTimeout(() => setShouldRenderAdvanced(false), 220);
-        return () => window.clearTimeout(timeoutId);
-    }, [advancedOpen]);
-
-    const runAction = async (action: () => Promise<boolean>) => {
-        if (submitting) {
-            return;
-        }
+    const runAction = async (action: () => Promise<boolean>, completion: SuccessfulCompletion, persistDetails = false) => {
+        if (submitting) return;
 
         setSubmitting(true);
         setSubmitError("");
+        const resolvedCompletion = pendingDetailsCompletion ?? completion;
 
         try {
-            const success = await action();
-            if (success) {
-                if (action === form.saveAndContinue) {
+            if (!pendingDetailsCompletion) {
+                const success = await action();
+                if (!success) {
                     setSubmitting(false);
                     return;
                 }
-                closeModal();
-                return;
             }
+
+            if (persistDetails) {
+                try {
+                    await details.commit();
+                } catch (detailsError) {
+                    console.error("Failed to save transaction details:", detailsError);
+                    setPendingDetailsCompletion(resolvedCompletion);
+                    setSubmitError("A transação foi salva, mas a anotação ou os anexos não. Tente salvar novamente para concluir os detalhes.");
+                    setSubmitting(false);
+                    return;
+                }
+            }
+
+            finishSuccessfulAction(resolvedCompletion);
         } catch (error) {
             console.error("Failed to submit transaction form:", error);
             setSubmitError(getTransactionSubmitErrorMessage(error));
+            setSubmitting(false);
         }
-
-        setSubmitting(false);
     };
 
     return (
-        <div className="flex flex-col justify-between rounded-xl border border-white/[0.09] bg-[#131313] p-4 text-white shadow-[0_26px_70px_-38px_rgba(0,0,0,0.95)]">
-            <div>
-                <header className="flex items-center justify-between gap-3">
-                    <TransactionHeader type={form.resolvedType} isEditing={form.isEditing} isSeriesTransaction={form.isSeriesTransaction} isInvoicePaymentEdit={form.isInvoicePaymentEdit} />
-                    <button
-                        type="button"
-                        onClick={closeModal}
-                        disabled={submitting}
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/[0.12] bg-white/[0.03] text-white/70 transition-colors hover:border-white/[0.22] hover:text-white disabled:cursor-not-allowed disabled:opacity-55"
-                        aria-label="Fechar modal"
-                        title="Fechar"
-                    >
-                        <X size={15} />
-                    </button>
-                </header>
+        <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-white/[0.09] bg-[#131313] p-4 text-white shadow-[0_26px_70px_-38px_rgba(0,0,0,0.95)]">
+            <header className="flex shrink-0 items-center justify-between gap-3">
+                <TransactionHeader type={form.resolvedType} isEditing={form.isEditing} isSeriesTransaction={form.isSeriesTransaction} isInvoicePaymentEdit={form.isInvoicePaymentEdit} />
+                <button type="button" onClick={closeModal} disabled={submitting} className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/[0.12] bg-white/[0.03] text-white/70 transition-colors hover:border-white/[0.22] hover:bg-white/[0.06] hover:text-white disabled:cursor-not-allowed disabled:opacity-55" aria-label="Fechar modal" title="Fechar">
+                    <X size={15} />
+                </button>
+            </header>
 
-                {submitError && <p className="mt-3 rounded-xl border border-red-400/25 bg-red-500/10 px-3 py-2 text-sm text-red-100">{submitError}</p>}
+            {submitError ? <p className="mt-3 rounded-xl border border-red-400/25 bg-red-500/10 px-3 py-2 text-sm text-red-100">{submitError}</p> : null}
 
-                <div className="mt-2 flex flex-col gap-3 lg:flex-row">
-                    <section className="flex grow flex-col gap-3">
-                        <label className="flex flex-col gap-1.5">
-                            <input
-                                className="rounded-xl border border-white/[0.1] bg-black/35 px-3 py-2 text-2xl text-white outline-none transition-colors placeholder:text-white/35 focus:border-white/[0.24] disabled:cursor-not-allowed disabled:opacity-65"
-                                inputMode="numeric"
-                                placeholder="R$ 0,00"
-                                value={form.amountInput}
-                                onChange={(event) => form.setAmountInput(event.target.value)}
-                                disabled={form.isInvoicePaymentEdit}
-                            />
-                        </label>
-
-                        <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-                            <StatusField status={form.status} onChange={form.setStatus} disabled={form.isInvoicePaymentEdit} />
-                            <DateField value={form.date} onChange={form.setDate} onOffset={form.setDateOffset} />
-                        </div>
-
-                        <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-                            {form.isInvoicePaymentEdit ? (
-                                <div className="flex flex-col gap-1.5">
-                                    <span className={FIELD_LABEL_CLASS}>Carteira</span>
-                                    <div className={FIELD_INPUT_CLASS}>
-                                        {walletOptions.find((option) => option.id === form.walletId) ? (
-                                            <WalletOptionContent option={walletOptions.find((option) => option.id === form.walletId)!} />
-                                        ) : (
-                                            <span className="text-white/45">Carteira removida</span>
-                                        )}
-                                    </div>
-                                </div>
-                            ) : (
-                                <SingleSelectCombobox
-                                    label="Carteira"
-                                    value={form.walletId}
-                                    placeholder="Selecione uma carteira"
-                                    emptyMessage="Nenhuma carteira encontrada."
-                                    options={walletOptions}
-                                    onChange={form.setWalletId}
-                                    renderOptionContent={(option) => <WalletOptionContent option={option} />}
-                                    labelClassName={FIELD_LABEL_CLASS}
-                                />
-                            )}
-
-                            <SingleSelectCombobox
-                                label="Beneficiário"
-                                value={form.beneficiaryId}
-                                placeholder="Selecione um beneficiário"
-                                emptyMessage="Nenhum beneficiário encontrado."
-                                options={beneficiaryOptions}
-                                onChange={form.setBeneficiaryId}
-                                renderOptionContent={(option) => <BeneficiaryOptionContent option={option} />}
-                                labelClassName={FIELD_LABEL_CLASS}
-                            />
-                        </div>
-
-                        {form.isInvoicePaymentEdit ? (
-                            <div className="flex flex-col gap-1.5">
-                                <span className={FIELD_LABEL_CLASS}>Categoria</span>
-                                <div className={`${FIELD_INPUT_CLASS} text-white/75`}>{transaction?.category.label ?? "Sem categoria"}</div>
-                            </div>
-                        ) : (
-                            <SingleSelectCombobox
-                                label="Categoria"
-                                value={selectedCategoryOptionId}
-                                placeholder="Selecione uma categoria"
-                                emptyMessage="Nenhuma categoria disponivel."
-                                options={categoryOptions}
-                                onChange={handleCategorySelect}
-                                renderOptionContent={(option) => <CategoryOptionContent option={option} />}
-                                labelClassName={FIELD_LABEL_CLASS}
-                            />
-                        )}
-
-                        <label className="flex flex-col gap-1.5">
-                            <span className={FIELD_LABEL_CLASS}>Descrição</span>
-                            <input className={FIELD_INPUT_CLASS} placeholder="Descrição da transação" value={form.description} onChange={(event) => form.setDescription(event.target.value)} />
-                        </label>
-                    </section>
-
-                    {advancedOpen && (
-                        <>
-                            <div className="h-px rounded-full bg-white/5 lg:h-auto lg:w-px" />
-
-                            <aside className="flex w-full flex-col gap-3 lg:w-[280px]">
-                                {form.isEditing && form.isSeriesTransaction && !form.isInvoicePaymentEdit && (
-                                    <SingleSelectCombobox
-                                        disableSearch
-                                        compactTrigger
-                                        label="Editar"
-                                        value={form.editScope}
-                                        placeholder="Selecione um escopo"
-                                        emptyMessage="Nenhum escopo encontrado."
-                                        options={EDIT_SCOPE_OPTIONS}
-                                        onChange={(value) => {
-                                            if (value === "all" || value === "this_and_next" || value === "single") {
-                                                form.setEditScope(value);
-                                                return;
-                                            }
-
-                                            form.setEditScope("single");
-                                        }}
-                                        renderOptionContent={(option) => <EditScopeOptionContent option={option} />}
-                                        renderSelectedContent={(option) => <EditScopeSelectedContent option={option} />}
-                                        labelClassName={FIELD_LABEL_CLASS}
-                                    />
-                                )}
-
-                                <MultiSelectCombobox
-                                    label="Tags"
-                                    values={form.selectedTagIds}
-                                    placeholder="Nenhuma tag selecionada"
-                                    emptyMessage="Nenhuma tag cadastrada."
-                                    options={tagOptions}
-                                    onChange={form.setSelectedTagIds}
-                                    renderOptionContent={(option) => <TagOptionContent option={option} />}
-                                    labelClassName={FIELD_LABEL_CLASS}
-                                />
-
-                                <TransactionModeField
-                                    mode={form.transactionMode}
-                                    installmentCountInput={form.installmentCountInput}
-                                    onModeChange={form.setTransactionMode}
-                                    onInstallmentCountChange={form.setInstallmentCountInput}
-                                    disabled={form.isInvoicePaymentEdit || form.isTransfer || form.isEditing}
-                                />
-                            </aside>
-                        </>
-                    )}
-                </div>
+            <div className="mt-3 min-h-0 flex-1">
+                <AnimatedTransactionFormPanel activeTab={activeTab}>
+                    <TransactionFormFields activeTab={activeTab} form={form} transaction={transaction} details={details} disabled={submitting} />
+                </AnimatedTransactionFormPanel>
             </div>
 
-            <footer className="mt-4 flex flex-col gap-3">
-                <div className="flex justify-end">
-                    <button
-                        type="button"
-                        onClick={() => setAdvancedOpen((current) => !current)}
-                        disabled={submitting}
-                        className={`inline-flex items-center gap-2 rounded-full border px-3 py-2 text-xs font-medium uppercase tracking-[0.08em] transition-colors duration-150 ${
-                            advancedOpen ? "border-emerald-400/45 bg-emerald-500/15 text-emerald-100" : "border-white/[0.14] bg-white/[0.03] text-white/70 hover:border-white/[0.22] hover:text-white"
-                        } disabled:cursor-not-allowed disabled:opacity-60`}
-                    >
-                        <SlidersHorizontal size={14} />
-                        {advancedOpen ? "Esconder opcoes" : "Mais opcoes"}
-                    </button>
+            <footer className="mt-4 flex shrink-0 flex-col gap-2 border-t border-white/[0.06] pt-4 sm:flex-row sm:items-end sm:justify-between">
+                <div className="flex flex-wrap gap-1">
+                    {form.isEditing && !form.isInvoicePaymentEdit ? (
+                        <>
+                            <FooterButton onClick={() => void runAction(form.remove, "close")} disabled={submitting || Boolean(pendingDetailsCompletion)}><Trash2 size={15} /> Excluir</FooterButton>
+                            <FooterButton onClick={() => void runAction(form.duplicate, "close")} disabled={submitting || Boolean(pendingDetailsCompletion)}><Copy size={15} /> Duplicar</FooterButton>
+                            <FooterButton onClick={() => void runAction(form.ignore, "close", true)} disabled={submitting}><SquareSlash size={15} /> Ignorar</FooterButton>
+                            <FooterButton onClick={() => void runAction(form.cancelTransaction, "close", true)} disabled={submitting}><CircleX size={15} /> Cancelar transação</FooterButton>
+                        </>
+                    ) : null}
                 </div>
 
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-                    <div className="flex flex-wrap gap-1">
-                        {form.isEditing && !form.isInvoicePaymentEdit && (
-                            <>
-
-                                <FooterButton onClick={() => void runAction(form.remove)}>
-                                    <Trash2 size={15} /> Excluir
-                                </FooterButton>
-                                <FooterButton onClick={() => void runAction(form.duplicate)}>
-                                    <Copy size={15} /> Duplicar
-                                </FooterButton>
-                                <FooterButton onClick={() => void runAction(form.ignore)}>
-                                    <SquareSlash size={15} /> Ignorar
-                                </FooterButton>
-                            
-                            </>
-                        )}
-                    </div>
-
-                    <div className="flex items-center justify-end gap-1">
-                        <button
-                            type="button"
-                            onClick={closeModal}
-                            disabled={submitting}
-                            className="inline-flex items-center justify-center rounded-xl border border-white/[0.12] bg-white/[0.03] px-3 py-2 text-sm font-medium text-white/70 transition-colors hover:border-white/[0.2] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                            Cancelar
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => void runAction(form.saveAndContinue)}
-                            disabled={submitting}
-                            className="inline-flex items-center justify-center rounded-xl border border-emerald-400/45 bg-emerald-500/15 px-3 py-2 text-sm font-semibold text-emerald-100 transition-colors hover:border-emerald-400/55 hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-60"
-                            >
-                            Salvar e continuar
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => void runAction(form.submit)}
-                            disabled={submitting}
-                            className="disabled:bg-white/10 disabled:text-white/60 disabled:border-white inline-flex items-center justify-center rounded-xl border border-emerald-400/35 bg-emerald-500/15 px-3 py-2 text-sm font-semibold text-emerald-100 transition-colors hover:border-emerald-400/55 hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                            {submitting ? "Carregando..." : "Salvar e fechar"}
-                        </button>
-                    </div>
+                <div className="flex flex-wrap items-center justify-end gap-1.5">
+                    <button type="button" onClick={closeModal} disabled={submitting} className="inline-flex min-w-24 items-center justify-center rounded-xl border border-white/[0.12] bg-white/[0.03] px-3 py-2 text-sm font-medium text-white/70 transition-colors hover:border-white/[0.2] hover:text-white disabled:cursor-not-allowed disabled:opacity-60">Cancelar</button>
+                    {!form.isEditing ? (
+                        <button type="button" onClick={() => void runAction(form.saveAndContinue, "continue", true)} disabled={submitting} className="inline-flex items-center justify-center rounded-xl border border-emerald-400/25 bg-emerald-500/[0.08] px-3 py-2 text-sm font-semibold text-emerald-100/85 transition-colors hover:border-emerald-400/45 hover:bg-emerald-500/[0.13] disabled:cursor-not-allowed disabled:opacity-60">Salvar e continuar</button>
+                    ) : null}
+                    <button type="button" onClick={() => void runAction(form.submit, "close", true)} disabled={submitting} className="inline-flex min-w-28 items-center justify-center rounded-xl border border-emerald-300/35 bg-emerald-400/[0.14] px-3 py-2 text-sm font-semibold text-emerald-50 transition-colors hover:border-emerald-300/55 hover:bg-emerald-400/[0.2] disabled:cursor-not-allowed disabled:opacity-60">
+                        {submitting ? "Salvando..." : pendingDetailsCompletion ? "Salvar detalhes" : "Salvar e fechar"}
+                    </button>
                 </div>
             </footer>
         </div>
     );
 }
 
-
 export function FooterButton({ onClick, disabled, children }: { onClick: () => void; disabled?: boolean; children: React.ReactNode }) {
     return (
-        <button
-            type="button"
-            onClick={onClick}
-            disabled={disabled}
-            className="inline-flex items-center justify-center gap-1 rounded-lg border border-white/[0.12] bg-white/[0.03] px-1.5 py-2 text-xs uppercase text-white/70 transition-colors hover:border-white/[0.4] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
-        >
+        <button type="button" onClick={onClick} disabled={disabled} className="inline-flex items-center justify-center gap-1 rounded-lg border border-white/[0.12] bg-white/[0.03] px-2 py-2 text-[11px] uppercase tracking-[0.04em] text-white/62 transition-colors hover:border-white/[0.28] hover:text-white disabled:cursor-not-allowed disabled:opacity-45">
             {children}
         </button>
-    )}
+    );
+}

@@ -60,15 +60,15 @@ export function DataSettingsTab() {
     const [importConfirmation, setImportConfirmation] = useState("");
     const [isImporting, setIsImporting] = useState(false);
     const [feedback, setFeedback] = useState<{ type: "error" | "success"; message: string } | null>(null);
-    const [localBackups, setLocalBackups] = useState<LocalFinanceBackupRecord[]>(() => (user ? listLocalFinanceBackups(user.uid) : []));
+    const [localBackups, setLocalBackups] = useState<LocalFinanceBackupRecord[]>([]);
 
-    const refreshLocalBackups = () => {
+    const refreshLocalBackups = async () => {
         if (!user) {
             setLocalBackups([]);
             return;
         }
 
-        setLocalBackups(listLocalFinanceBackups(user.uid));
+        setLocalBackups(await listLocalFinanceBackups(user.uid));
     };
 
     useEffect(() => {
@@ -77,7 +77,15 @@ export function DataSettingsTab() {
             return;
         }
 
-        setLocalBackups(listLocalFinanceBackups(user.uid));
+        let cancelled = false;
+        void listLocalFinanceBackups(user.uid).then((backups) => {
+            if (!cancelled) {
+                setLocalBackups(backups);
+            }
+        });
+        return () => {
+            cancelled = true;
+        };
     }, [user]);
 
     const handleExportCurrent = () => {
@@ -172,7 +180,7 @@ export function DataSettingsTab() {
 
             setPendingImport(null);
             setImportConfirmation("");
-            refreshLocalBackups();
+            await refreshLocalBackups();
             setFeedback({
                 type: "success",
                 message: "Backup importado com sucesso. O estado anterior tambem foi exportado antes da restauracao.",

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ChevronsUpDown, Dot, Search } from "lucide-react";
 import { normalizeComparisonText } from "../../context/finance/helpers";
+import { AnchoredOverlay } from "./AnchoredOverlay";
 import type { ComboboxOptionBase } from "./SingleSelectCombobox";
 
 interface MultiSelectComboboxProps<T extends ComboboxOptionBase> {
@@ -38,6 +39,8 @@ export function MultiSelectCombobox<T extends ComboboxOptionBase>({
     const [isOpen, setIsOpen] = useState(false);
     const [query, setQuery] = useState("");
     const wrapperRef = useRef<HTMLDivElement>(null);
+    const triggerRef = useRef<HTMLButtonElement>(null);
+    const overlayRef = useRef<HTMLDivElement>(null);
     const searchInputRef = useRef<HTMLInputElement>(null);
 
     const normalizedValues = useMemo(() => Array.from(new Set(values)), [values]);
@@ -61,15 +64,25 @@ export function MultiSelectCombobox<T extends ComboboxOptionBase>({
                 return;
             }
 
-            if (event.target instanceof Node && !wrapperRef.current.contains(event.target)) {
+            if (event.target instanceof Node && !wrapperRef.current.contains(event.target) && !overlayRef.current?.contains(event.target)) {
                 setIsOpen(false);
                 setQuery("");
             }
         };
 
+        const handleEscapeKey = (event: KeyboardEvent) => {
+            if (event.key === "Escape") {
+                setIsOpen(false);
+                setQuery("");
+                triggerRef.current?.focus();
+            }
+        };
+
         document.addEventListener("mousedown", handleOutsideClick, true);
+        document.addEventListener("keydown", handleEscapeKey);
         return () => {
             document.removeEventListener("mousedown", handleOutsideClick, true);
+            document.removeEventListener("keydown", handleEscapeKey);
         };
     }, [isOpen]);
 
@@ -127,6 +140,7 @@ export function MultiSelectCombobox<T extends ComboboxOptionBase>({
         <div ref={wrapperRef} className="relative flex flex-col gap-1.5">
             <span className={labelClassName}>{label}</span>
             <button
+                ref={triggerRef}
                 type="button"
                 onClick={() => {
                     if (disabled) {
@@ -141,8 +155,7 @@ export function MultiSelectCombobox<T extends ComboboxOptionBase>({
                 <ChevronsUpDown size={15} className="ml-2 shrink-0 text-white/55" />
             </button>
 
-            {isOpen && !disabled && (
-                <div className="absolute left-0 top-full z-30 mt-1 w-full rounded-xl border border-white/[0.1] bg-[#101010] p-2 shadow-[0_24px_60px_-30px_rgba(0,0,0,0.95)]">
+            <AnchoredOverlay anchorRef={triggerRef} overlayRef={overlayRef} isOpen={isOpen && !disabled} preferredMaxHeight={330} className="rounded-xl border border-white/[0.1] bg-[#101010] p-2 shadow-[0_24px_60px_-30px_rgba(0,0,0,0.95)]">
                     <div className="relative mb-2">
                         <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-white/40" />
                         <input
@@ -173,8 +186,7 @@ export function MultiSelectCombobox<T extends ComboboxOptionBase>({
                         })}
                         {filteredOptions.length === 0 && <p className="px-2.5 py-1.5 text-sm text-white/45">{emptyMessage}</p>}
                     </div>
-                </div>
-            )}
+            </AnchoredOverlay>
         </div>
     );
 }

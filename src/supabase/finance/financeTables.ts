@@ -102,7 +102,7 @@ export interface WishItemRow {
     id: string;
     value: number | string;
     category_id: string;
-    priority: string;
+    priority: number | string;
     description: string;
     link: string | null;
     image_url: string | null;
@@ -157,6 +157,7 @@ export interface TransactionRow {
     status: string;
     paid_at: string | null;
     invoice_id: string | null;
+    payment_for_invoice_id?: string | null;
     notes: string | null;
     title: string | null;
     category_id: string | null;

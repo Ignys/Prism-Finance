@@ -68,6 +68,7 @@ export interface StoredTransaction {
     status: TransactionStatus;
     paidAt: string | null;
     invoiceId: string | null;
+    paymentForInvoiceId?: string | null;
     notes: string | null;
     title: string | null;
     categoryId: string | null;
@@ -1092,7 +1093,10 @@ export function normalizeTransactionGroup(group: Partial<TransactionGroup> & { i
         type: inferGroupType(group.type, asNumber(group.totalAmount, 0)),
         transactionMode: asTransactionMode(group.transactionMode),
         totalAmount: roundToCents(Math.abs(asNumber(group.totalAmount, 0))),
-        installmentCount: Number.isInteger(group.installmentCount) ? Number(group.installmentCount) : null,
+        installmentCount:
+            Number.isInteger(group.installmentCount) && Number(group.installmentCount) > 0
+                ? Number(group.installmentCount)
+                : null,
         recurrenceRule: isRecord(group.recurrenceRule) ? group.recurrenceRule : null,
         recurrenceEndDate: asNullableString(group.recurrenceEndDate, null),
         sourceWalletId,
@@ -1111,12 +1115,19 @@ export function normalizeStoredTransaction(transaction: Partial<StoredTransactio
     return {
         id: asString(transaction.id, `tx-${Date.now()}`),
         groupId: asString(transaction.groupId, `group-${Date.now()}`),
-        installmentNumber: Number.isInteger(transaction.installmentNumber) ? Number(transaction.installmentNumber) : null,
+        installmentNumber:
+            Number.isInteger(transaction.installmentNumber) && Number(transaction.installmentNumber) > 0
+                ? Number(transaction.installmentNumber)
+                : null,
         amount: roundToCents(Math.abs(asNumber(transaction.amount, 0))),
         scheduledDate,
         status,
         paidAt,
         invoiceId: asNullableString(transaction.invoiceId, null),
+        paymentForInvoiceId: asNullableString(
+            transaction.paymentForInvoiceId,
+            parseInvoicePaymentNote(transaction.notes ?? null)?.invoiceId ?? null,
+        ),
         notes: asNullableString(transaction.notes, null),
         title: asNullableString(transaction.title, null),
         categoryId: asNullableString(transaction.categoryId, null),
@@ -1491,7 +1502,14 @@ export function createLedgerEntriesForPaidTransaction(transaction: StoredTransac
         if (resolveTransactionCreditCardId(transaction, group)) {
             return [];
         }
-        const walletId = resolveTransactionSourceWalletId(transaction, group) ?? DEFAULT_WALLET_ID;
+        const sourceWalletId = resolveTransactionSourceWalletId(transaction, group);
+        // A manual invoice close is an explicit settlement without a cash
+        // account movement. PostgreSQL applies the same rule and therefore no
+        // synthetic default-wallet ledger row may be recreated during hydrate.
+        if (parseInvoicePaymentNote(transaction.notes) && !sourceWalletId) {
+            return [];
+        }
+        const walletId = sourceWalletId ?? DEFAULT_WALLET_ID;
         return [
             {
                 id: createLedgerEntryId(transaction.id),
@@ -2506,7 +2524,7 @@ export function normalizeFinanceSnapshot(rawFinance: unknown, userId: string | n
             userId: asNullableString(rawWishItem.userId, userId),
             value: asNumber(rawWishItem.value, 0),
             categoryId: asString(rawWishItem.categoryId, ""),
-            priority: rawWishItem.priority,
+            priority: normalizeWishItemPriority(rawWishItem.priority),
             description: asString(rawWishItem.description, "Desejo"),
             link: asNullableString(rawWishItem.link, null),
             imageUrl: asNullableString(rawWishItem.imageUrl, null),

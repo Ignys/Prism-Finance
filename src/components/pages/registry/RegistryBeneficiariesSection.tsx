@@ -1,5 +1,5 @@
 import { Reorder } from "framer-motion";
-import { GripVertical, UserRound } from "lucide-react";
+import { GripVertical } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { type Beneficiary, useFinanceActions, useFinanceBeneficiaries } from "../../../context/FinanceContext";
 import { useModal } from "../../../context/ModalContext";

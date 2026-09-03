@@ -1,4 +1,4 @@
-import { Bell, ImagePlus, KeyRound, LogOut, ShieldCheck, Sparkles, Trash2 } from "lucide-react";
+import { ImagePlus, KeyRound, LogOut, Trash2 } from "lucide-react";
 import { useFinanceSession } from "../../../context/FinanceContext";
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import { resolveUserDisplayName } from "../../../lib/userProfile";
@@ -21,46 +21,7 @@ type AccountSettingsTabProps = {
     onSignOut: () => void | Promise<void>;
 };
 
-type SettingToggleProps = {
-    label: string;
-    description: string;
-    value: boolean;
-    onChange: (nextValue: boolean) => void;
-};
-
-function SettingToggle({ label, description, value, onChange }: SettingToggleProps) {
-    return (
-        <button
-            type="button"
-            onClick={() => onChange(!value)}
-            className="flex w-full items-center justify-between gap-4 rounded-2xl border border-white/[0.08] bg-white/[0.03] px-4 py-4 text-left transition-colors hover:border-white/[0.14] hover:bg-white/[0.05]"
-        >
-            <div>
-                <p className="text-sm font-medium text-white">{label}</p>
-                <p className="mt-1 text-sm text-white/45">{description}</p>
-            </div>
-            <span
-                className={`relative inline-flex h-7 w-12 rounded-full border transition-colors ${value ? "border-emerald-300/40 bg-emerald-400/30" : "border-white/[0.1] bg-white/[0.05]"}`}
-                aria-hidden="true"
-            >
-                <span className={`absolute top-1 h-5 w-5 rounded-full bg-white transition-transform ${value ? "translate-x-6" : "translate-x-1"}`} />
-            </span>
-        </button>
-    );
-}
-
-export function AccountSettingsTab({
-    emailAlertsEnabled,
-    focusModeEnabled,
-    monthlySummaryEnabled,
-    onEmailAlertsChange,
-    onFocusModeChange,
-    onMonthlySummaryChange,
-    onOpenRegistry,
-    onOpenTransactions,
-    onOpenWishlist,
-    onSignOut,
-}: AccountSettingsTabProps) {
+export function AccountSettingsTab({ onSignOut }: AccountSettingsTabProps) {
     const { user, profile } = useFinanceSession();
     const userName = profile?.displayName ?? resolveUserDisplayName(user);
     const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -86,15 +47,6 @@ export function AccountSettingsTab({
     const supportsPasswordChange = useMemo(() => user?.providerData.some((provider) => provider.providerId === "password") ?? false, [user]);
     const hasPersistedPhoto = Boolean(userPhotoUrl);
     const hasSelectedPhoto = Boolean(selectedPhotoFile && selectedPhotoPreviewUrl);
-    const isMarkedForRemoval = photoMode === "remove" && (hasPersistedPhoto || hasSelectedPhoto);
-    const createdAtLabel = user?.metadata.creationTime
-        ? new Date(user.metadata.creationTime).toLocaleDateString("pt-BR", {
-              day: "2-digit",
-              month: "long",
-              year: "numeric",
-          })
-        : "Data indisponivel";
-
     function clearSelectedPhotoPreview() {
         if (previewObjectUrlRef.current) {
             URL.revokeObjectURL(previewObjectUrlRef.current);

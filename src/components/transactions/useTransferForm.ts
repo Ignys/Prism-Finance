@@ -5,8 +5,10 @@ import {
     type TransactionStatus,
     useFinanceActions,
     useFinanceFavoriteWallet,
+    useFinanceTags,
     useFinanceWallets,
 } from "../../context/FinanceContext";
+import { createId } from "../../context/finance/helpers";
 import { getLocalDateFromOffset, getLocalTodayDate, parseDateOnlyToLocalDate } from "../../lib/localDate";
 import { extractCurrencyDigits, formatCurrencyFromDigits, parseCurrencyDigitsToNumber } from "../../lib/currencyMask";
 
@@ -35,6 +37,7 @@ function resolveInitialDate(prefillDate?: string): string {
 
 export function useTransferForm({ prefill, transaction }: UseTransferFormOptions = {}) {
     const wallets = useFinanceWallets();
+    const tags = useFinanceTags();
     const favoriteWalletId = useFinanceFavoriteWallet();
     const { addTransaction, updateTransaction } = useFinanceActions();
     const isEditing = Boolean(transaction);
@@ -51,6 +54,8 @@ export function useTransferForm({ prefill, transaction }: UseTransferFormOptions
     const [destinationWalletId, setDestinationWalletId] = useState<string | null>(transaction?.destinationWalletId ?? null);
     const [date, setDate] = useState(() => transaction?.date ?? resolveInitialDate(prefill?.initialDate));
     const [description, setDescription] = useState(transaction?.description ?? "");
+    const [selectedTagIds, setSelectedTagIds] = useState<string[]>(transaction?.tagIds ?? []);
+    const [draftTransactionId] = useState(() => createId("tx"));
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
     const amountValue = useMemo(() => parseCurrencyDigitsToNumber(extractCurrencyDigits(amountInput)), [amountInput]);
@@ -66,6 +71,7 @@ export function useTransferForm({ prefill, transaction }: UseTransferFormOptions
         setDestinationWalletId(transaction.destinationWalletId ?? null);
         setDate(transaction.date);
         setDescription(transaction.description ?? "");
+        setSelectedTagIds(transaction.tagIds ?? []);
         setErrorMessage(null);
     }, [transaction]);
 
@@ -122,6 +128,7 @@ export function useTransferForm({ prefill, transaction }: UseTransferFormOptions
         const trimmedDescription = description.trim();
 
         const draft = {
+            id: transaction ? undefined : draftTransactionId,
             type: "transfer" as const,
             value: amountValue,
             date: date || getLocalTodayDate(),
@@ -131,7 +138,7 @@ export function useTransferForm({ prefill, transaction }: UseTransferFormOptions
             creditCardId: null,
             categoryId: null,
             beneficiaryId: null,
-            tagIds: [],
+            tagIds: selectedTagIds,
             description: trimmedDescription || "Transferencia",
             status,
             notes: trimmedDescription || undefined,
@@ -156,6 +163,7 @@ export function useTransferForm({ prefill, transaction }: UseTransferFormOptions
 
     return {
         isEditing,
+        transactionId: transaction?.id ?? draftTransactionId,
         amountInput,
         amountValue,
         status,
@@ -163,8 +171,10 @@ export function useTransferForm({ prefill, transaction }: UseTransferFormOptions
         destinationWalletId,
         date,
         description,
+        selectedTagIds,
         errorMessage,
         sourceWallets,
+        tags,
         setAmountInput,
         setStatus,
         setSourceWalletId,
@@ -172,6 +182,7 @@ export function useTransferForm({ prefill, transaction }: UseTransferFormOptions
         setDate,
         setDateOffset,
         setDescription,
+        setSelectedTagIds,
         submit,
     };
 }

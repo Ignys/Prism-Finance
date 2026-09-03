@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowRight, Copy, Eye, Info, Layers3, ReceiptText, Repeat, SlidersHorizontal, SquareSlash, Trash2, X } from "lucide-react";
+import { ArrowRight, Copy, Eye, Info, Layers3, ReceiptText, Repeat, SquareSlash, Trash2, X } from "lucide-react";
 import type { Beneficiary, Category, CreditCard, CreditCardInvoice, Transaction, TransactionMode, TransactionSeriesScope, TransactionStatus } from "../../context/FinanceContext";
 import {
     SYSTEM_EXPENSE_CARD_INVOICE_CATEGORY_ID,
@@ -16,22 +16,25 @@ import {
 } from "../../context/FinanceContext";
 import { getCreditCardInvoiceReadState, type CreditCardInvoiceVisualStatus } from "../../context/finance/invoiceStatus";
 import { buildCreditCardInvoiceId, getCreditCardInvoiceMonthKey, parseCreditCardInvoiceId, resolveCreditCardInvoiceCycle, resolveCreditCardInvoiceCycleFromCycleKey } from "../../context/financeTypes";
-import { findCurrentUserSelfBeneficiary, roundToCents, splitAmountAcrossInstallments } from "../../context/finance/helpers";
+import { createId, findCurrentUserSelfBeneficiary, roundToCents, splitAmountAcrossInstallments } from "../../context/finance/helpers";
 import { useModal } from "../../context/ModalContext";
 import { extractCurrencyDigits, formatCurrencyFromDigits, parseCurrencyDigitsToNumber } from "../../lib/currencyMask";
 import { getCategoryIconComponent } from "../../lib/categoryIcons";
 import { getLocalTodayDate } from "../../lib/localDate";
 import { BeneficiaryAvatar } from "../common/BeneficiaryAvatar";
 import { WalletAvatar } from "../common/WalletAvatar";
+import { AnimatedTransactionFormPanel } from "./AnimatedTransactionFormPanel";
 import { DateField } from "./DateField";
+import { DescriptionAutocomplete } from "./DescriptionAutocomplete";
 import { MultiSelectCombobox } from "./MultiSelectCombobox";
 import { SingleSelectCombobox, type ComboboxOptionBase } from "./SingleSelectCombobox";
+import { TransactionDetailsField } from "./TransactionDetailsField";
+import type { TransactionFormTab } from "./TransactionFormTabs";
 import { FIELD_LABEL_CLASS } from "./transactionForm.constants";
 import { getTransactionSubmitErrorMessage } from "./transactionSubmitError";
 import { formatCurrencyBRL } from "./transactionView";
 import { FooterButton } from "./TransactionForm";
-
-const FIELD_INPUT_CLASS = "rounded-xl border border-white/[0.1] bg-black/35 p-2.5 text-white outline-none transition-colors placeholder:text-white/35 focus:border-white/[0.24]";
+import { useTransactionDetails } from "./useTransactionDetails";
 
 const INVOICE_STATUS_LABELS: Record<CreditCardInvoiceVisualStatus, string> = {
     open: "Aberta",
@@ -49,7 +52,7 @@ const monthLabelFormatter = new Intl.DateTimeFormat("pt-BR", {
 interface CardSpendingFormProps {
     transaction?: Transaction | null;
     prefill?: CardSpendingFormPrefill;
-    onAdvancedOpenChange?: (isOpen: boolean) => void;
+    activeTab: TransactionFormTab;
     onInstallmentPreviewOpenChange?: (isOpen: boolean) => void;
 }
 
@@ -424,7 +427,7 @@ function InstallmentPreviewModal({ data, onClose }: { data: InstallmentPreviewDa
     );
 }
 
-export function CardSpendingForm({ transaction = null, prefill, onAdvancedOpenChange, onInstallmentPreviewOpenChange }: CardSpendingFormProps) {
+export function CardSpendingForm({ transaction = null, prefill, activeTab, onInstallmentPreviewOpenChange }: CardSpendingFormProps) {
     const { closeModal } = useModal();
     const { addTransaction, deleteTransactionWithScope, updateTransaction } = useFinanceActions();
     const creditCards = useFinanceCreditCards();
@@ -475,8 +478,9 @@ export function CardSpendingForm({ transaction = null, prefill, onAdvancedOpenCh
 
     const [submitting, setSubmitting] = useState(false);
     const [submitError, setSubmitError] = useState("");
-    const [advancedOpen, setAdvancedOpen] = useState(false);
     const [installmentPreviewOpen, setInstallmentPreviewOpen] = useState(false);
+    const [draftTransactionId] = useState(() => createId("tx"));
+    const [transactionSaved, setTransactionSaved] = useState(false);
     const [amountInput, setAmountInputState] = useState(() => (transaction ? formatAmountInputFromValue(transaction.value) : "R$ 0,00"));
     const [description, setDescription] = useState(transaction?.description ?? "");
     const [date, setDate] = useState(transaction?.date ?? (initialPrefillDate || getLocalTodayDate()));
@@ -492,6 +496,7 @@ export function CardSpendingForm({ transaction = null, prefill, onAdvancedOpenCh
     );
     const [ignoredInstallmentsCountInput, setIgnoredInstallmentsCountInput] = useState(() => (sourceGroup?.transactionMode === "installment" ? String(leadingSkippedInstallmentsCount) : "0"));
     const [editScope, setEditScope] = useState<TransactionSeriesScope>("single");
+    const details = useTransactionDetails({ transactionId: transaction?.id ?? draftTransactionId, userId: user?.uid, loadExisting: isEditing });
     const activeCreditCards = useMemo(() => creditCards.filter((card) => card.isActive), [creditCards]);
     const selectableCreditCards = useMemo(() => creditCards.filter((card) => card.isActive || (isEditing && card.id === creditCardId)), [creditCardId, creditCards, isEditing]);
 
@@ -516,10 +521,6 @@ export function CardSpendingForm({ transaction = null, prefill, onAdvancedOpenCh
         setIgnoredInstallmentsCountInput(sourceGroup?.transactionMode === "installment" ? String(leadingSkippedInstallmentsCount) : "0");
         setEditScope("single");
     }, [favoriteCreditCardId, leadingSkippedInstallmentsCount, sourceGroup?.installmentCount, sourceGroup?.transactionMode, transaction?.id]);
-
-    useEffect(() => {
-        onAdvancedOpenChange?.(advancedOpen);
-    }, [advancedOpen, onAdvancedOpenChange]);
 
     useEffect(() => {
         onInstallmentPreviewOpenChange?.(installmentPreviewOpen);
@@ -846,9 +847,18 @@ export function CardSpendingForm({ transaction = null, prefill, onAdvancedOpenCh
         const selectedOption = categoryOptions.find((option) => option.categoryId === categoryId);
         return selectedOption?.id ?? "";
     }, [categoryId, categoryOptions]);
+    const descriptionSuggestionCategoryIds = useMemo(() => categoryOptions.map((option) => option.categoryId), [categoryOptions]);
 
     const handleCategorySelect = (optionId: string) => {
         const selectedOption = categoryOptions.find((option) => option.id === optionId);
+        if (!selectedOption) {
+            return;
+        }
+        setCategoryId(selectedOption.categoryId);
+    };
+
+    const handleDescriptionSuggestionSelect = (suggestion: Transaction) => {
+        const selectedOption = categoryOptions.find((option) => option.categoryId === suggestion.category.id);
         if (!selectedOption) {
             return;
         }
@@ -898,6 +908,7 @@ export function CardSpendingForm({ transaction = null, prefill, onAdvancedOpenCh
         const resolvedIgnoredInstallmentsCount = resolvedMode === "installment" ? normalizeIgnoredInstallmentsCountInput(ignoredInstallmentsCountInput, resolvedInstallmentCount) : null;
 
         return {
+            id: transaction ? undefined : draftTransactionId,
             type: "spending" as const,
             value: numericValue,
             date: date || getLocalTodayDate(),
@@ -987,7 +998,7 @@ export function CardSpendingForm({ transaction = null, prefill, onAdvancedOpenCh
         return true;
     };
 
-    const runAction = async (action: () => Promise<boolean>) => {
+    const runAction = async (action: () => Promise<boolean>, persistDetails = false) => {
         if (submitting) {
             return;
         }
@@ -996,11 +1007,28 @@ export function CardSpendingForm({ transaction = null, prefill, onAdvancedOpenCh
         setSubmitError("");
 
         try {
-            const success = await action();
-            if (success) {
-                closeModal();
-                return;
+            if (!transactionSaved) {
+                const success = await action();
+                if (!success) {
+                    setSubmitting(false);
+                    return;
+                }
             }
+
+            if (persistDetails) {
+                try {
+                    await details.commit();
+                } catch (detailsError) {
+                    console.error("Failed to save card spending details:", detailsError);
+                    setTransactionSaved(true);
+                    setSubmitError("O gasto foi salvo, mas a anotação ou os anexos não. Tente novamente para concluir os detalhes.");
+                    setSubmitting(false);
+                    return;
+                }
+            }
+
+            closeModal();
+            return;
         } catch (error) {
             console.error("Failed to submit card spending form:", error);
             setSubmitError(getTransactionSubmitErrorMessage(error));
@@ -1010,9 +1038,7 @@ export function CardSpendingForm({ transaction = null, prefill, onAdvancedOpenCh
     };
 
     const invoiceLabelContent = (
-        <div className="flex flex-wrap items-center justify-between gap-2 pr-2">
-            <span className={FIELD_LABEL_CLASS}>Fatura</span>
-            <div className="flex items-center gap-2">
+        <div className="flex items-center justify-end gap-2 pr-1">
                 <button
                     type="button"
                     disabled={!selectedCard}
@@ -1032,7 +1058,7 @@ export function CardSpendingForm({ transaction = null, prefill, onAdvancedOpenCh
                             }`}
                         />
                     </span>
-                    <span className={FIELD_LABEL_CLASS}>Escolher pela data</span>
+                    <span className={FIELD_LABEL_CLASS}>Calcular fatura pela data</span>
                     <div className="group relative">
                         <span className="inline-flex items-center justify-center rounded-ful text-white/55 transition-colors group-hover:border-white/[0.24] group-hover:text-white/80">
                             <Info size={15} />
@@ -1042,16 +1068,14 @@ export function CardSpendingForm({ transaction = null, prefill, onAdvancedOpenCh
                         </div>
                     </div>
                 </button>
-            </div>
         </div>
     );
 
     return (
         <>
             {installmentPreviewOpen && installmentPreviewData && <InstallmentPreviewModal data={installmentPreviewData} onClose={() => setInstallmentPreviewOpen(false)} />}
-            <div className="rounded-xl flex flex-col justify-between border h-149 border-white/[0.09] bg-[#131313] p-4 text-white shadow-[0_26px_70px_-38px_rgba(0,0,0,0.95)]">
-                <div>
-                    <header className="flex items-center justify-between">
+            <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-white/[0.09] bg-[#131313] p-4 text-white shadow-[0_26px_70px_-38px_rgba(0,0,0,0.95)]">
+                    <header className="flex shrink-0 items-center justify-between">
                         <h1 className="text-sm ml-1 uppercase opacity-50">{isEditing ? (isSeriesTransaction ? "Editando gasto da série" : "Editando gasto no cartão") : "Novo gasto no cartão"}</h1>
                         <div className="flex items-center gap-2">
                             <button
@@ -1069,19 +1093,18 @@ export function CardSpendingForm({ transaction = null, prefill, onAdvancedOpenCh
 
                     {submitError && <p className="mt-3 rounded-xl border border-red-400/25 bg-red-500/10 px-3 py-2 text-sm text-red-100">{submitError}</p>}
 
-                    <div className={`mt-2 flex justify-between gap-3`}>
-                        <section className="flex flex-col gap-3 grow">
-                            <label className="flex flex-col gap-1.5">
-                                <input
-                                    className={
-                                        "text-2xl rounded-xl border border-white/[0.1] bg-black/35 px-3 py-2 text-white outline-none transition-colors placeholder:text-white/35 focus:border-white/[0.24]"
-                                    }
-                                    inputMode="numeric"
-                                    placeholder="R$ 0,00"
-                                    value={amountInput}
-                                    onChange={(event) => setAmountInput(event.target.value)}
-                                />
-                            </label>
+                    <div className="mt-3 min-h-0 flex-1">
+                        <AnimatedTransactionFormPanel activeTab={activeTab}>
+                            {activeTab === "simple" ? (
+                        <section className="flex flex-col gap-3" role="tabpanel" aria-label="Dados simples">
+                            <input
+                                className="rounded-xl border border-white/[0.1] bg-black/35 px-3 py-2 text-2xl text-white outline-none transition-colors placeholder:text-white/35 focus:border-white/[0.24] disabled:cursor-not-allowed disabled:opacity-65"
+                                inputMode="numeric"
+                                placeholder="R$ 0,00"
+                                value={amountInput}
+                                onChange={(event) => setAmountInput(event.target.value)}
+                                disabled={submitting}
+                            />
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                                 <DateField value={date} onChange={setDate} shortcuts={DATE_SHORTCUTS} />
                                 <SingleSelectCombobox
@@ -1132,41 +1155,36 @@ export function CardSpendingForm({ transaction = null, prefill, onAdvancedOpenCh
                                 labelClassName={FIELD_LABEL_CLASS}
                             />
 
-                            <label className="flex flex-col gap-1.5 md:col-span-2">
-                                <span className={FIELD_LABEL_CLASS}>Descrição</span>
-                                <input className={FIELD_INPUT_CLASS} placeholder="Descrição da transação" value={description} onChange={(event) => setDescription(event.target.value)} />
-                            </label>
+                            <DescriptionAutocomplete
+                                value={description}
+                                onChange={setDescription}
+                                onSuggestionSelect={handleDescriptionSuggestionSelect}
+                                transactions={transactions}
+                                type="spending"
+                                allowedCategoryIds={descriptionSuggestionCategoryIds}
+                                excludeTransactionId={transaction?.id}
+                                disabled={submitting}
+                            />
+                            {isEditing && isSeriesTransaction ? (
+                                <SingleSelectCombobox
+                                    disableSearch
+                                    label="Aplicar edição em"
+                                    value={editScope}
+                                    placeholder="Selecione um escopo"
+                                    emptyMessage="Nenhum escopo encontrado."
+                                    options={EDIT_SCOPE_OPTIONS}
+                                    onChange={(value) => setEditScope(value === "all" || value === "this_and_next" ? value : "single")}
+                                    renderOptionContent={(option) => <EditScopeOptionContent option={option} />}
+                                    renderSelectedContent={(option) => <EditScopeSelectedContent option={option} />}
+                                    disabled={submitting}
+                                    labelClassName={FIELD_LABEL_CLASS}
+                                />
+                            ) : null}
                         </section>
 
-                        {advancedOpen && (
-                            <>
-                                <div className="w-px bg-white/5 rounded-full"></div>
-
-                                <aside className="flex flex-col gap-3 w-70">
-                                    {isEditing && isSeriesTransaction && (
-                                        <label className="flex flex-col gap-1.5">
-                                            <SingleSelectCombobox
-                                                disableSearch
-                                                compactTrigger
-                                                label="Editar"
-                                                value={editScope}
-                                                placeholder="Selecione um escopo"
-                                                emptyMessage="Nenhum escopo encontrado."
-                                                options={EDIT_SCOPE_OPTIONS}
-                                                onChange={(value) => {
-                                                    if (value === "all" || value === "this_and_next" || value === "single") {
-                                                        setEditScope(value);
-                                                        return;
-                                                    }
-
-                                                    setEditScope("single");
-                                                }}
-                                                renderOptionContent={(option) => <EditScopeOptionContent option={option} />}
-                                                renderSelectedContent={(option) => <EditScopeSelectedContent option={option} />}
-                                                labelClassName={FIELD_LABEL_CLASS}
-                                            />
-                                        </label>
-                                    )}
+                        ) : (
+                            <section className="flex flex-col gap-3" role="tabpanel" aria-label="Opções avançadas">
+                                <div className="grid gap-3 md:grid-cols-2">
                                     <MultiSelectCombobox
                                         label={"Tags"}
                                         values={selectedTagIds}
@@ -1178,7 +1196,6 @@ export function CardSpendingForm({ transaction = null, prefill, onAdvancedOpenCh
                                         labelClassName={FIELD_LABEL_CLASS}
                                     />
                                     <div>
-                                        <label className="flex flex-col gap-1.5">
                                             <SingleSelectCombobox
                                                 disableSearch
                                                 label="Tipo"
@@ -1197,14 +1214,12 @@ export function CardSpendingForm({ transaction = null, prefill, onAdvancedOpenCh
                                                 renderOptionContent={(option) => <SpendingModeOptionContent option={option} />}
                                                 labelClassName={FIELD_LABEL_CLASS}
                                             />
-                                        </label>
                                         {spendingMode === "installment" && (
-                                            <>
-                                                <div className="flex rounded-b flex-col gap-1 bg-black/20 mx-0.5 border-white/10 border-dashed border-x border-b py-4 px-3 ">
-                                                    <label className="flex justify-between items-center gap-1.5 ">
-                                                        <span className={"text-[12px] text-white/50 uppercase"}>Parcelas <br /> ignoradas</span>
+                                                <div className="mx-0.5 flex flex-col gap-2 rounded-b border-x border-b border-dashed border-white/10 bg-black/20 px-3 py-3">
+                                                    <label className="flex items-center justify-between gap-3">
+                                                        <span className="text-[11px] uppercase tracking-[0.08em] text-white/50">Parcelas ignoradas</span>
                                                         <input
-                                                            className={"w-25 rounded-xl border border-white/[0.1] bg-black/35 p-2.5 text-white outline-none transition-colors placeholder:text-white/35 focus:border-white/[0.24]"}
+                                                            className="w-24 rounded-xl border border-white/[0.1] bg-black/35 p-2.5 text-white outline-none transition-colors focus:border-white/[0.24]"
                                                             type="number"
                                                             min={0}
                                                             max={installmentCountInput ? Number(installmentCountInput) - 1 : undefined}
@@ -1218,17 +1233,19 @@ export function CardSpendingForm({ transaction = null, prefill, onAdvancedOpenCh
                                                                 const normalizedIgnoredCount = normalizeIgnoredInstallmentsCountInput(ignoredInstallmentsCountInput, resolvedInstallmentCount);
                                                                 setIgnoredInstallmentsCountInput(String(normalizedIgnoredCount));
                                                             }}
+                                                            disabled={submitting}
                                                         />
                                                     </label>
-                                                    <label className="flex justify-between items-center gap-1.5">
-                                                        <span className={"text-[12px] text-white/50 uppercase"}>QUANTIDADE DE PARCELAS</span>
+                                                    <label className="flex items-center justify-between gap-3">
+                                                        <span className="text-[11px] uppercase tracking-[0.08em] text-white/50">Quantidade de parcelas</span>
                                                         <input
-                                                            className={"w-25 rounded-xl border border-white/[0.1] bg-black/35 p-2.5 text-white outline-none transition-colors placeholder:text-white/35 focus:border-white/[0.24]"}
+                                                            className="w-24 rounded-xl border border-white/[0.1] bg-black/35 p-2.5 text-white outline-none transition-colors focus:border-white/[0.24]"
                                                             type="number"
                                                             min={2}
                                                             step={1}
                                                             value={installmentCountInput}
                                                             onChange={(event) => setInstallmentCountInput(event.target.value)}
+                                                            disabled={submitting}
                                                         />
                                                     </label>
                                                     <button
@@ -1241,42 +1258,28 @@ export function CardSpendingForm({ transaction = null, prefill, onAdvancedOpenCh
                                                         Pré-visualizar
                                                     </button>
                                                 </div>
-                                            </>
                                         )}
                                     </div>
-                                </aside>
-                            </>
+                                </div>
+                                <div className="h-px bg-white/[0.06]" />
+                                <TransactionDetailsField details={details} disabled={submitting} />
+                            </section>
                         )}
+                        </AnimatedTransactionFormPanel>
                     </div>
-                </div>
 
-                <footer className="mt-4 flex flex-col gap-3">
-                    <div className="flex justify-end">
-                        <button
-                            type="button"
-                            onClick={() => setAdvancedOpen((current) => !current)}
-                            disabled={submitting}
-                            className={`inline-flex items-center gap-2 border px-3 py-2 text-xs font-medium uppercase tracking-[0.08em]  rounded-full transition-colors duration-150 ${
-                                advancedOpen
-                                    ? "border-emerald-400/45 bg-emerald-500/15 text-emerald-100"
-                                    : "border-white/[0.14] bg-white/[0.03] text-white/70 hover:border-white/[0.22] hover:text-white"
-                            } disabled:cursor-not-allowed disabled:opacity-60`}
-                        >
-                            <SlidersHorizontal size={14} />
-                            {advancedOpen ? "Esconder opções" : "Mais opções"}
-                        </button>
-                    </div>
+                <footer className="mt-4 flex shrink-0 flex-col gap-3 border-t border-white/[0.06] pt-4">
                     <div className="flex justify-between">
                         <div className="flex gap-1">
                             {isEditing && (
                                 <>
-                                    <FooterButton onClick={() => void runAction(remove)}>
+                                    <FooterButton onClick={() => void runAction(remove)} disabled={transactionSaved}>
                                         <Trash2 size={15} /> Excluir
                                     </FooterButton>
-                                    <FooterButton onClick={() => void runAction(duplicate)}>
+                                    <FooterButton onClick={() => void runAction(duplicate)} disabled={transactionSaved}>
                                         <Copy size={15} /> Duplicar
                                     </FooterButton>
-                                    <FooterButton onClick={() => void runAction(ignore)}>
+                                    <FooterButton onClick={() => void runAction(ignore, true)}>
                                         <SquareSlash size={15} /> Ignorar
                                     </FooterButton>
                                 </>
@@ -1293,11 +1296,11 @@ export function CardSpendingForm({ transaction = null, prefill, onAdvancedOpenCh
                             </button>
                             <button
                                 type="button"
-                                onClick={() => void runAction(submit)}
+                                onClick={() => void runAction(submit, true)}
                                 disabled={submitting}
                                 className="inline-flex min-w-28 items-center justify-center rounded-xl border border-emerald-400/35 bg-emerald-500/15 px-4 py-2 text-sm font-semibold text-emerald-100 transition-colors hover:border-emerald-400/55 hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-60"
                             >
-                                {submitting ? "Carregando..." : "Concluir"}
+                                {submitting ? "Salvando..." : transactionSaved ? "Salvar detalhes" : "Salvar e fechar"}
                             </button>
                         </div>
                     </div>

@@ -8,6 +8,31 @@ function isSameValue<T>(a: T | undefined, b: T | undefined): boolean {
     return stableStringify(a ?? null) === stableStringify(b ?? null);
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function mergeValue<T>(baseValue: T, remoteValue: T, targetValue: T): T {
+    if (isSameValue(baseValue, targetValue)) {
+        return remoteValue;
+    }
+    if (isSameValue(baseValue, remoteValue) || isSameValue(remoteValue, targetValue)) {
+        return targetValue;
+    }
+    if (isRecord(baseValue) && isRecord(remoteValue) && isRecord(targetValue)) {
+        const merged: Record<string, unknown> = {};
+        const keys = new Set([...Object.keys(baseValue), ...Object.keys(remoteValue), ...Object.keys(targetValue)]);
+        keys.forEach((key) => {
+            merged[key] = mergeValue(baseValue[key], remoteValue[key], targetValue[key]);
+        });
+        return merged as T;
+    }
+
+    // Simultaneous edits to the same scalar remain local. The retry still goes
+    // through CAS and server-side invariants before becoming canonical.
+    return targetValue;
+}
+
 function mergeByKey<T>(params: {
     baseItems: T[];
     remoteItems: T[];
@@ -32,12 +57,18 @@ function mergeByKey<T>(params: {
         const existsInTarget = targetByKey.has(key);
         const wasLocallyChanged = existsInTarget ? !isSameValue(baseItem, targetItem) : existedInBase;
 
+        // A confirmed remote deletion is authoritative. This prevents a stale
+        // device from resurrecting an entity after a revision conflict.
+        if (existedInBase && !remoteItem) {
+            return;
+        }
+
         if (!existsInTarget && existedInBase) {
             return;
         }
 
         if (wasLocallyChanged && targetItem) {
-            mergedItems.push(targetItem);
+            mergedItems.push(baseItem && remoteItem ? mergeValue(baseItem, remoteItem, targetItem) : targetItem);
             return;
         }
 
@@ -52,10 +83,6 @@ function mergeByKey<T>(params: {
     });
 
     return mergedItems;
-}
-
-function mergeValue<T>(baseValue: T, remoteValue: T, targetValue: T): T {
-    return isSameValue(baseValue, targetValue) ? remoteValue : targetValue;
 }
 
 function getId<T extends { id: string }>(item: T): string {
@@ -74,6 +101,8 @@ export function mergeSupabaseFinanceData(params: {
     const { baseData, remoteData, targetData } = params;
 
     return {
+        despesas: mergeValue(baseData.despesas, remoteData.despesas, targetData.despesas),
+        receitas: mergeValue(baseData.receitas, remoteData.receitas, targetData.receitas),
         wallets: mergeByKey({ baseItems: baseData.wallets, remoteItems: remoteData.wallets, targetItems: targetData.wallets, getKey: getId }),
         creditCards: mergeByKey({ baseItems: baseData.creditCards, remoteItems: remoteData.creditCards, targetItems: targetData.creditCards, getKey: getId }),
         creditCardInvoices: mergeByKey({ baseItems: baseData.creditCardInvoices, remoteItems: remoteData.creditCardInvoices, targetItems: targetData.creditCardInvoices, getKey: getId }),
