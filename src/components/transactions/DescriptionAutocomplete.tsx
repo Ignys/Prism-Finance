@@ -1,8 +1,10 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { TextAlignStart } from "lucide-react";
 import type { Transaction, TransactionType } from "../../context/FinanceContext";
 import { getCategoryIconComponent } from "../../lib/categoryIcons";
 import { AnchoredOverlay } from "./AnchoredOverlay";
-import { FIELD_INPUT_CLASS, FIELD_LABEL_CLASS } from "./transactionForm.constants";
+import { FIELD_EMBEDDED_INPUT_CLASS, FIELD_ICON_CONTROL_CLASS } from "./transactionForm.constants";
+import { TransactionFieldIcon } from "./TransactionFieldIcon";
 import {
     getTransactionDescriptionSuggestions,
     MIN_DESCRIPTION_SUGGESTION_QUERY_LENGTH,
@@ -116,12 +118,13 @@ export function DescriptionAutocomplete({
     };
 
     return (
-        <label ref={wrapperRef} className="flex flex-col gap-1.5" htmlFor={inputId}>
-            <span className={FIELD_LABEL_CLASS}>Descrição</span>
+        <label ref={wrapperRef} className={`${FIELD_ICON_CONTROL_CLASS} relative flex min-h-[50px] items-center gap-2`} htmlFor={inputId}>
+            <TransactionFieldIcon icon={TextAlignStart} />
             <input
                 ref={inputRef}
                 id={inputId}
-                className={FIELD_INPUT_CLASS}
+                aria-label="Descrição"
+                className={FIELD_EMBEDDED_INPUT_CLASS}
                 placeholder="Descrição da transação"
                 value={value}
                 onChange={(event) => {
@@ -146,7 +149,7 @@ export function DescriptionAutocomplete({
                 aria-activedescendant={showSuggestions ? `${listboxId}-${suggestions[activeIndex]?.id}` : undefined}
             />
 
-            <AnchoredOverlay anchorRef={inputRef} overlayRef={overlayRef} isOpen={showSuggestions} preferredMaxHeight={360} className="rounded-xl border border-white/[0.12] bg-[#101010] p-1.5 shadow-[0_24px_60px_-28px_rgba(0,0,0,0.98)]">
+            <AnchoredOverlay anchorRef={wrapperRef} overlayRef={overlayRef} isOpen={showSuggestions} preferredMaxHeight={360} className="rounded-xl border border-white/[0.12] bg-[#101010] p-1.5 shadow-[0_24px_60px_-28px_rgba(0,0,0,0.98)]">
                 <div id={listboxId} role="listbox" aria-label="Sugestões de transações" className="space-y-1">
                     {suggestions.map((suggestion, index) => {
                         const Icon = getCategoryIconComponent(suggestion.category.icon, suggestion.category.type);

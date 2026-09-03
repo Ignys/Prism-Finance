@@ -161,6 +161,7 @@ export function PayCreditCardInvoiceModal({ invoice, creditCard }: PayCreditCard
 
                 <div className="mt-4 flex grid grid-cols-2 grid-rows-1 gap-3">
                     <SingleSelectCombobox
+                        hideLabel
                         label="Pagamento"
                         value={walletId}
                         placeholder="Selecione uma carteira"
@@ -170,7 +171,7 @@ export function PayCreditCardInvoiceModal({ invoice, creditCard }: PayCreditCard
                         renderOptionContent={(option) => <WalletOptionContent option={option} />}
                     />
 
-                    <DateField label="Data do pagamento" value={paymentDate} onChange={setPaymentDate} />
+                    <DateField hideLabel label="Data do pagamento" value={paymentDate} onChange={setPaymentDate} />
                 </div>
 
                 {error && <p className="mt-3 text-sm text-red-300">{error}</p>}

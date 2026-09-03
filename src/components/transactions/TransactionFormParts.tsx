@@ -2,7 +2,6 @@ import type { Beneficiary, Category, Tag, TransactionStatus, TransactionType, Wa
 import { getCategoryIconComponent } from "../../lib/categoryIcons";
 import { BeneficiaryAvatar } from "../common/BeneficiaryAvatar";
 import { WalletAvatar } from "../common/WalletAvatar";
-import { FIELD_LABEL_CLASS } from "./transactionForm.constants";
 
 export interface WalletOptionLike {
     label: string;
@@ -85,8 +84,7 @@ export function TransactionHeader({ type, isEditing, isSeriesTransaction = false
 
 export function StatusField({ status, onChange, disabled = false }: StatusFieldProps) {
     return (
-        <div className="flex flex-col gap-1.5">
-            <span className={FIELD_LABEL_CLASS}>Status</span>
+        <div aria-label="Status">
             <div className="flex gap-1 rounded-xl border border-white/[0.1] bg-black/35 p-1">
                 <button
                     type="button"

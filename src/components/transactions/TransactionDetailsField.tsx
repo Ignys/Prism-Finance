@@ -1,6 +1,7 @@
-import { Download, FileText, LoaderCircle, Paperclip, Plus, X } from "lucide-react";
+import { Download, FileText, LoaderCircle, NotebookPen, Paperclip, Plus, X } from "lucide-react";
 import type { TransactionAttachment } from "../../types/transactionDetails";
-import { FIELD_INPUT_CLASS, FIELD_LABEL_CLASS } from "./transactionForm.constants";
+import { FIELD_EMBEDDED_INPUT_CLASS, FIELD_ICON_CONTROL_CLASS } from "./transactionForm.constants";
+import { TransactionFieldIcon } from "./TransactionFieldIcon";
 import type { TransactionDetailsController } from "./useTransactionDetails";
 
 interface TransactionDetailsFieldProps {
@@ -44,26 +45,26 @@ export function TransactionDetailsField({ details, disabled = false }: Transacti
     return (
         <div className="grid gap-2 md:grid-cols-2">
             <div>
-                <label className="flex h-full flex-col gap-1.5">
-                    <span className={FIELD_LABEL_CLASS}>Anotação</span>
+                <label className={`${FIELD_ICON_CONTROL_CLASS} flex min-h-32 items-start gap-2`}>
+                    <TransactionFieldIcon icon={NotebookPen} className="mt-0.5 text-violet-200/75" />
                     <textarea
+                        aria-label="Anotação"
                         value={details.annotation}
                         onChange={(event) => details.setAnnotation(event.target.value)}
                         disabled={controlsDisabled}
                         maxLength={2000}
                         placeholder="Adicione contexto, observações ou detalhes"
-                        className={`${FIELD_INPUT_CLASS} min-h-32 flex-1 resize-none leading-6`}
+                        className={`${FIELD_EMBEDDED_INPUT_CLASS} min-h-[108px] resize-none leading-6`}
                     />
                 </label>
-                <p className="mt-1 px-1 text-[10px] text-white/32">Contexto adicional, observações ou detalhes que não cabem na descrição.</p>
             </div>
 
             <div className="rounded-2xl border border-white/[0.09] bg-black/20 p-2.5">
                 <div className="mb-2 flex items-center justify-between gap-2">
-                    <span className="inline-flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-[0.12em] text-emerald-100/65">
-                        <Paperclip size={12} /> Anexos
+                    <span title="Anexos" aria-label="Anexos">
+                        <TransactionFieldIcon icon={Paperclip} className="text-emerald-100/70" />
                     </span>
-                    <span className="text-[10px] text-white/32">Até 5 · 10 MB cada</span>
+                    <span className="text-[10px] text-white/32">{details.attachments.length + details.stagedFiles.length}/5 · 10 MB cada</span>
                 </div>
 
                 <div className="elegant-scrollbar max-h-28 space-y-1.5 overflow-y-auto pr-1">

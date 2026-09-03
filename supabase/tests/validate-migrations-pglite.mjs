@@ -67,6 +67,7 @@ const migrationNames = [
     "014_family_share_realtime.sql",
     "015_batched_finance_commits.sql",
     "016_pgcrypto_function_search_path.sql",
+    "017_fix_ledger_transaction_delete.sql",
 ];
 
 for (const migrationName of migrationNames) {
@@ -499,5 +500,26 @@ if (Number(legacyShapeResult.rows[0]?.commit?.snapshot?.revision) !== 3) {
     throw new Error("a pre-015 browser did not receive its compatible snapshot response");
 }
 
-console.log(`RUNTIME OK family RLS/share, CAS, batched ${bulkSize}-row projection (${bulkElapsedMs.toFixed(0)}ms), compact commits, cascades, tombstones, safe legacy adapter, gap fallback and atomic load`);
+const directTransactionDeleteCommit = await applyChanges(3, {
+    preferences: { planning: {}, favorite_wallet_id: "bulk-wallet" },
+    upserts: {},
+    deletes: [
+        { entity_type: "transaction", entity_id: "bulk-tx-0000" },
+        { entity_type: "transaction_group", entity_id: "bulk-group-0000" },
+    ],
+}, "direct-transaction-delete-runtime");
+const directlyDeletedRows = await database.query(`
+    select
+        (select count(*)::integer from public.transactions where id = 'bulk-tx-0000') as transaction_count,
+        (select count(*)::integer from public.ledger_entries where transaction_id = 'bulk-tx-0000') as ledger_count
+`);
+if (
+    Number(directTransactionDeleteCommit?.revision) !== 4 ||
+    directlyDeletedRows.rows[0]?.transaction_count !== 0 ||
+    directlyDeletedRows.rows[0]?.ledger_count !== 0
+) {
+    throw new Error("direct paid transaction deletion did not cascade its server-managed ledger projection");
+}
+
+console.log(`RUNTIME OK family RLS/share, CAS, batched ${bulkSize}-row projection (${bulkElapsedMs.toFixed(0)}ms), compact commits, cascades, direct transaction deletion, tombstones, safe legacy adapter, gap fallback and atomic load`);
 await database.close();

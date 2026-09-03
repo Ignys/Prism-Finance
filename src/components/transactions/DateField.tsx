@@ -3,6 +3,7 @@ import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight } from "lucide-rea
 import { formatLocalDateInput, getLocalDateFromOffset, parseDateOnlyToLocalDate } from "../../lib/localDate";
 import { AnchoredOverlay } from "./AnchoredOverlay";
 import { FIELD_INPUT_CLASS, FIELD_LABEL_CLASS } from "./transactionForm.constants";
+import { TransactionFieldIcon } from "./TransactionFieldIcon";
 
 const DATE_MONTH_LABEL_FORMATTER = new Intl.DateTimeFormat("pt-BR", {
     month: "long",
@@ -36,6 +37,7 @@ interface DateFieldProps {
     className?: string;
     labelClassName?: string;
     inputClassName?: string;
+    hideLabel?: boolean;
 }
 
 function capitalizeLabel(value: string): string {
@@ -53,6 +55,7 @@ export function DateField({
     className = "",
     labelClassName = FIELD_LABEL_CLASS,
     inputClassName = FIELD_INPUT_CLASS,
+    hideLabel = false,
 }: DateFieldProps) {
     const todayValue = getLocalDateFromOffset(0);
     const yesterdayValue = getLocalDateFromOffset(-1);
@@ -173,8 +176,8 @@ export function DateField({
     };
 
     return (
-        <div ref={containerRef} className={`relative flex flex-col gap-1.5 ${className}`.trim()}>
-            <span className={labelClassName}>{label}</span>
+        <div ref={containerRef} className={`relative flex flex-col ${hideLabel ? "" : "gap-1.5"} ${className}`.trim()}>
+            {!hideLabel && <span className={labelClassName}>{label}</span>}
             <button
                 ref={triggerRef}
                 type="button"
@@ -182,10 +185,11 @@ export function DateField({
                 className="flex h-[50px] w-full items-center justify-between rounded-xl border border-white/[0.1] bg-black/35 px-3 text-left text-sm text-white transition-colors hover:border-white/[0.2] focus-visible:border-white/[0.26] focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-60"
                 aria-haspopup="dialog"
                 aria-expanded={isOpen}
+                aria-label={hideLabel ? label : undefined}
                 disabled={disabled}
             >
                 <span className="flex min-w-0 items-center gap-2">
-                    <CalendarDays size={15} className="shrink-0 text-emerald-200/85" />
+                    <TransactionFieldIcon icon={CalendarDays} className="text-emerald-200/85" />
                     <span className="truncate">{displayValue}</span>
                 </span>
                 <ChevronDown size={15} className={`shrink-0 text-white/65 transition-transform ${isOpen ? "rotate-180" : ""}`} />

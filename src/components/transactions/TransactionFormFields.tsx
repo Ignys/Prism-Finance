@@ -1,15 +1,17 @@
 import { useMemo } from "react";
-import { ArrowRight, Layers3, ReceiptText } from "lucide-react";
+import { ArrowRight, Layers3, LayoutGrid, ReceiptText, Tags } from "lucide-react";
 import { useFinanceTransactions, type Beneficiary, type Category, type Tag, type Transaction, type TransactionSeriesScope, type Wallet } from "../../context/FinanceContext";
 import { DateField } from "./DateField";
 import { DescriptionAutocomplete } from "./DescriptionAutocomplete";
+import { IconTextField } from "./IconTextField";
 import { MultiSelectCombobox } from "./MultiSelectCombobox";
 import { SingleSelectCombobox, type ComboboxOptionBase } from "./SingleSelectCombobox";
 import { TransactionDetailsField } from "./TransactionDetailsField";
+import { TransactionFieldIcon } from "./TransactionFieldIcon";
 import { BeneficiaryOptionContent, CategoryOptionContent, StatusField, TagOptionContent, WalletOptionContent } from "./TransactionFormParts";
 import { TransactionModeField } from "./TransactionModeField";
 import type { TransactionFormTab } from "./TransactionFormTabs";
-import { FIELD_INPUT_CLASS, FIELD_LABEL_CLASS } from "./transactionForm.constants";
+import { FIELD_ICON_TRIGGER_CLASS } from "./transactionForm.constants";
 import type { TransactionDetailsController } from "./useTransactionDetails";
 import type { TransactionFormState } from "./useTransactionForm";
 
@@ -30,8 +32,13 @@ function EditScopeOptionContent({ option }: { option: EditScopeOption }) {
     return <div className="flex items-center gap-2"><span className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-white/[0.12] bg-white/[0.04] text-white/80"><Icon size={14} /></span><span className="truncate">{option.label}</span></div>;
 }
 
-function ReadOnlyField({ label, children }: { label: string; children: React.ReactNode }) {
-    return <div className="flex flex-col gap-1.5"><span className={FIELD_LABEL_CLASS}>{label}</span><div className={`${FIELD_INPUT_CLASS} min-h-[46px] text-white/75`}>{children}</div></div>;
+function ReadOnlyField({ label, children, showFallbackIcon = false }: { label: string; children: React.ReactNode; showFallbackIcon?: boolean }) {
+    return (
+        <div aria-label={label} className="flex min-h-[50px] items-center gap-2 rounded-xl border border-white/[0.1] bg-black/35 px-3 py-2.5 text-sm text-white/75">
+            {showFallbackIcon ? <TransactionFieldIcon icon={LayoutGrid} /> : null}
+            <div className="min-w-0 flex-1">{children}</div>
+        </div>
+    );
 }
 
 interface TransactionFormFieldsProps {
@@ -78,7 +85,7 @@ export function TransactionFormFields({ activeTab, form, transaction, details, d
         return (
             <section className="flex flex-col gap-3">
                 <div className="grid gap-3 md:grid-cols-2">
-                    <MultiSelectCombobox label="Tags" values={form.selectedTagIds} placeholder="Nenhuma tag selecionada" emptyMessage="Nenhuma tag cadastrada." options={tagOptions} onChange={form.setSelectedTagIds} renderOptionContent={(option) => <TagOptionContent option={option} />} />
+                    <MultiSelectCombobox hideLabel leadingIcon={<TransactionFieldIcon icon={Tags} />} triggerClassName={FIELD_ICON_TRIGGER_CLASS} label="Tags" values={form.selectedTagIds} placeholder="Nenhuma tag selecionada" emptyMessage="Nenhuma tag cadastrada." options={tagOptions} onChange={form.setSelectedTagIds} renderOptionContent={(option) => <TagOptionContent option={option} />} />
                     <TransactionModeField mode={form.transactionMode} installmentCountInput={form.installmentCountInput} onModeChange={form.setTransactionMode} onInstallmentCountChange={form.setInstallmentCountInput} disabled={form.isInvoicePaymentEdit || form.isTransfer || form.isEditing || disabled} />
                 </div>
                 <div className="h-px bg-white/[0.06]" />
@@ -90,14 +97,14 @@ export function TransactionFormFields({ activeTab, form, transaction, details, d
     return (
         <section className="flex flex-col gap-3">
             <input className="rounded-xl border border-white/[0.1] bg-black/35 px-3 py-2 text-2xl text-white outline-none transition-colors placeholder:text-white/35 focus:border-white/[0.24] disabled:cursor-not-allowed disabled:opacity-65" inputMode="numeric" placeholder="R$ 0,00" value={form.amountInput} onChange={(event) => form.setAmountInput(event.target.value)} disabled={form.isInvoicePaymentEdit || disabled} />
-            <div className="grid grid-cols-1 gap-2 md:grid-cols-2"><StatusField status={form.status} onChange={form.setStatus} disabled={form.isInvoicePaymentEdit || disabled} /><DateField value={form.date} onChange={form.setDate} onOffset={form.setDateOffset} disabled={disabled} /></div>
+            <div className="grid grid-cols-1 gap-2 md:grid-cols-2"><StatusField status={form.status} onChange={form.setStatus} disabled={form.isInvoicePaymentEdit || disabled} /><DateField hideLabel value={form.date} onChange={form.setDate} onOffset={form.setDateOffset} disabled={disabled} /></div>
             <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-                {form.isInvoicePaymentEdit ? <ReadOnlyField label="Carteira">{walletOptions.find((option) => option.id === form.walletId) ? <WalletOptionContent option={walletOptions.find((option) => option.id === form.walletId)!} /> : <span>Carteira removida</span>}</ReadOnlyField> : <SingleSelectCombobox label="Carteira" value={form.walletId} placeholder="Selecione uma carteira" emptyMessage="Nenhuma carteira encontrada." options={walletOptions} onChange={form.setWalletId} renderOptionContent={(option) => <WalletOptionContent option={option} />} disabled={disabled} />}
-                <SingleSelectCombobox label="Beneficiário" value={form.beneficiaryId} placeholder="Selecione um beneficiário" emptyMessage="Nenhum beneficiário encontrado." options={beneficiaryOptions} onChange={form.setBeneficiaryId} renderOptionContent={(option) => <BeneficiaryOptionContent option={option} />} disabled={disabled} />
+                {form.isInvoicePaymentEdit ? <ReadOnlyField label="Carteira">{walletOptions.find((option) => option.id === form.walletId) ? <WalletOptionContent option={walletOptions.find((option) => option.id === form.walletId)!} /> : <span>Carteira removida</span>}</ReadOnlyField> : <SingleSelectCombobox hideLabel label="Carteira" value={form.walletId} placeholder="Selecione uma carteira" emptyMessage="Nenhuma carteira encontrada." options={walletOptions} onChange={form.setWalletId} renderOptionContent={(option) => <WalletOptionContent option={option} />} disabled={disabled} />}
+                <SingleSelectCombobox hideLabel label="Beneficiário" value={form.beneficiaryId} placeholder="Selecione um beneficiário" emptyMessage="Nenhum beneficiário encontrado." options={beneficiaryOptions} onChange={form.setBeneficiaryId} renderOptionContent={(option) => <BeneficiaryOptionContent option={option} />} disabled={disabled} />
             </div>
-            {form.isInvoicePaymentEdit ? <ReadOnlyField label="Categoria">{transaction?.category.label ?? "Sem categoria"}</ReadOnlyField> : <SingleSelectCombobox label="Categoria" value={selectedCategoryOptionId} placeholder="Selecione uma categoria" emptyMessage="Nenhuma categoria disponível." options={categoryOptions} onChange={handleCategorySelect} renderOptionContent={(option) => <CategoryOptionContent option={option} />} disabled={disabled} />}
+            {form.isInvoicePaymentEdit ? <ReadOnlyField label="Categoria" showFallbackIcon>{transaction?.category.label ?? "Sem categoria"}</ReadOnlyField> : <SingleSelectCombobox hideLabel label="Categoria" value={selectedCategoryOptionId} placeholder="Selecione uma categoria" emptyMessage="Nenhuma categoria disponível." options={categoryOptions} onChange={handleCategorySelect} renderOptionContent={(option) => <CategoryOptionContent option={option} />} disabled={disabled} />}
             {form.isInvoicePaymentEdit ? (
-                <label className="flex flex-col gap-1.5"><span className={FIELD_LABEL_CLASS}>Descrição</span><input className={FIELD_INPUT_CLASS} placeholder="Descrição da transação" value={form.description} onChange={(event) => form.setDescription(event.target.value)} disabled={disabled} maxLength={160} /></label>
+                <IconTextField ariaLabel="Descrição" placeholder="Descrição da transação" value={form.description} onChange={form.setDescription} disabled={disabled} maxLength={160} />
             ) : (
                 <DescriptionAutocomplete
                     value={form.description}

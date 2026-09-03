@@ -61,7 +61,7 @@ export function TransactionModeField({
                     }
                 }}
                 renderOptionContent={(option) => <TransactionModeOptionContent option={option} />}
-                labelClassName={FIELD_LABEL_CLASS}
+                hideLabel
                 disabled={disabled}
             />
 

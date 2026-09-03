@@ -16,6 +16,8 @@ interface MultiSelectComboboxProps<T extends ComboboxOptionBase> {
     labelClassName?: string;
     triggerClassName?: string;
     renderSelectedSummary?: (selectedOptions: T[]) => ReactNode;
+    leadingIcon?: ReactNode;
+    hideLabel?: boolean;
     disabled?: boolean;
 }
 
@@ -34,6 +36,8 @@ export function MultiSelectCombobox<T extends ComboboxOptionBase>({
     labelClassName = DEFAULT_LABEL_CLASS,
     triggerClassName = DEFAULT_TRIGGER_CLASS,
     renderSelectedSummary,
+    leadingIcon,
+    hideLabel = false,
     disabled = false,
 }: MultiSelectComboboxProps<T>) {
     const [isOpen, setIsOpen] = useState(false);
@@ -137,8 +141,8 @@ export function MultiSelectCombobox<T extends ComboboxOptionBase>({
     }, [placeholder, renderSelectedSummary, selectedOptions]);
 
     return (
-        <div ref={wrapperRef} className="relative flex flex-col gap-1.5">
-            <span className={labelClassName}>{label}</span>
+        <div ref={wrapperRef} className={`relative flex flex-col ${hideLabel ? "" : "gap-1.5"}`}>
+            {!hideLabel && <span className={labelClassName}>{label}</span>}
             <button
                 ref={triggerRef}
                 type="button"
@@ -149,9 +153,13 @@ export function MultiSelectCombobox<T extends ComboboxOptionBase>({
                     setIsOpen((current) => !current);
                 }}
                 disabled={disabled}
+                aria-label={hideLabel ? label : undefined}
                 className={`${triggerClassName} ${disabled ? "cursor-not-allowed opacity-60" : ""}`}
             >
-                <span className={` min-w-0 flex-1 truncate ${selectedOptions.length < 1 ? "text-white/40" : ""}`}>{selectedSummary}</span>
+                <span className="flex min-w-0 flex-1 items-center gap-2">
+                    {leadingIcon}
+                    <span className={`min-w-0 flex-1 truncate ${selectedOptions.length < 1 ? "text-white/40" : ""}`}>{selectedSummary}</span>
+                </span>
                 <ChevronsUpDown size={15} className="ml-2 shrink-0 text-white/55" />
             </button>
 

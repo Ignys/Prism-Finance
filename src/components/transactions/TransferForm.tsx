@@ -1,15 +1,17 @@
 import { useMemo, useState } from "react";
-import { ArrowRight, CircleSlash, ReceiptText, X } from "lucide-react";
+import { ArrowRight, CircleSlash, ReceiptText, Tags, X } from "lucide-react";
 import { type Tag, type Transaction, type Wallet, useFinanceSession } from "../../context/FinanceContext";
 import { useModal } from "../../context/ModalContext";
 import { AnimatedTransactionFormPanel } from "./AnimatedTransactionFormPanel";
 import { DateField } from "./DateField";
+import { IconTextField } from "./IconTextField";
 import { MultiSelectCombobox } from "./MultiSelectCombobox";
 import { SingleSelectCombobox, type ComboboxOptionBase } from "./SingleSelectCombobox";
 import { TransactionDetailsField } from "./TransactionDetailsField";
+import { TransactionFieldIcon } from "./TransactionFieldIcon";
 import { StatusField, TagOptionContent, WalletOptionContent } from "./TransactionFormParts";
 import type { TransactionFormTab } from "./TransactionFormTabs";
-import { FIELD_INPUT_CLASS, FIELD_LABEL_CLASS } from "./transactionForm.constants";
+import { FIELD_ICON_TRIGGER_CLASS } from "./transactionForm.constants";
 import { useTransactionDetails } from "./useTransactionDetails";
 import { type TransferFormPrefill, useTransferForm } from "./useTransferForm";
 
@@ -96,19 +98,19 @@ export function TransferForm({ prefill, transaction, activeTab = "simple" }: Tra
                     {activeTab === "simple" ? (
                         <section className="flex flex-col gap-3" role="tabpanel" aria-label="Dados simples">
                             <input className="rounded-xl border border-white/[0.1] bg-black/35 px-3 py-2 text-2xl text-white outline-none transition-colors placeholder:text-white/35 focus:border-white/[0.24] disabled:opacity-65" inputMode="numeric" placeholder="R$ 0,00" value={form.amountInput} onChange={(event) => form.setAmountInput(event.target.value)} disabled={submitting} />
-                            <div className="grid grid-cols-1 gap-2 md:grid-cols-2"><StatusField status={form.status} onChange={form.setStatus} disabled={submitting} /><DateField value={form.date} onChange={form.setDate} onOffset={form.setDateOffset} disabled={submitting} /></div>
+                            <div className="grid grid-cols-1 gap-2 md:grid-cols-2"><StatusField status={form.status} onChange={form.setStatus} disabled={submitting} /><DateField hideLabel value={form.date} onChange={form.setDate} onOffset={form.setDateOffset} disabled={submitting} /></div>
                             <div className="grid grid-cols-1 items-end gap-2 md:grid-cols-[1fr_auto_1fr]">
-                                <SingleSelectCombobox label="Sai de" value={form.sourceWalletId} placeholder="Selecione a origem" emptyMessage="Nenhuma carteira encontrada." options={sourceWalletOptions} onChange={form.setSourceWalletId} renderOptionContent={(option) => <WalletOptionContent option={option} />} labelClassName={FIELD_LABEL_CLASS} disabled={submitting} />
+                                <SingleSelectCombobox hideLabel label="Sai de" value={form.sourceWalletId} placeholder="Selecione a origem" emptyMessage="Nenhuma carteira encontrada." options={sourceWalletOptions} onChange={form.setSourceWalletId} renderOptionContent={(option) => <WalletOptionContent option={option} />} disabled={submitting} />
                                 <div className="hidden h-[50px] items-center justify-center text-white/45 md:flex"><ArrowRight size={18} /></div>
-                                <SingleSelectCombobox label="Entra em" value={form.destinationWalletId ?? "none"} placeholder="Selecione o destino" emptyMessage="Nenhuma carteira encontrada." options={destinationWalletOptions} onChange={(value) => form.setDestinationWalletId(value === "none" ? null : value)} renderOptionContent={(option) => <DestinationWalletOptionContent option={option} />} labelClassName={FIELD_LABEL_CLASS} disabled={submitting} />
+                                <SingleSelectCombobox hideLabel label="Entra em" value={form.destinationWalletId ?? "none"} placeholder="Selecione o destino" emptyMessage="Nenhuma carteira encontrada." options={destinationWalletOptions} onChange={(value) => form.setDestinationWalletId(value === "none" ? null : value)} renderOptionContent={(option) => <DestinationWalletOptionContent option={option} />} disabled={submitting} />
                             </div>
-                            <label className="flex flex-col gap-1.5"><span className={FIELD_LABEL_CLASS}>Descrição</span><input className={FIELD_INPUT_CLASS} placeholder="Descrição da transferência" value={form.description} onChange={(event) => form.setDescription(event.target.value)} disabled={submitting} maxLength={160} /></label>
+                            <IconTextField ariaLabel="Descrição" placeholder="Descrição da transferência" value={form.description} onChange={form.setDescription} disabled={submitting} maxLength={160} />
                         </section>
                     ) : (
                         <section className="flex flex-col gap-3" role="tabpanel" aria-label="Opções avançadas">
                             <div className="grid gap-3 md:grid-cols-2">
-                                <MultiSelectCombobox label="Tags" values={form.selectedTagIds} placeholder="Nenhuma tag selecionada" emptyMessage="Nenhuma tag cadastrada." options={tagOptions} onChange={form.setSelectedTagIds} renderOptionContent={(option) => <TagOptionContent option={option} />} labelClassName={FIELD_LABEL_CLASS} />
-                                <div className="flex flex-col gap-1.5"><span className={FIELD_LABEL_CLASS}>Tipo</span><div className={`${FIELD_INPUT_CLASS} flex min-h-[46px] items-center gap-2 text-white/75`}><ReceiptText size={14} /> Única</div></div>
+                                <MultiSelectCombobox hideLabel leadingIcon={<TransactionFieldIcon icon={Tags} />} triggerClassName={FIELD_ICON_TRIGGER_CLASS} label="Tags" values={form.selectedTagIds} placeholder="Nenhuma tag selecionada" emptyMessage="Nenhuma tag cadastrada." options={tagOptions} onChange={form.setSelectedTagIds} renderOptionContent={(option) => <TagOptionContent option={option} />} />
+                                <div aria-label="Tipo" className="flex min-h-[50px] items-center gap-2 rounded-xl border border-white/[0.1] bg-black/35 px-3 py-2.5 text-sm text-white/75"><TransactionFieldIcon icon={ReceiptText} /> Única</div>
                             </div>
                             <div className="h-px bg-white/[0.06]" />
                             <TransactionDetailsField details={details} disabled={submitting} />

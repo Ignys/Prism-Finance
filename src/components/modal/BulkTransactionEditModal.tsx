@@ -1,11 +1,13 @@
 import { useMemo, useState } from "react";
+import { Tags } from "lucide-react";
 import type { Beneficiary, Category, Tag, Transaction, TransactionStatus } from "../../context/FinanceContext";
 import { useFinanceActions, useFinanceBeneficiaries, useFinanceCategories, useFinanceTags, useFinanceTransactions } from "../../context/FinanceContext";
 import { useModal } from "../../context/ModalContext";
 import { MultiSelectCombobox } from "../transactions/MultiSelectCombobox";
 import { SingleSelectCombobox, type ComboboxOptionBase } from "../transactions/SingleSelectCombobox";
 import { BeneficiaryOptionContent, CategoryOptionContent, TagOptionContent } from "../transactions/TransactionFormParts";
-import { FIELD_LABEL_CLASS } from "../transactions/transactionForm.constants";
+import { TransactionFieldIcon } from "../transactions/TransactionFieldIcon";
+import { FIELD_ICON_TRIGGER_CLASS, FIELD_LABEL_CLASS } from "../transactions/transactionForm.constants";
 import { ModalStructure } from "./ModalStructure";
 
 interface BulkTransactionEditModalProps {
@@ -220,6 +222,7 @@ export function BulkTransactionEditModal({ transactions, context, onApplied }: B
                         <div className={BULK_FIELD_ROW_CLASS}>
                             <BulkFieldToggle checked={categoryEnabled} label="Alterar categoria" onChange={setCategoryEnabled} />
                             <SingleSelectCombobox
+                                hideLabel
                                 label="Categoria"
                                 value={categoryId}
                                 placeholder="Selecione a categoria"
@@ -236,6 +239,7 @@ export function BulkTransactionEditModal({ transactions, context, onApplied }: B
                         <div className={BULK_FIELD_ROW_CLASS}>
                             <BulkFieldToggle checked={beneficiaryEnabled} label="Alterar beneficiario" onChange={setBeneficiaryEnabled} />
                             <SingleSelectCombobox
+                                hideLabel
                                 label="Beneficiario"
                                 value={beneficiaryId}
                                 placeholder="Selecione o beneficiario"
@@ -251,6 +255,7 @@ export function BulkTransactionEditModal({ transactions, context, onApplied }: B
                     <div className={BULK_FIELD_ROW_CLASS}>
                         <BulkFieldToggle checked={statusEnabled} label="Alterar status" onChange={setStatusEnabled} />
                         <SingleSelectCombobox
+                            hideLabel
                             label="Status"
                             value={status}
                             placeholder="Selecione o status"
@@ -266,6 +271,8 @@ export function BulkTransactionEditModal({ transactions, context, onApplied }: B
                     <div className={BULK_FIELD_ROW_CLASS}>
                         <BulkFieldToggle checked={tagsEnabled} label="Adicionar tags" onChange={setTagsEnabled} />
                         <MultiSelectCombobox
+                            hideLabel
+                            leadingIcon={<TransactionFieldIcon icon={Tags} />}
                             label="Tags"
                             values={tagIdsToAdd}
                             placeholder="Selecione as tags"
@@ -274,7 +281,7 @@ export function BulkTransactionEditModal({ transactions, context, onApplied }: B
                             onChange={setTagIdsToAdd}
                             renderOptionContent={(option) => <TagOptionContent option={option} />}
                             disabled={!tagsEnabled}
-                            triggerClassName="flex w-full items-center justify-between rounded-xl border border-white/[0.1] bg-black/35 px-3 py-2.5 text-left text-sm text-white transition-colors hover:border-white/[0.2]"
+                            triggerClassName={FIELD_ICON_TRIGGER_CLASS}
                         />
                     </div>
                 </div>

@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(46);
+select plan(47);
 
 insert into auth.users(id, aud, role, email, encrypted_password, email_confirmed_at, created_at, updated_at)
 values
@@ -472,6 +472,17 @@ select ok(
 select ok(
     exists (select 1 from pg_trigger where tgname = 'transaction_attachments_queue_blob_delete' and not tgisinternal),
     'attachment metadata cascades enqueue blob cleanup'
+);
+
+select ok(
+    (
+        select count(*) = 1 and bool_and(c.confdeltype = 'c')
+          from pg_constraint c
+         where c.conrelid = 'public.ledger_entries'::regclass
+           and c.confrelid = 'public.transactions'::regclass
+           and c.contype = 'f'
+    ),
+    'ledger entries have one cascading transaction foreign key'
 );
 
 select * from finish();

@@ -20,6 +20,7 @@ interface SingleSelectComboboxProps<T extends ComboboxOptionBase> {
     renderSelectedContent?: (option: T) => ReactNode;
     labelClassName?: string;
     labelContent?: ReactNode;
+    hideLabel?: boolean;
     disabled?: boolean;
     disableSearch?: boolean;
     compactTrigger?: boolean;
@@ -39,6 +40,7 @@ export function SingleSelectCombobox<T extends ComboboxOptionBase>({
     renderSelectedContent,
     labelClassName = DEFAULT_LABEL_CLASS,
     labelContent,
+    hideLabel = false,
     disabled = false,
     disableSearch = false,
     compactTrigger = false,
@@ -127,8 +129,8 @@ export function SingleSelectCombobox<T extends ComboboxOptionBase>({
         } text-left text-white transition-colors`;
 
     return (
-        <div ref={wrapperRef} className="relative flex flex-col gap-1.5">
-            {labelContent ? labelContent : <span className={labelClassName}>{label}</span>}
+        <div ref={wrapperRef} className={`relative flex flex-col ${hideLabel ? "" : "gap-1.5"}`}>
+            {!hideLabel && (labelContent ? labelContent : <span className={labelClassName}>{label}</span>)}
             <button
                 ref={triggerRef}
                 type="button"
@@ -139,6 +141,7 @@ export function SingleSelectCombobox<T extends ComboboxOptionBase>({
                     setIsOpen((current) => !current);
                 }}
                 disabled={disabled}
+                aria-label={hideLabel ? label : undefined}
                 className={`${resolvedTriggerClassName} ${disabled ? "cursor-not-allowed opacity-60" : "hover:border-white/[0.2]"}`}
             >
                 <div className="min-w-0 flex-1">

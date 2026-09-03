@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowRight, Copy, Eye, Info, Layers3, ReceiptText, Repeat, SquareSlash, Trash2, X } from "lucide-react";
+import { ArrowRight, Copy, Eye, Info, Layers3, ReceiptText, Repeat, SquareSlash, Tags, Trash2, X } from "lucide-react";
 import type { Beneficiary, Category, CreditCard, CreditCardInvoice, Transaction, TransactionMode, TransactionSeriesScope, TransactionStatus } from "../../context/FinanceContext";
 import {
     SYSTEM_EXPENSE_CARD_INVOICE_CATEGORY_ID,
@@ -29,8 +29,9 @@ import { DescriptionAutocomplete } from "./DescriptionAutocomplete";
 import { MultiSelectCombobox } from "./MultiSelectCombobox";
 import { SingleSelectCombobox, type ComboboxOptionBase } from "./SingleSelectCombobox";
 import { TransactionDetailsField } from "./TransactionDetailsField";
+import { TransactionFieldIcon } from "./TransactionFieldIcon";
 import type { TransactionFormTab } from "./TransactionFormTabs";
-import { FIELD_LABEL_CLASS } from "./transactionForm.constants";
+import { FIELD_ICON_TRIGGER_CLASS, FIELD_LABEL_CLASS } from "./transactionForm.constants";
 import { getTransactionSubmitErrorMessage } from "./transactionSubmitError";
 import { formatCurrencyBRL } from "./transactionView";
 import { FooterButton } from "./TransactionForm";
@@ -1105,8 +1106,8 @@ export function CardSpendingForm({ transaction = null, prefill, activeTab, onIns
                                 onChange={(event) => setAmountInput(event.target.value)}
                                 disabled={submitting}
                             />
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                                <DateField value={date} onChange={setDate} shortcuts={DATE_SHORTCUTS} />
+                            <div className="grid grid-cols-1 items-end gap-2 md:grid-cols-2">
+                                <DateField hideLabel value={date} onChange={setDate} shortcuts={DATE_SHORTCUTS} />
                                 <SingleSelectCombobox
                                     label="Fatura"
                                     value={resolvedInvoiceSelectionId}
@@ -1121,7 +1122,7 @@ export function CardSpendingForm({ transaction = null, prefill, activeTab, onIns
                                 />
                             </div>
 
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                            <div className="grid grid-cols-1 items-end gap-2 md:grid-cols-2">
                                 <SingleSelectCombobox
                                     label="Cartão"
                                     value={creditCardId}
@@ -1133,6 +1134,7 @@ export function CardSpendingForm({ transaction = null, prefill, activeTab, onIns
                                     labelClassName={FIELD_LABEL_CLASS}
                                 />
                                 <SingleSelectCombobox
+                                    hideLabel
                                     label="Beneficiario"
                                     value={beneficiaryId}
                                     placeholder="Selecione um beneficiario"
@@ -1145,6 +1147,7 @@ export function CardSpendingForm({ transaction = null, prefill, activeTab, onIns
                             </div>
 
                             <SingleSelectCombobox
+                                hideLabel
                                 label="Categoria"
                                 value={selectedCategoryOptionId}
                                 placeholder="Selecione uma categoria"
@@ -1186,7 +1189,10 @@ export function CardSpendingForm({ transaction = null, prefill, activeTab, onIns
                             <section className="flex flex-col gap-3" role="tabpanel" aria-label="Opções avançadas">
                                 <div className="grid gap-3 md:grid-cols-2">
                                     <MultiSelectCombobox
-                                        label={"Tags"}
+                                        hideLabel
+                                        leadingIcon={<TransactionFieldIcon icon={Tags} />}
+                                        triggerClassName={FIELD_ICON_TRIGGER_CLASS}
+                                        label="Tags"
                                         values={selectedTagIds}
                                         placeholder="Nenhuma tag selecionada"
                                         emptyMessage="Nenhuma tag cadastrada."
@@ -1198,6 +1204,7 @@ export function CardSpendingForm({ transaction = null, prefill, activeTab, onIns
                                     <div>
                                             <SingleSelectCombobox
                                                 disableSearch
+                                                hideLabel
                                                 label="Tipo"
                                                 value={spendingMode}
                                                 placeholder="Selecione um modo"
