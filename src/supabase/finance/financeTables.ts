@@ -124,7 +124,7 @@ export interface TransactionGroupRow {
     transaction_mode: string;
     total_amount: number | string;
     installment_count: number | null;
-    recurrence_rule: Record<string, unknown> | null;
+    recurrence_rule: unknown;
     recurrence_end_date: string | null;
     source_wallet_id: string | null;
     destination_wallet_id: string | null;
@@ -152,6 +152,9 @@ export interface TransactionRow {
     id: string;
     group_id: string;
     installment_number: number | null;
+    occurrence_number?: number | null;
+    routing_override?: boolean;
+    commitment?: "forecast" | "posted";
     amount: number | string;
     scheduled_date: string;
     status: string;

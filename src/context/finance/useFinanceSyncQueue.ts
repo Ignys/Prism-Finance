@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FinanceSnapshot } from "../financeTypes";
+import type { FinanceSyncStatus, FinanceSyncValue } from "./contextTypes";
 import { toSupabasePlanningState } from "../../lib/planningLocalPreferences";
+import { describeFinanceSyncError } from "./financeSyncErrors";
+import { persistConflictResolution } from "./persistConflictResolution";
+import { persistPendingSync } from "./persistPendingSync";
+import { recoverPendingSync } from "./recoverPendingSync";
 import {
     isFinanceRevisionConflictError,
     type SaveSupabaseFinanceDataParams,
@@ -14,17 +19,6 @@ import {
     writePendingFinanceSync,
     type PendingFinanceSync,
 } from "./pendingFinanceSyncStorage";
-
-export type FinanceSyncStatus = "syncing" | "synced" | "error";
-
-export interface FinanceSyncValue {
-    status: FinanceSyncStatus;
-    pendingCount: number;
-    lastSyncedAt: string | null;
-    lastError: string | null;
-    hasPendingSync: boolean;
-    retrySync: () => void;
-}
 
 interface EnqueueFinanceSyncContext {
     baseRevision: number;
@@ -45,9 +39,11 @@ interface UseFinanceSyncQueueParams {
     mergeFinanceData: (params: MergeFinanceSyncDataParams) => SupabaseFinanceData;
     onSyncAccepted: (financeData: SupabaseFinanceData, revision: number) => void;
     onConflictMerged: (financeData: SupabaseFinanceData, baseData: SupabaseFinanceData, revision: number) => void;
+    backupPendingData: (financeData: SupabaseFinanceData) => Promise<void>;
 }
 
 interface UseFinanceSyncQueueValue extends FinanceSyncValue {
+    hydratedUserId: string | null;
     enqueueSync: (financeData: SupabaseFinanceData, context: EnqueueFinanceSyncContext) => void;
     getPendingSyncData: () => SupabaseFinanceData | null;
     getPendingSyncBaseRevision: () => number | null;
@@ -80,7 +76,7 @@ function replacePendingTargetData(pendingSync: PendingFinanceSync, targetData: S
 }
 
 function resolveErrorMessage(error: unknown): string {
-    return error instanceof Error ? error.message : "Nao foi possivel sincronizar com o banco de dados.";
+    return describeFinanceSyncError(error).message;
 }
 
 function summarizeFinanceSyncData(financeData: SupabaseFinanceData): Record<string, number> {
@@ -122,11 +118,13 @@ export function useFinanceSyncQueue({
     mergeFinanceData,
     onSyncAccepted,
     onConflictMerged,
+    backupPendingData,
 }: UseFinanceSyncQueueParams): UseFinanceSyncQueueValue {
     const [status, setStatus] = useState<FinanceSyncStatus>("synced");
     const [pendingCount, setPendingCount] = useState(0);
     const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
     const [lastError, setLastError] = useState<string | null>(null);
+    const [hydratedUserId, setHydratedUserId] = useState<string | null>(null);
 
     const userIdRef = useRef(userId);
     const clientIdRef = useRef(clientId);
@@ -135,7 +133,9 @@ export function useFinanceSyncQueue({
     const mergeFinanceDataRef = useRef(mergeFinanceData);
     const onSyncAcceptedRef = useRef(onSyncAccepted);
     const onConflictMergedRef = useRef(onConflictMerged);
+    const backupPendingDataRef = useRef(backupPendingData);
     const pendingSyncRef = useRef<PendingFinanceSync | null>(null);
+    const durablePendingQueuedAtRef = useRef<string | null>(null);
     const inFlightRef = useRef(false);
     const activeFlushIdRef = useRef(0);
     const retryAttemptRef = useRef(0);
@@ -174,6 +174,7 @@ export function useFinanceSyncQueue({
     useEffect(() => {
         onConflictMergedRef.current = onConflictMerged;
     }, [onConflictMerged]);
+    useEffect(() => { backupPendingDataRef.current = backupPendingData; }, [backupPendingData]);
 
     useEffect(() => {
         syncStateRef.current = { status, pendingCount };
@@ -202,6 +203,7 @@ export function useFinanceSyncQueue({
     const handleRevisionConflict = useCallback(
         async (activeUserId: string, pendingSync: PendingFinanceSync): Promise<void> => {
             const remoteFinance = await loadFinanceDataRef.current(activeUserId);
+            if (userIdRef.current !== activeUserId || pendingSyncRef.current?.queuedAt !== pendingSync.queuedAt) return;
             const remoteData = remoteFinance.data;
             if (!remoteData) {
                 throw new Error("Nao foi possivel recarregar os dados remotos para resolver o conflito.");
@@ -217,8 +219,17 @@ export function useFinanceSyncQueue({
                 baseData: remoteData,
             });
 
-            pendingSyncRef.current = mergedPendingSync;
-            await writePendingFinanceSync(activeUserId, clientIdRef.current, mergedPendingSync);
+            const published = await persistConflictResolution({
+                original: pendingSync,
+                resolved: mergedPendingSync,
+                isCurrent: (pending) => isMountedRef.current && userIdRef.current === activeUserId && pendingSyncRef.current?.queuedAt === pending.queuedAt,
+                persist: (pending) => writePendingFinanceSync(activeUserId, clientIdRef.current, pending),
+                publish: (pending) => {
+                    pendingSyncRef.current = pending;
+                    durablePendingQueuedAtRef.current = pending.queuedAt;
+                },
+            });
+            if (!published) return;
             retryAttemptRef.current = 0;
             onConflictMergedRef.current(mergedData, remoteData, remoteFinance.revision);
             setStatus("syncing");
@@ -260,6 +271,7 @@ export function useFinanceSyncQueue({
                 const currentPendingSync = pendingSyncRef.current;
                 if (currentPendingSync?.queuedAt === pendingSync.queuedAt) {
                     pendingSyncRef.current = null;
+                    durablePendingQueuedAtRef.current = null;
                     void removePendingFinanceSync(activeUserId, clientIdRef.current, pendingSync.queuedAt).catch(logPendingStorageError);
                     retryAttemptRef.current = 0;
                     onSyncAcceptedRef.current(result.data, result.revision);
@@ -279,12 +291,7 @@ export function useFinanceSyncQueue({
                 }
 
                 if (isFinanceRevisionConflictError(error)) {
-                    void handleRevisionConflict(activeUserId, pendingSync)
-                        .then(() => {
-                            if (isMountedRef.current && userIdRef.current === activeUserId) {
-                                flushSyncRef.current();
-                            }
-                        })
+                    return handleRevisionConflict(activeUserId, pendingSync)
                         .catch((conflictError) => {
                             if (!isMountedRef.current || userIdRef.current !== activeUserId || pendingSyncRef.current?.queuedAt !== pendingSync.queuedAt) {
                                 return;
@@ -301,7 +308,6 @@ export function useFinanceSyncQueue({
                             setLastError(resolveErrorMessage(conflictError));
                             scheduleRetry();
                         });
-                    return;
                 }
 
                 logFinanceSyncError({
@@ -313,7 +319,7 @@ export function useFinanceSyncQueue({
                 setStatus("error");
                 setPendingCount(1);
                 setLastError(resolveErrorMessage(error));
-                scheduleRetry();
+                if (describeFinanceSyncError(error).retryAutomatically) scheduleRetry();
             })
             .finally(() => {
                 if (activeFlushIdRef.current !== flushId) {
@@ -327,7 +333,9 @@ export function useFinanceSyncQueue({
                 }
 
                 const currentPendingSync = pendingSyncRef.current;
-                if (currentPendingSync && currentPendingSync.queuedAt !== pendingSync.queuedAt) {
+                if (currentPendingSync
+                    && currentPendingSync.queuedAt !== pendingSync.queuedAt
+                    && durablePendingQueuedAtRef.current === currentPendingSync.queuedAt) {
                     flushSyncRef.current();
                 }
             });
@@ -339,6 +347,8 @@ export function useFinanceSyncQueue({
 
     useEffect(() => {
         userIdRef.current = userId;
+        durablePendingQueuedAtRef.current = null;
+        setHydratedUserId(null);
         clearRetryTimer();
         activeFlushIdRef.current += 1;
         inFlightRef.current = false;
@@ -360,10 +370,10 @@ export function useFinanceSyncQueue({
                 }
                 pendingSyncRef.current = storedPendingSync;
                 if (storedPendingSync) {
+                    durablePendingQueuedAtRef.current = storedPendingSync.queuedAt;
                     setStatus("syncing");
                     setPendingCount(1);
                     setLastError(null);
-                    flushSyncRef.current();
                     return;
                 }
 
@@ -376,6 +386,11 @@ export function useFinanceSyncQueue({
                     logPendingStorageError(error);
                     setLastError(resolveErrorMessage(error));
                 }
+            })
+            .finally(() => {
+                if (!cancelled && userIdRef.current === userId) {
+                    setHydratedUserId(userId);
+                }
             });
 
         return () => {
@@ -385,9 +400,10 @@ export function useFinanceSyncQueue({
 
     useEffect(() => {
         const handleOnline = () => {
-            if (pendingSyncRef.current) {
-                flushSyncRef.current();
-            }
+            const activeUserId = userIdRef.current;
+            const pendingSync = pendingSyncRef.current;
+            if (!activeUserId || !pendingSync) return;
+            if (durablePendingQueuedAtRef.current === pendingSync.queuedAt) flushSyncRef.current();
         };
 
         window.addEventListener("online", handleOnline);
@@ -409,6 +425,30 @@ export function useFinanceSyncQueue({
         return () => window.removeEventListener("beforeunload", handleBeforeUnload);
     }, []);
 
+    const persistPendingThenFlush = useCallback((activeUserId: string, pendingSync: PendingFinanceSync) => {
+        void persistPendingSync({
+            pending: pendingSync,
+            isCurrent: (candidate) => isMountedRef.current
+                && userIdRef.current === activeUserId
+                && pendingSyncRef.current?.queuedAt === candidate.queuedAt,
+            persist: (candidate) => writePendingFinanceSync(activeUserId, clientIdRef.current, candidate),
+            onDurable: (candidate) => {
+                durablePendingQueuedAtRef.current = candidate.queuedAt;
+                flushSyncRef.current();
+            },
+        }).catch((error) => {
+            logPendingStorageError(error);
+            if (!isMountedRef.current
+                || userIdRef.current !== activeUserId
+                || pendingSyncRef.current?.queuedAt !== pendingSync.queuedAt) {
+                return;
+            }
+            setStatus("error");
+            setPendingCount(1);
+            setLastError("Não foi possível proteger as alterações locais no armazenamento do navegador. Tente novamente antes de sair.");
+        });
+    }, []);
+
     const enqueueSync = useCallback((financeData: SupabaseFinanceData, context: EnqueueFinanceSyncContext) => {
         const activeUserId = userIdRef.current;
         if (!activeUserId) {
@@ -421,15 +461,60 @@ export function useFinanceSyncQueue({
         setStatus("syncing");
         setPendingCount(1);
         setLastError(null);
-        void writePendingFinanceSync(activeUserId, clientIdRef.current, pendingSync)
-            .catch(logPendingStorageError)
-            .finally(() => flushSyncRef.current());
-    }, []);
+        persistPendingThenFlush(activeUserId, pendingSync);
+    }, [persistPendingThenFlush]);
+
+    const restoreConfirmedData = useCallback(async () => {
+        const activeUserId = userIdRef.current;
+        const pending = pendingSyncRef.current;
+        if (!activeUserId || !pending) return;
+        if (inFlightRef.current) throw new Error("Aguarde a sincronização em andamento terminar.");
+        const recoveryId = ++activeFlushIdRef.current;
+        clearRetryTimer();
+        inFlightRef.current = true;
+        setStatus("syncing");
+        try {
+            await recoverPendingSync({
+                load: () => loadFinanceDataRef.current(activeUserId),
+                backup: () => backupPendingDataRef.current(pending.targetData),
+                removePending: () => removePendingFinanceSync(activeUserId, clientIdRef.current, pending.queuedAt),
+                isCurrent: () => isMountedRef.current && activeFlushIdRef.current === recoveryId && userIdRef.current === activeUserId && pendingSyncRef.current?.queuedAt === pending.queuedAt,
+                publish: (remote) => {
+                    pendingSyncRef.current = null;
+                    durablePendingQueuedAtRef.current = null;
+                    onSyncAcceptedRef.current(remote.data!, remote.revision);
+                    setPendingCount(0);
+                    setLastError(null);
+                    setLastSyncedAt(new Date().toISOString());
+                    setStatus("synced");
+                },
+            });
+        } catch (error) {
+            if (isMountedRef.current && activeFlushIdRef.current === recoveryId && userIdRef.current === activeUserId) {
+                setStatus("error");
+                setLastError(resolveErrorMessage(error));
+            }
+            throw error;
+        } finally {
+            if (activeFlushIdRef.current === recoveryId && userIdRef.current === activeUserId) {
+                inFlightRef.current = false;
+                const currentPendingSync = pendingSyncRef.current;
+                if (currentPendingSync
+                    && currentPendingSync.queuedAt !== pending.queuedAt
+                    && durablePendingQueuedAtRef.current === currentPendingSync.queuedAt) {
+                    flushSyncRef.current();
+                }
+            }
+        }
+    }, [clearRetryTimer]);
 
     const retrySync = useCallback(() => {
         retryAttemptRef.current = 0;
-        flushSyncRef.current();
-    }, []);
+        const activeUserId = userIdRef.current;
+        const pendingSync = pendingSyncRef.current;
+        if (!activeUserId || !pendingSync) return;
+        persistPendingThenFlush(activeUserId, pendingSync);
+    }, [persistPendingThenFlush]);
 
     const getPendingSyncData = useCallback((): SupabaseFinanceData | null => pendingSyncRef.current?.targetData ?? null, []);
     const getPendingSyncBaseRevision = useCallback((): number | null => pendingSyncRef.current?.baseRevision ?? null, []);
@@ -437,17 +522,19 @@ export function useFinanceSyncQueue({
 
     return useMemo(
         () => ({
+            hydratedUserId,
             status,
             pendingCount,
             lastSyncedAt,
             lastError,
             hasPendingSync,
             retrySync,
+            restoreConfirmedData,
             enqueueSync,
             getPendingSyncData,
             getPendingSyncBaseRevision,
         }),
-        [enqueueSync, getPendingSyncBaseRevision, getPendingSyncData, hasPendingSync, lastError, lastSyncedAt, pendingCount, retrySync, status],
+        [enqueueSync, getPendingSyncBaseRevision, getPendingSyncData, hasPendingSync, hydratedUserId, lastError, lastSyncedAt, pendingCount, retrySync, restoreConfirmedData, status],
     );
 }
 

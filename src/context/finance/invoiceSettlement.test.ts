@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { buildInvoiceSettlement } from "./invoiceSettlement";
-import { createLedgerEntriesForPaidTransaction, type Category, type CreditCardInvoice } from "../financeTypes";
+import { calculateFinanceSummary, createLedgerEntriesForPaidTransaction, toTransactionList, type Category, type CreditCardInvoice } from "../financeTypes";
+import { fixtureGroup } from "./financeTestFixtures";
+import { requireRecurrenceRule } from "./recurrence/rule";
 
 const invoice: CreditCardInvoice = {
     id: "invoice-1",
@@ -48,10 +50,18 @@ describe("buildInvoiceSettlement", () => {
         expect(result.changed).toBe(true);
         expect(result.transactions).toHaveLength(1);
         expect(result.transactions[0]?.amount).toBe(75);
+        expect(result.transactions[0]?.status).toBe("paid");
+        expect(result.transactions[0]?.scheduledDate).toBe("2026-09-02");
         expect(result.transactions[0]?.paymentForInvoiceId).toBe(invoice.id);
         expect(result.transactions[0]?.notes).toContain(`|${invoice.id}|${invoice.creditCardId}`);
         expect(result.transactionGroups[0]?.sourceWalletId).toBeNull();
         expect(createLedgerEntriesForPaidTransaction(result.transactions[0]!, result.transactionGroups[0]!)).toEqual([]);
+        expect(createLedgerEntriesForPaidTransaction({ ...result.transactions[0]!, notes: null }, result.transactionGroups[0]!)).toEqual([]);
+        const canonicalOnly = { ...result.transactions[0]!, notes: null };
+        expect(toTransactionList([canonicalOnly], result.transactionGroups, [], [], [], [])[0]).toMatchObject({
+            systemKind: "invoice_payment", paymentForInvoiceId: invoice.id, isNonCashSettlement: true,
+        });
+        expect(calculateFinanceSummary([], result.transactionGroups, [canonicalOnly])).toEqual({ despesas: 0, receitas: 0 });
         expect(result.invoices[0]).toMatchObject({ paidAmount: 100, status: "paid" });
     });
 
@@ -69,12 +79,14 @@ describe("buildInvoiceSettlement", () => {
             nowIso: "2026-09-02T12:00:00.000Z",
         });
         const transactionId = closed.transactions[0]!.id;
+        const projectedSeries = fixtureGroup({ id: "rule-only", transactionMode: "recurring",
+            recurrenceRule: requireRecurrenceRule({ anchorDate: "2026-09-10", amount: 100 }) });
         const reopened = buildInvoiceSettlement({
             invoiceIds: [invoice.id],
             markAsPaid: false,
             userId: "user-1",
             invoices: closed.invoices,
-            transactionGroups: closed.transactionGroups,
+            transactionGroups: [...closed.transactionGroups, projectedSeries],
             transactions: closed.transactions,
             ledgerEntries: [
                 {
@@ -95,7 +107,7 @@ describe("buildInvoiceSettlement", () => {
 
         expect(reopened.changed).toBe(true);
         expect(reopened.transactions).toHaveLength(0);
-        expect(reopened.transactionGroups).toHaveLength(0);
+        expect(reopened.transactionGroups).toEqual([projectedSeries]);
         expect(reopened.ledgerEntries).toHaveLength(0);
         expect(reopened.invoices[0]).toMatchObject({ paidAmount: 0, status: "open", paidAt: null });
     });

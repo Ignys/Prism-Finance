@@ -50,7 +50,11 @@ export function useRegistryAssetActionHandler(kind: RegistryAssetKind) {
                 <ConfirmActionModal
                     title={`Excluir ${assetLabel} em definitivo?`}
                     description={`O cadastro "${asset.name}" será removido permanentemente.`}
-                    consequences={["Esta ação não pode ser desfeita."]}
+                    consequences={[
+                        "As transações e séries vinculadas serão excluídas, incluindo parcelas e ocorrências alteradas individualmente para outra carteira ou cartão.",
+                        isWallet ? "Os lançamentos dessa carteira serão removidos e os saldos afetados serão recalculados." : "As faturas e seus pagamentos também serão excluídos, alterando os saldos das carteiras usadas nos pagamentos.",
+                        "Para manter o histórico, use Arquivar. A exclusão permanente não pode ser desfeita.",
+                    ]}
                     confirmLabel="Excluir em definitivo"
                     onConfirm={async () => {
                         if (asset.isActive) {

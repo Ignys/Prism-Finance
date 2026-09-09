@@ -13,10 +13,13 @@ import { ModalStructure } from "./ModalStructure";
 interface PayCreditCardInvoiceModalProps {
     invoice: CreditCardInvoice;
     creditCard: CreditCard;
+    defaultSettleWithoutWallet?: boolean;
 }
 
+const NO_WALLET_OPTION_ID = "__no-wallet__";
+
 interface WalletOption extends ComboboxOptionBase {
-    wallet: Wallet;
+    wallet: Wallet | null;
 }
 
 function formatAmountInputFromValue(value: number): string {
@@ -38,6 +41,15 @@ function formatFriendlyDate(dateValue: string): string {
 }
 
 function WalletOptionContent({ option }: { option: WalletOption }) {
+    if (!option.wallet) {
+        return (
+            <div className="flex items-center gap-2">
+                <div className="h-7 w-7 rounded-md border border-dashed border-white/[0.2]" />
+                <p className="truncate text-white/70">{option.label}</p>
+            </div>
+        );
+    }
+
     return (
         <div className="flex items-center gap-2">
             <WalletAvatar wallet={option.wallet} className="h-7 w-7 rounded-md border border-white/[0.12]" iconSize={14} iconStrokeWidth={1.7} />
@@ -48,34 +60,37 @@ function WalletOptionContent({ option }: { option: WalletOption }) {
     );
 }
 
-export function PayCreditCardInvoiceModal({ invoice, creditCard }: PayCreditCardInvoiceModalProps) {
+export function PayCreditCardInvoiceModal({ invoice, creditCard, defaultSettleWithoutWallet = false }: PayCreditCardInvoiceModalProps) {
     const wallets = useFinanceWallets();
     const activeWallets = useMemo(() => wallets.filter((wallet) => wallet.isActive), [wallets]);
     const { payCreditCardInvoice } = useFinanceActions();
     const { closeModal } = useModal();
     const openAmount = Math.max(0, invoice.totalAmount - invoice.paidAmount);
-    const [walletId, setWalletId] = useState(creditCard.bankWalletId ?? activeWallets[0]?.id ?? "");
+    const [walletId, setWalletId] = useState(defaultSettleWithoutWallet ? NO_WALLET_OPTION_ID : creditCard.bankWalletId ?? activeWallets[0]?.id ?? "");
     const [amountInput, setAmountInput] = useState(formatAmountInputFromValue(openAmount));
     const [paymentDate, setPaymentDate] = useState(getLocalTodayDate());
+    const [settleWithoutWallet, setSettleWithoutWallet] = useState(defaultSettleWithoutWallet);
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState("");
 
     const amount = useMemo(() => parseCurrencyDigitsToNumber(extractCurrencyDigits(amountInput)), [amountInput]);
     const selectedWallet = useMemo(() => wallets.find((wallet) => wallet.id === walletId) ?? null, [walletId, wallets]);
     const walletOptions = useMemo<WalletOption[]>(
-        () =>
-            activeWallets.map((wallet) => ({
+        () => [
+            { id: NO_WALLET_OPTION_ID, label: "Nenhuma carteira", searchText: "nenhuma carteira sem carteira", wallet: null },
+            ...activeWallets.map((wallet) => ({
                 id: wallet.id,
                 label: wallet.name,
                 searchText: `${wallet.name} ${wallet.balance}`,
                 wallet,
             })),
+        ],
         [activeWallets],
     );
 
     useEffect(() => {
         const fallbackWalletId = activeWallets.find((wallet) => wallet.id === creditCard.bankWalletId)?.id ?? activeWallets[0]?.id ?? "";
-        if (!activeWallets.some((wallet) => wallet.id === walletId)) {
+        if (walletId !== NO_WALLET_OPTION_ID && !activeWallets.some((wallet) => wallet.id === walletId)) {
             setWalletId(fallbackWalletId);
         }
     }, [activeWallets, creditCard.bankWalletId, walletId]);
@@ -95,7 +110,7 @@ export function PayCreditCardInvoiceModal({ invoice, creditCard }: PayCreditCard
             return;
         }
 
-        if (!selectedWallet) {
+        if (walletId !== NO_WALLET_OPTION_ID && !selectedWallet) {
             setError("Selecione uma carteira para pagamento.");
             return;
         }
@@ -111,9 +126,10 @@ export function PayCreditCardInvoiceModal({ invoice, creditCard }: PayCreditCard
         try {
             await payCreditCardInvoice({
                 invoiceId: invoice.id,
-                walletId: selectedWallet.id,
+                walletId: walletId === NO_WALLET_OPTION_ID ? null : (selectedWallet?.id ?? null),
                 amount,
                 paymentDate,
+                settleWithoutWallet,
             });
             closeModal();
         } catch (submitError) {
@@ -152,6 +168,7 @@ export function PayCreditCardInvoiceModal({ invoice, creditCard }: PayCreditCard
                         <input
                             value={amountInput}
                             onChange={(event) => setAmountInput(formatCurrencyFromDigits(extractCurrencyDigits(event.target.value)))}
+                            disabled={submitting}
                             className="rounded-xl border border-white/[0.1] bg-black/35 p-2.5 text-white outline-none placeholder:text-white/35"
                             placeholder="R$ 0,00"
                             inputMode="numeric"
@@ -169,10 +186,26 @@ export function PayCreditCardInvoiceModal({ invoice, creditCard }: PayCreditCard
                         options={walletOptions}
                         onChange={setWalletId}
                         renderOptionContent={(option) => <WalletOptionContent option={option} />}
+                        disabled={settleWithoutWallet || submitting}
                     />
 
-                    <DateField hideLabel label="Data do pagamento" value={paymentDate} onChange={setPaymentDate} />
+                    <DateField hideLabel label="Data do pagamento" value={paymentDate} onChange={setPaymentDate} disabled={submitting} />
                 </div>
+
+                <label className="mt-3 flex items-center gap-2 text-sm text-white/70">
+                    <input
+                        type="checkbox"
+                        checked={settleWithoutWallet}
+                        onChange={(event) => {
+                            const checked = event.target.checked;
+                            setSettleWithoutWallet(checked);
+                            if (checked) setWalletId(NO_WALLET_OPTION_ID);
+                        }}
+                        disabled={submitting}
+                        className="h-4 w-4 rounded border-white/[0.2] bg-black/35"
+                    />
+                    Quitar sem movimentar carteira (fora dos relatorios de caixa)
+                </label>
 
                 {error && <p className="mt-3 text-sm text-red-300">{error}</p>}
 

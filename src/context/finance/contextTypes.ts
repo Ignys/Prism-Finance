@@ -23,9 +23,10 @@ import type {
 
 export interface PayCreditCardInvoiceDraft {
     invoiceId: string;
-    walletId: string;
+    walletId: string | null;
     amount: number;
     paymentDate: string;
+    settleWithoutWallet?: boolean;
 }
 
 export interface SetCreditCardInvoicesPaidStateDraft {
@@ -77,6 +78,7 @@ export interface FinanceSyncValue {
     lastError: string | null;
     hasPendingSync: boolean;
     retrySync: () => void;
+    restoreConfirmedData: () => Promise<void>;
 }
 
 export interface FinanceActionsValue {
@@ -89,6 +91,7 @@ export interface FinanceActionsValue {
     addTransaction: (newTransaction: TransactionDraft) => Promise<void>;
     updateTransaction: (draft: UpdateTransactionDraft) => Promise<void>;
     updateTransactionsBulk: (draft: BulkUpdateTransactionsDraft) => Promise<void>;
+    materializeTransaction: (transactionId: string) => Promise<void>;
     markTransactionAsPaid: (transaction: Transaction) => Promise<void>;
     setTransactionStatus: (transaction: Transaction, status: TransactionStatus) => Promise<void>;
     deleteTransaction: (transaction: Transaction) => Promise<void>;

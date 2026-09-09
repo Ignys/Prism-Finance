@@ -1,4 +1,7 @@
 import type { SupabaseFinanceData } from "../../supabase/finance";
+import { createLedgerEntriesForPaidTransaction } from "./financeCore";
+import { mergeSeriesRevisions } from "./recurrence/mergeSeriesRevisions";
+import { reconcileInvoicePaymentMerge } from "./reconcileInvoicePaymentMerge";
 
 function stableStringify(value: unknown): string {
     return JSON.stringify(value);
@@ -100,7 +103,7 @@ export function mergeSupabaseFinanceData(params: {
 }): SupabaseFinanceData {
     const { baseData, remoteData, targetData } = params;
 
-    return {
+    const merged: SupabaseFinanceData = {
         despesas: mergeValue(baseData.despesas, remoteData.despesas, targetData.despesas),
         receitas: mergeValue(baseData.receitas, remoteData.receitas, targetData.receitas),
         wallets: mergeByKey({ baseItems: baseData.wallets, remoteItems: remoteData.wallets, targetItems: targetData.wallets, getKey: getId }),
@@ -118,4 +121,24 @@ export function mergeSupabaseFinanceData(params: {
         planning: mergeValue(baseData.planning, remoteData.planning, targetData.planning),
         favoriteWalletId: mergeValue(baseData.favoriteWalletId, remoteData.favoriteWalletId, targetData.favoriteWalletId),
     };
+    Object.assign(merged, mergeSeriesRevisions(baseData, remoteData, targetData, merged));
+    const baseById = new Map(baseData.transactions.map((item) => [item.id, item]));
+    const remoteById = new Map(remoteData.transactions.map((item) => [item.id, item]));
+    const settled = new Set<string>();
+    merged.transactions = merged.transactions.map((transaction) => {
+        const remote = remoteById.get(transaction.id);
+        const base = baseById.get(transaction.id);
+        // Materializing the same projected ID on two devices is one occurrence.
+        // A device that never saw the payment cannot implicitly reverse it.
+        if (remote?.status !== "paid" || (transaction.status !== "paid" && base)) return transaction;
+        settled.add(transaction.id);
+        return { ...transaction, status: "paid", paidAt: remote.paidAt, commitment: "posted" };
+    });
+    merged.ledgerEntries = merged.ledgerEntries.filter((entry) => !entry.transactionId || !settled.has(entry.transactionId));
+    for (const transaction of merged.transactions) {
+        if (!settled.has(transaction.id)) continue;
+        const group = merged.transactionGroups.find((item) => item.id === transaction.groupId);
+        if (group) merged.ledgerEntries.push(...createLedgerEntriesForPaidTransaction(transaction, group));
+    }
+    return reconcileInvoicePaymentMerge(merged, remoteData);
 }

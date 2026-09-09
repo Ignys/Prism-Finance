@@ -1,3 +1,5 @@
+import { occurrenceId } from "../../context/finance/recurrence/projectOccurrences";
+import { duplicateTransactionDraft } from "./duplicateTransactionDraft";
 import { useEffect, useMemo, useState } from "react";
 import {
     DEFAULT_WALLET_ID,
@@ -20,16 +22,22 @@ import { createId, findCurrentUserSelfBeneficiary, normalizeComparisonText } fro
 import { getLocalDateFromOffset, getLocalTodayDate, parseDateOnlyToLocalDate } from "../../lib/localDate";
 import { extractCurrencyDigits, formatCurrencyFromDigits, parseCurrencyDigitsToNumber } from "../../lib/currencyMask";
 
+export interface TransactionFormPrefill {
+    initialDate?: string;
+    initialAmount?: number;
+    initialCategoryId?: string;
+    initialDescription?: string;
+    initialWalletId?: string;
+    initialBeneficiaryId?: string | null;
+    initialTagIds?: string[];
+    initialStatus?: TransactionStatus;
+}
+
 interface UseTransactionFormOptions {
     type?: TransactionType;
     transaction?: Transaction | null;
     mode?: "default" | "invoice_payment_edit";
-    prefill?: {
-        initialDate?: string;
-        initialAmount?: number;
-        initialCategoryId?: string;
-        initialDescription?: string;
-    };
+    prefill?: TransactionFormPrefill;
 }
 
 interface CategorySelection {
@@ -56,6 +64,8 @@ export interface TransactionFormState {
     resolvedType: TransactionType;
     transactionMode: TransactionMode;
     installmentCountInput: string;
+    recurrenceCountInput: string;
+    setRecurrenceCountInput: (value: string) => void;
     editScope: TransactionSeriesScope;
     availableCategories: ReturnType<typeof useFinanceCategories>;
     rootCategories: ReturnType<typeof useFinanceCategories>;
@@ -203,18 +213,19 @@ export function useTransactionForm({ type, transaction, mode = "default", prefil
     const [amountInput, setAmountInputState] = useState(() =>
         transaction ? formatAmountInputFromValue(transaction.value) : typeof prefill?.initialAmount === "number" ? formatAmountInputFromValue(prefill.initialAmount) : "R$ 0,00",
     );
-    const [status, setStatus] = useState<TransactionStatus>(transaction?.status ?? "paid");
+    const [status, setStatus] = useState<TransactionStatus>(transaction?.status ?? prefill?.initialStatus ?? "paid");
     const [description, setDescription] = useState(transaction?.description ?? prefill?.initialDescription ?? "");
-    const [walletId, setWalletId] = useState(transaction?.inWallet ?? favoriteWalletId);
+    const [walletId, setWalletId] = useState(transaction?.inWallet ?? prefill?.initialWalletId ?? favoriteWalletId);
     const [rootCategoryId, setRootCategoryId] = useState("");
     const [subCategoryId, setSubCategoryId] = useState("");
-    const [beneficiaryId, setBeneficiaryId] = useState(transaction?.beneficiaryId ?? "");
-    const [selectedTagIds, setSelectedTagIds] = useState<string[]>(transaction?.tagIds ?? []);
+    const [beneficiaryId, setBeneficiaryId] = useState(transaction?.beneficiaryId ?? prefill?.initialBeneficiaryId ?? "");
+    const [selectedTagIds, setSelectedTagIds] = useState<string[]>(transaction?.tagIds ?? prefill?.initialTagIds ?? []);
     const [date, setDate] = useState(transaction?.date ?? resolveInitialDate(prefill?.initialDate));
     const [transactionMode, setTransactionModeState] = useState<TransactionMode>(() => sourceGroup?.transactionMode ?? "single");
     const [installmentCountInput, setInstallmentCountInput] = useState(() =>
         sourceGroup?.transactionMode === "installment" && sourceGroup.installmentCount ? String(sourceGroup.installmentCount) : "2",
     );
+    const [recurrenceCountInput, setRecurrenceCountInput] = useState(() => sourceGroup?.recurrenceRule?.end.type === "count" ? String(sourceGroup.recurrenceRule.end.count) : "");
     const [editScope, setEditScopeState] = useState<TransactionSeriesScope>("single");
     const [draftTransactionId, setDraftTransactionId] = useState(() => createId("tx"));
     const [hydratedTransactionId, setHydratedTransactionId] = useState<string | null>(null);
@@ -298,6 +309,7 @@ export function useTransactionForm({ type, transaction, mode = "default", prefil
         setTransactionModeState(sourceGroup?.transactionMode ?? "single");
         setInstallmentCountInput(sourceGroup?.transactionMode === "installment" && sourceGroup.installmentCount ? String(sourceGroup.installmentCount) : "2");
         setEditScopeState("single");
+        setRecurrenceCountInput(sourceGroup?.recurrenceRule?.end.type === "count" ? String(sourceGroup.recurrenceRule.end.count) : "");
         setHydratedTransactionId(null);
     }, [favoriteWalletId, sourceGroup?.installmentCount, sourceGroup?.transactionMode, transaction?.id]);
 
@@ -455,7 +467,8 @@ export function useTransactionForm({ type, transaction, mode = "default", prefil
         const finalStatus = statusOverride ?? status;
 
         return {
-            id: transaction ? undefined : draftTransactionId,
+            id: transaction ? undefined : transactionMode === "recurring" ? occurrenceId(`group-${draftTransactionId}`, 1) : draftTransactionId,
+            groupId: !transaction && transactionMode === "recurring" ? `group-${draftTransactionId}` : undefined,
             type: transaction?.type ?? resolvedType,
             value: numericValue,
             date: date || getLocalTodayDate(),
@@ -473,7 +486,8 @@ export function useTransactionForm({ type, transaction, mode = "default", prefil
             recurrenceRule:
                 resolvedTransactionMode === "recurring"
                     ? {
-                        frequency: "monthly",
+                        frequency: "monthly" as const,
+                        end: recurrenceCountInput ? { type: "count" as const, count: Number(recurrenceCountInput) } : sourceGroup?.recurrenceRule?.end.type === "until" ? sourceGroup.recurrenceRule.end : { type: "never" as const },
                         interval: 1,
                         anchorDate: date || getLocalTodayDate(),
                         amount: Math.abs(numericValue),
@@ -551,7 +565,7 @@ export function useTransactionForm({ type, transaction, mode = "default", prefil
             return false;
         }
 
-        await addTransaction(draft);
+        await addTransaction(duplicateTransactionDraft(draft));
         return true;
     };
 
@@ -603,7 +617,7 @@ export function useTransactionForm({ type, transaction, mode = "default", prefil
         isTransfer,
         isSeriesTransaction,
         sourceTransaction: transaction ?? null,
-        transactionId: transaction?.id ?? draftTransactionId,
+        transactionId: transaction?.id ?? (transactionMode === "recurring" ? occurrenceId(`group-${draftTransactionId}`, 1) : draftTransactionId),
         amountInput,
         status,
         description,
@@ -616,6 +630,8 @@ export function useTransactionForm({ type, transaction, mode = "default", prefil
         resolvedType,
         transactionMode,
         installmentCountInput,
+        recurrenceCountInput,
+        setRecurrenceCountInput,
         editScope,
         availableCategories,
         rootCategories,

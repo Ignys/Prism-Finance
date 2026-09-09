@@ -2,6 +2,8 @@ import { ArrowDownRight, ArrowUpRight, MoveRight, UserRound } from "lucide-react
 import { useModal } from "../../../context/ModalContext";
 import { type Transaction, useFinanceCreditCards, useFinanceWallets } from "../../../context/FinanceContext";
 import { getTransactionCategoryDisplayLabel } from "../../../lib/transactionCategory";
+import { transactionSettlementDate } from "../../../lib/transactionSettlementDate";
+import { formatLocalDateInput } from "../../../lib/localDate";
 import { WalletAvatar } from "../../common/WalletAvatar";
 import { EditTransaction } from "../../modal/EditTransaction";
 import { formatCurrencyBRL, formatTransactionDate, getTransactionTypeMeta, resolveTransactionWallet } from "../../transactions/transactionView";
@@ -15,6 +17,8 @@ export function MiniTransactionBlock({ transaction }: { transaction: Transaction
     const paymentSource = transaction.paymentMethod === "credit_card" && creditCard ? creditCard : wallet;
 
     const typeMeta = getTransactionTypeMeta(transaction.type);
+    const settlementDate = transactionSettlementDate(transaction);
+    const displayDate = settlementDate ? formatLocalDateInput(settlementDate) : transaction.date;
 
     return (
         <button
@@ -51,7 +55,7 @@ export function MiniTransactionBlock({ transaction }: { transaction: Transaction
                     </div>
                     <div className="flex flex-col text-right pr-1">
                         <span className={`text-sm font-semibold ${typeMeta.amountColorClass}`}>R$ {formatCurrencyBRL(transaction.value)}</span>
-                        <span className="text-[11px] uppercase tracking-[0.08em] text-neutral-500">{formatTransactionDate(transaction.date, "dd/MM")}</span>
+                        <span title="Data efetiva" className="text-[11px] uppercase tracking-[0.08em] text-neutral-500">{formatTransactionDate(displayDate, "dd/MM")}</span>
                     </div>
                 </div>
             </div>

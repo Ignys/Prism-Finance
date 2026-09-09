@@ -4,7 +4,7 @@ import { Doughnut } from "react-chartjs-2";
 
 import { motion } from "framer-motion";
 import { useFinanceCategories, useFinanceTransactions } from "../../../../context/FinanceContext";
-import { parseAppDate } from "../../../../lib/localDate";
+import { transactionSettlementDate } from "../../../../lib/transactionSettlementDate";
 import { getCategoryIconComponent } from "../../../../lib/categoryIcons";
 
 type BreakdownMode = "category" | "category-with-subcategories";
@@ -32,7 +32,7 @@ export function GastosPorCategoria() {
     }).format(currentDate);
 
     const currentMonthTransactions = transactions.filter((t) => {
-        const transactionDate = parseAppDate(t.date);
+        const transactionDate = transactionSettlementDate(t);
         if (!transactionDate) {
             return false;
         }
@@ -197,10 +197,10 @@ export function GastosPorCategoria() {
                                             </span>
                                             <span className="truncate text-sm text-neutral-200">{cat.label}</span>
                                         </div>
-                                        <div className="flex grow max-w-full justify-end h-1">
-                                            <div className="h-0.5 rounded-full bg-white/20" style={{ width: `${cat.value / 15}%`, backgroundColor: cat.color }}></div>
+                                        <div className="flex grow max-w-full justify-end h-1 mx-3">
+                                            <div className="h-0.5 rounded-full bg-white/20" style={{ width: `${cat.value / 30}%`, backgroundColor: cat.color }}></div>
                                         </div>
-                                        <div className="ml-3 flex items-center gap-3 text-sm w-29 justify-end">
+                                        <div className="flex items-center gap-3 text-sm w-29 justify-end">
                                             <span className="text-neutral-400 text-xs">{formatPercent(cat.value)}%</span>
                                             <span className="font-semibold text-white">R$ {formatCurrency(cat.value)}</span>
                                         </div>

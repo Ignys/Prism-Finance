@@ -1,5 +1,5 @@
 ﻿import { useFinanceTransactions } from "../../../../context/FinanceContext";
-import { parseAppDate } from "../../../../lib/localDate";
+import { transactionSettlementDate } from "../../../../lib/transactionSettlementDate";
 
 export function BalancoMensal() {
     const transactions = useFinanceTransactions();
@@ -13,7 +13,7 @@ export function BalancoMensal() {
     }).format(currentDate);
 
     const currentMonthTransactions = transactions.filter((t) => {
-        const transactionDate = parseAppDate(t.date);
+        const transactionDate = transactionSettlementDate(t);
         if (!transactionDate) {
             return false;
         }

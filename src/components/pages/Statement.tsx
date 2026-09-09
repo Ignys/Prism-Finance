@@ -1,11 +1,17 @@
+import { monthPeriod } from "../../context/finance/recurrence/period";
 import { useEffect, useMemo, useRef } from "react";
-import { type CreditCard, type CreditCardInvoice, useFinanceFavoriteCreditCard, useFinanceCreditCardInvoices, useFinanceCreditCards, useFinanceActions, useFinanceSession, useFinanceTransactions } from "../../context/FinanceContext";
+import { Plus } from "lucide-react";
 import {
-    buildCreditCardInvoiceId,
-    getMonthKeyFromDateValue,
-    resolveCreditCardInvoiceCycle,
-    resolveCreditCardInvoiceCycleFromCycleKey,
-} from "../../context/financeTypes";
+    type CreditCard,
+    type CreditCardInvoice,
+    useFinanceFavoriteCreditCard,
+    useFinanceCreditCardInvoices,
+    useFinanceCreditCards,
+    useFinanceActions,
+    useFinanceSession,
+    useFinanceTransactions,
+} from "../../context/FinanceContext";
+import { buildCreditCardInvoiceId, getMonthKeyFromDateValue, resolveCreditCardInvoiceCycle, resolveCreditCardInvoiceCycleFromCycleKey } from "../../context/financeTypes";
 import { useModal } from "../../context/ModalContext";
 import { usePage } from "../../context/PageContext";
 import { useLocalPreferenceSection } from "../../lib/localPreferences";
@@ -16,14 +22,8 @@ import { PayCreditCardInvoiceModal } from "../modal/PayCreditCardInvoiceModal";
 import { useTransactionContextActionHandler } from "../transactions/useTransactionContextActionHandler";
 import { StatementContentPanel } from "./statement/StatementContentPanel";
 import { StatementFiltersPanel } from "./statement/StatementFiltersPanel";
-import {
-    buildStatementSummary,
-    compareInvoicesByDueDate,
-    INITIAL_STATEMENT_FILTER_STATE,
-    resolveDefaultStatementFilters,
-    type StatementFilterState,
-} from "./statement/statementPageShared";
-import { StatementSummaryCards } from "./statement/StatementSummaryCards";
+import { buildStatementSummary, compareInvoicesByDueDate, INITIAL_STATEMENT_FILTER_STATE, resolveDefaultStatementFilters, type StatementFilterState } from "./statement/statementPageShared";
+import { StatementOverviewPanel } from "./statement/StatementOverviewPanel";
 
 const STATEMENT_PAGE_PREFERENCES_SECTION = "statement";
 
@@ -37,18 +37,20 @@ function normalizeStatementFilterState(value: unknown): StatementFilterState {
     }
 
     const selectedMonth = typeof value.selectedMonth === "string" && /^\d{4}-(0[1-9]|1[0-2])$/.test(value.selectedMonth) ? value.selectedMonth : INITIAL_STATEMENT_FILTER_STATE.selectedMonth;
-    const selectedCardId = typeof value.selectedCardId === "string" ? value.selectedCardId : INITIAL_STATEMENT_FILTER_STATE.selectedCardId;
+    const selectedCardIds = Array.isArray(value.selectedCardIds)
+        ? value.selectedCardIds.filter((cardId): cardId is string => typeof cardId === "string")
+        : typeof value.selectedCardId === "string" && value.selectedCardId
+          ? [value.selectedCardId]
+          : INITIAL_STATEMENT_FILTER_STATE.selectedCardIds;
 
     return {
         selectedMonth,
-        selectedCardId,
+        selectedCardIds,
     };
 }
 
 export function StatementPage() {
-    const transactions = useFinanceTransactions();
     const creditCards = useFinanceCreditCards();
-    const creditCardInvoices = useFinanceCreditCardInvoices();
     const favoriteCreditCardId = useFinanceFavoriteCreditCard();
     const { loading: sessionLoading, user } = useFinanceSession();
     const { setCreditCardInvoicesPaidState } = useFinanceActions();
@@ -57,6 +59,9 @@ export function StatementPage() {
     const { consumePendingNavigation } = usePage();
     const [filters, setFilters] = useLocalPreferenceSection(user?.uid, STATEMENT_PAGE_PREFERENCES_SECTION, INITIAL_STATEMENT_FILTER_STATE, normalizeStatementFilterState);
     const hasResolvedEntryFiltersRef = useRef(false);
+    const period = monthPeriod(filters.selectedMonth, 2);
+    const transactions = useFinanceTransactions(period);
+    const creditCardInvoices = useFinanceCreditCardInvoices(period);
 
     useEffect(() => {
         if (hasResolvedEntryFiltersRef.current) {
@@ -69,7 +74,7 @@ export function StatementPage() {
 
             setFilters((current) => ({
                 ...current,
-                selectedCardId: pendingNavigation.selectedCardId,
+                selectedCardIds: [pendingNavigation.selectedCardId],
                 selectedMonth: pendingNavigation.selectedMonth,
             }));
 
@@ -89,7 +94,7 @@ export function StatementPage() {
         });
 
         setFilters((current) => {
-            const hasValidStoredCard = current.selectedCardId && creditCards.some((card) => card.id === current.selectedCardId);
+            const hasValidStoredCard = current.selectedCardIds[0] && creditCards.some((card) => card.id === current.selectedCardIds[0]);
             return hasValidStoredCard ? current : defaultFilters;
         });
     }, [consumePendingNavigation, creditCardInvoices, creditCards, favoriteCreditCardId, sessionLoading, setFilters]);
@@ -100,7 +105,7 @@ export function StatementPage() {
         }
 
         setFilters((current) => {
-            if (!current.selectedCardId || creditCards.some((card) => card.id === current.selectedCardId)) {
+            if (!current.selectedCardIds[0] || creditCards.some((card) => card.id === current.selectedCardIds[0])) {
                 return current;
             }
 
@@ -113,7 +118,9 @@ export function StatementPage() {
         });
     }, [creditCardInvoices, creditCards, favoriteCreditCardId, sessionLoading, setFilters]);
 
-    const { selectedMonth: selectedDueMonth, selectedCardId } = filters;
+    const { selectedMonth: selectedDueMonth, selectedCardIds } = filters;
+    // ponytail: só o primeiro cartão selecionado escopa fatura/resumo; o multiselect no overview é preparo para agregação futura, ainda não pedida.
+    const selectedCardId = selectedCardIds[0] ?? "";
 
     const setFilter = <K extends keyof StatementFilterState>(key: K, value: StatementFilterState[K]) => {
         setFilters((current) => ({
@@ -178,13 +185,7 @@ export function StatementPage() {
 
     const monthTransactions = useMemo(() => {
         return transactions
-            .filter(
-                (transaction) =>
-                    transaction.paymentMethod === "credit_card" &&
-                    transaction.type === "spending" &&
-                    transaction.status !== "cancelled" &&
-                    Boolean(transaction.invoiceId),
-            )
+            .filter((transaction) => transaction.paymentMethod === "credit_card" && transaction.type === "spending" && transaction.status !== "cancelled" && Boolean(transaction.invoiceId))
             .filter((transaction) => {
                 if (transaction.creditCardId !== selectedCardId) {
                     return false;
@@ -213,8 +214,8 @@ export function StatementPage() {
         [selectedDueMonth, selectedCardName, scopedCards, scopedInvoices, monthInvoices, monthTransactions, cardNameById],
     );
 
-    const handlePayInvoice = (invoice: CreditCardInvoice, creditCard: CreditCard) => {
-        openModal(<PayCreditCardInvoiceModal invoice={invoice} creditCard={creditCard} />);
+    const handlePayInvoice = (invoice: CreditCardInvoice, creditCard: CreditCard, settleWithoutWallet = false) => {
+        openModal(<PayCreditCardInvoiceModal invoice={invoice} creditCard={creditCard} defaultSettleWithoutWallet={settleWithoutWallet} />);
     };
 
     const handleInvoiceStateAdjustment = (targetInvoices: CreditCardInvoice[], action: "close" | "reopen") => {
@@ -231,11 +232,11 @@ export function StatementPage() {
                 description={
                     markAsPaid
                         ? isBulk
-                            ? "Essa acao vai marcar as faturas vencidas selecionadas como quitadas sem criar pagamentos."
-                            : "Essa acao vai marcar esta fatura vencida como quitada sem criar pagamento."
+                            ? "Essa acao vai quitar as faturas vencidas selecionadas sem movimentar carteiras."
+                            : "Essa acao vai quitar esta fatura vencida sem movimentar carteira."
                         : isBulk
-                          ? "Essa acao vai reabrir as faturas pagas selecionadas sem criar estornos ou remover pagamentos existentes."
-                          : "Essa acao vai reabrir esta fatura paga sem criar estorno nem remover pagamentos existentes."
+                          ? "Essa acao vai reabrir as faturas selecionadas e remover suas quitacoes vinculadas."
+                          : "Essa acao vai reabrir esta fatura e remover sua quitacao vinculada."
                 }
                 confirmLabel={markAsPaid ? (isBulk ? "Fechar faturas" : "Fechar fatura") : isBulk ? "Reabrir faturas" : "Reabrir fatura"}
                 tone="success"
@@ -251,7 +252,7 @@ export function StatementPage() {
 
     const handleCreateCardSpendingFromStatement = () => {
         const activeCards = creditCards.filter((card) => card.isActive);
-        const favoriteCard = favoriteCreditCardId ? creditCards.find((card) => card.id === favoriteCreditCardId) ?? null : null;
+        const favoriteCard = favoriteCreditCardId ? (creditCards.find((card) => card.id === favoriteCreditCardId) ?? null) : null;
         const fallbackCard = activeCards[0] ?? creditCards[0] ?? null;
 
         const selectedCard = creditCards.find((card) => card.id === selectedCardId) ?? (favoriteCard && favoriteCard.isActive ? favoriteCard : fallbackCard);
@@ -264,10 +265,7 @@ export function StatementPage() {
         const openCycle = resolveCreditCardInvoiceCycle(today, selectedCard.closingDay, selectedCard.dueDay);
         const prefillCycleKey = selectedDueMonth;
         const prefillInvoiceId = buildCreditCardInvoiceId(selectedCard.id, prefillCycleKey);
-        const prefillDate =
-            prefillCycleKey === openCycle.cycleKey
-                ? today
-                : resolveCreditCardInvoiceCycleFromCycleKey(prefillCycleKey, selectedCard.closingDay, selectedCard.dueDay).dueDate;
+        const prefillDate = prefillCycleKey === openCycle.cycleKey ? today : resolveCreditCardInvoiceCycleFromCycleKey(prefillCycleKey, selectedCard.closingDay, selectedCard.dueDay).dueDate;
 
         openModal(
             <AddCardSpending
@@ -290,7 +288,7 @@ export function StatementPage() {
                         selectedCardId={selectedCardId}
                         creditCards={creditCards}
                         onMonthChange={(value) => setFilter("selectedMonth", value)}
-                        onCardChange={(value) => setFilter("selectedCardId", value)}
+                        onCardChange={(value) => setFilter("selectedCardIds", [value])}
                     />
 
                     <StatementContentPanel
@@ -299,11 +297,32 @@ export function StatementPage() {
                         transactions={monthTransactions}
                         cardById={cardById}
                         invoiceById={invoiceById}
-                        onPayInvoice={handlePayInvoice}
-                        onInvoiceStateAdjustment={handleInvoiceStateAdjustment}
-                        onCreateCardSpending={handleCreateCardSpendingFromStatement}
                         onAction={handleTransactionContextAction}
-                        summaryAside={<StatementSummaryCards summary={summary} />}
+                        summaryAside={
+                            <>
+                                <StatementOverviewPanel
+                                    creditCards={creditCards}
+                                    selectedCardIds={selectedCardIds}
+                                    onCardIdsChange={(value) => setFilter("selectedCardIds", value)}
+                                    selectedMonth={selectedDueMonth}
+                                    onMonthChange={(value) => setFilter("selectedMonth", value)}
+                                    summary={summary}
+                                    invoices={monthInvoices}
+                                    cardById={cardById}
+                                    onPayInvoice={handlePayInvoice}
+                                    onInvoiceStateAdjustment={handleInvoiceStateAdjustment}
+                                />
+                                <button
+                                    type="button"
+                                    onClick={handleCreateCardSpendingFromStatement}
+                                    disabled={cardById.size < 1}
+                                    className="mt-2 inline-flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl border border-emerald-300/30 bg-emerald-500/15 px-3 py-2 text-xs font-semibold uppercase tracking-[0.05em] text-emerald-100 transition-all hover:border-emerald-300/45 hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                    <Plus size={14} />
+                                    Adicionar gasto
+                                </button>
+                            </>
+                        }
                     />
                 </div>
             </div>

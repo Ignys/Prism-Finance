@@ -1,3 +1,6 @@
+import { validateRecurrenceRuntime } from "./recurrence-runtime.mjs";
+import { validateRecurrenceSyncRuntime } from "./recurrence-sync-runtime.mjs";
+import { seedLegacyRecurrences, validateLegacyRecurrences } from "./recurrence-legacy.mjs";
 import { readFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -68,9 +71,21 @@ const migrationNames = [
     "015_batched_finance_commits.sql",
     "016_pgcrypto_function_search_path.sql",
     "017_fix_ledger_transaction_delete.sql",
+    "018_recurrence_occurrences.sql",
+    "019_invoice_history_invariants.sql",
+    "020_invoice_assignment.sql",
+    "021_recurrence_projection.sql",
+    "022_recurrence_integrity_and_sync.sql",
+    "023_recurrence_deletion_exclusions.sql",
+    "024_recurrence_registry_references.sql",
+    "025_explicit_transaction_routing.sql",
+    "026_paid_card_routing_guard.sql",
+    "027_attachment_retry_upsert.sql",
 ];
 
+let legacyRecurrences;
 for (const migrationName of migrationNames) {
+    if (migrationName === "018_recurrence_occurrences.sql") legacyRecurrences = await seedLegacyRecurrences(database);
     if (migrationName === "006_finance_integrity_and_versions.sql") {
         await database.exec(`
             insert into auth.users(id, email, created_at, updated_at)
@@ -113,6 +128,7 @@ for (const migrationName of migrationNames) {
     }
     console.log(`MIGRATION OK ${migrationName}`);
 }
+await validateLegacyRecurrences(database, legacyRecurrences);
 
 const normalizedLegacyInstallments = await database.query(`
     select g.installment_count, t.installment_number
@@ -522,4 +538,6 @@ if (
 }
 
 console.log(`RUNTIME OK family RLS/share, CAS, batched ${bulkSize}-row projection (${bulkElapsedMs.toFixed(0)}ms), compact commits, cascades, direct transaction deletion, tombstones, safe legacy adapter, gap fallback and atomic load`);
+await validateRecurrenceRuntime(database, expectDatabaseError);
+await validateRecurrenceSyncRuntime(database, projectRoot, expectDatabaseError);
 await database.close();

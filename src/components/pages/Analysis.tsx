@@ -1,3 +1,4 @@
+import { monthPeriod } from "../../context/finance/recurrence/period";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
@@ -48,8 +49,6 @@ function isPlanningPanel(value: string | null): value is PlanningPanel {
 export function PlanningPage() {
     const wallets = useFinanceWallets();
     const creditCards = useFinanceCreditCards();
-    const creditCardInvoices = useFinanceCreditCardInvoices();
-    const transactions = useFinanceTransactions();
     const ledgerEntries = useFinanceLedgerEntries();
     const wishItems = useFinanceWishItems();
     const planning = useFinancePlanning();
@@ -81,6 +80,14 @@ export function PlanningPage() {
     const horizontalMode = planning.timelineHorizontalMode ?? false;
     const timelineMonthCount = planning.timelineMonthCount ?? DEFAULT_TIMELINE_MONTHS;
     const reportPeriod = planning.reportsPeriod;
+    const timelinePeriod = monthPeriod(currentMonthKey, 2, timelineMonthCount - 1);
+    const selectedPeriod = monthPeriod(selectedMonthKey, 2);
+    const projectionPeriod = {
+        startDate: [timelinePeriod.startDate, selectedPeriod.startDate, monthPeriod(reportPeriod.startMonth).startDate].sort()[0],
+        endDate: [timelinePeriod.endDate, selectedPeriod.endDate, monthPeriod(reportPeriod.endMonth).endDate].sort().reverse()[0],
+    };
+    const transactions = useFinanceTransactions(projectionPeriod);
+    const creditCardInvoices = useFinanceCreditCardInvoices(projectionPeriod);
     const scopedWallets = useMemo(() => getScopedWallets(wallets, timelineSelectedWalletIds), [timelineSelectedWalletIds, wallets]);
     const scopedCreditCards = useMemo(() => getScopedCreditCards(creditCards, timelineSelectedWalletIds, timelineSelectedWalletIds.length === walletIds.length), [creditCards, timelineSelectedWalletIds, walletIds.length]);
     const scopedCreditCardInvoices = useMemo(() => getScopedCreditCardInvoices(creditCardInvoices, scopedCreditCards), [creditCardInvoices, scopedCreditCards]);

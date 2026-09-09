@@ -13,6 +13,7 @@ import type {
 } from "../../../context/FinanceContext";
 import { getMonthKeyFromDateValue } from "../../../context/financeTypes";
 import { parseAppDate } from "../../../lib/localDate";
+import { transactionSettlementDate } from "../../../lib/transactionSettlementDate";
 import {
     DEFAULT_TIMELINE_MONTHS,
     TIMELINE_MONTH_OPTIONS,
@@ -212,7 +213,8 @@ function getMonthReality(params: {
     const inheritedItems: MonthReality["inheritedItems"] = [];
 
     for (const transaction of transactions) {
-        if (!isIncludedStatus(transaction.status) || getMonthKeyFromDateValue(transaction.date) !== monthKey) {
+        const cashDate = transaction.status === "paid" ? transactionSettlementDate(transaction) : parseAppDate(transaction.date);
+        if (transaction.isNonCashSettlement || !isIncludedStatus(transaction.status) || !cashDate || format(cashDate, MONTH_KEY_FORMAT) !== monthKey) {
             continue;
         }
 
@@ -281,7 +283,8 @@ function getMonthReality(params: {
             continue;
         }
 
-        const openAmount = roundToCents(Math.max(0, invoice.totalAmount - invoice.paidAmount));
+        const forecastAmount = invoice.forecastAmount ?? 0;
+        const openAmount = roundToCents(Math.max(0, invoice.totalAmount - invoice.paidAmount) + forecastAmount);
         if (openAmount <= 0) {
             continue;
         }
@@ -291,7 +294,7 @@ function getMonthReality(params: {
             id: `invoice:${invoice.id}`,
             source: "invoice",
             invoiceId: invoice.id,
-            label: `Fatura ${cardNameById.get(invoice.creditCardId) ?? "cartao"}`,
+            label: `Fatura ${cardNameById.get(invoice.creditCardId) ?? "cartao"}${forecastAmount > 0 ? " (inclui previsões)" : ""}`,
             amount: openAmount,
             iconName: null,
             isDisabled: disabledInheritedExpenseIds.has(`invoice:${invoice.id}`),

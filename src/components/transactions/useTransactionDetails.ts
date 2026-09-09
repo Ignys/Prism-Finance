@@ -1,3 +1,4 @@
+import { useFinanceActions } from "../../context/FinanceContext";
 import { useEffect, useMemo, useState } from "react";
 import { createTransactionAttachmentDownloadUrl, loadTransactionDetails, saveTransactionDetails } from "../../supabase/finance/transactionDetailsService";
 import type { TransactionAttachment } from "../../types/transactionDetails";
@@ -34,6 +35,7 @@ function formatLoadError(error: unknown): string {
 }
 
 export function useTransactionDetails({ transactionId, userId, loadExisting }: UseTransactionDetailsOptions): TransactionDetailsController {
+    const { materializeTransaction } = useFinanceActions();
     const [annotation, setAnnotation] = useState("");
     const [initialAnnotation, setInitialAnnotation] = useState("");
     const [attachments, setAttachments] = useState<TransactionAttachment[]>([]);
@@ -141,6 +143,7 @@ export function useTransactionDetails({ transactionId, userId, loadExisting }: U
             return;
         }
 
+        await materializeTransaction(transactionId);
         const details = await saveTransactionDetails({
             userId,
             transactionId,

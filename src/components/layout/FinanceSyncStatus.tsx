@@ -1,5 +1,6 @@
 import { RefreshCw } from "lucide-react";
 import { useFinanceSync } from "../../context/FinanceContext";
+import { FinanceSyncRecoveryButton } from "./FinanceSyncRecoveryButton";
 
 interface FinanceSyncStatusProps {
     compactAtLaptop?: boolean;
@@ -38,6 +39,12 @@ export function FinanceSyncStatus({ compactAtLaptop = false }: FinanceSyncStatus
                 </span>
             </div>
 
+            {sync.status === "error" ? (
+                <p role="alert" className="text-xs text-orange-200" title={sync.lastError ?? undefined}>
+                    {sync.lastError}
+                </p>
+            ) : null}
+            {sync.status === "error" && sync.hasPendingSync ? <FinanceSyncRecoveryButton /> : null}
             {sync.status === "error" ? (
                 <button
                     type="button"

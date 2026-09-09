@@ -2,6 +2,7 @@ import { addMonths, format, isValid, parse, startOfMonth } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import type { Beneficiary, CreditCardInvoice, ReportPeriod, Transaction } from "../../../context/FinanceContext";
 import { getMonthKeyFromDateValue } from "../../../context/financeTypes";
+import { invoicePaymentContributions } from "./invoicePaymentContributions";
 import { getTransactionCategoryDisplay } from "../../../lib/transactionCategory";
 
 export type { ReportPeriod } from "../../../context/FinanceContext";
@@ -141,7 +142,7 @@ function isIncludedType(transaction: Transaction): boolean {
 }
 
 function isIncludedTransaction(transaction: Transaction): boolean {
-    return isIncludedStatus(transaction.status) && isIncludedType(transaction);
+    return !transaction.isNonCashSettlement && isIncludedStatus(transaction.status) && isIncludedType(transaction);
 }
 
 function isWalletSpendingTransaction(transaction: Transaction): boolean {
@@ -258,51 +259,10 @@ function addInvoiceCategoryContribution(
     invoice: CreditCardInvoice | undefined,
     linkedPurchases: Transaction[],
 ): void {
-    const invoiceTotalAmount = invoice?.totalAmount ?? 0;
-    if (invoiceTotalAmount <= 0 || linkedPurchases.length < 1) {
-        const fallbackCategory = ensureCategoryAccumulator(categoryReports, paymentTransaction);
-        fallbackCategory.totalAmount = roundToCents(fallbackCategory.totalAmount + paymentTransaction.value);
-        fallbackCategory.invoiceAmount = roundToCents(fallbackCategory.invoiceAmount + paymentTransaction.value);
-        fallbackCategory.count += 1;
-        return;
-    }
-
-    const paymentFactor = Math.min(1, Math.max(0, paymentTransaction.value / invoiceTotalAmount));
-    if (paymentFactor <= 0) {
-        return;
-    }
-
-    const purchaseContributions = linkedPurchases
-        .map((purchase) => ({
-            purchase,
-            amount: roundToCents(purchase.value * paymentFactor),
-        }))
-        .filter((entry) => entry.amount > 0);
-
-    if (purchaseContributions.length < 1) {
-        const fallbackCategory = ensureCategoryAccumulator(categoryReports, paymentTransaction);
-        fallbackCategory.totalAmount = roundToCents(fallbackCategory.totalAmount + paymentTransaction.value);
-        fallbackCategory.invoiceAmount = roundToCents(fallbackCategory.invoiceAmount + paymentTransaction.value);
-        fallbackCategory.count += 1;
-        return;
-    }
-
-    const distributedAmount = roundToCents(purchaseContributions.reduce((sum, entry) => sum + entry.amount, 0));
-    const roundingDifference = roundToCents(paymentTransaction.value - distributedAmount);
-    if (roundingDifference !== 0) {
-        const lastContribution = purchaseContributions[purchaseContributions.length - 1];
-        lastContribution.amount = roundToCents(lastContribution.amount + roundingDifference);
-    }
-
-    purchaseContributions.forEach(({ purchase, amount }) => {
-        const proportionalAmount = roundToCents(amount);
-        if (proportionalAmount <= 0) {
-            return;
-        }
-
+    invoicePaymentContributions(paymentTransaction, invoice?.totalAmount ?? 0, linkedPurchases).forEach(({ purchase, amount }) => {
         const category = ensureCategoryAccumulator(categoryReports, purchase);
-        category.totalAmount = roundToCents(category.totalAmount + proportionalAmount);
-        category.invoiceAmount = roundToCents(category.invoiceAmount + proportionalAmount);
+        category.totalAmount = roundToCents(category.totalAmount + amount);
+        category.invoiceAmount = roundToCents(category.invoiceAmount + amount);
         category.count += 1;
     });
 }
@@ -314,51 +274,10 @@ function addInvoiceBeneficiaryContribution(
     invoice: CreditCardInvoice | undefined,
     linkedPurchases: Transaction[],
 ): void {
-    const invoiceTotalAmount = invoice?.totalAmount ?? 0;
-    if (invoiceTotalAmount <= 0 || linkedPurchases.length < 1) {
-        const fallbackBeneficiary = ensureBeneficiaryAccumulator(beneficiaryReports, paymentTransaction, beneficiariesById);
-        fallbackBeneficiary.totalAmount = roundToCents(fallbackBeneficiary.totalAmount + paymentTransaction.value);
-        fallbackBeneficiary.invoiceAmount = roundToCents(fallbackBeneficiary.invoiceAmount + paymentTransaction.value);
-        fallbackBeneficiary.count += 1;
-        return;
-    }
-
-    const paymentFactor = Math.min(1, Math.max(0, paymentTransaction.value / invoiceTotalAmount));
-    if (paymentFactor <= 0) {
-        return;
-    }
-
-    const purchaseContributions = linkedPurchases
-        .map((purchase) => ({
-            purchase,
-            amount: roundToCents(purchase.value * paymentFactor),
-        }))
-        .filter((entry) => entry.amount > 0);
-
-    if (purchaseContributions.length < 1) {
-        const fallbackBeneficiary = ensureBeneficiaryAccumulator(beneficiaryReports, paymentTransaction, beneficiariesById);
-        fallbackBeneficiary.totalAmount = roundToCents(fallbackBeneficiary.totalAmount + paymentTransaction.value);
-        fallbackBeneficiary.invoiceAmount = roundToCents(fallbackBeneficiary.invoiceAmount + paymentTransaction.value);
-        fallbackBeneficiary.count += 1;
-        return;
-    }
-
-    const distributedAmount = roundToCents(purchaseContributions.reduce((sum, entry) => sum + entry.amount, 0));
-    const roundingDifference = roundToCents(paymentTransaction.value - distributedAmount);
-    if (roundingDifference !== 0) {
-        const lastContribution = purchaseContributions[purchaseContributions.length - 1];
-        lastContribution.amount = roundToCents(lastContribution.amount + roundingDifference);
-    }
-
-    purchaseContributions.forEach(({ purchase, amount }) => {
-        const proportionalAmount = roundToCents(amount);
-        if (proportionalAmount <= 0) {
-            return;
-        }
-
+    invoicePaymentContributions(paymentTransaction, invoice?.totalAmount ?? 0, linkedPurchases).forEach(({ purchase, amount }) => {
         const beneficiary = ensureBeneficiaryAccumulator(beneficiaryReports, purchase, beneficiariesById);
-        beneficiary.totalAmount = roundToCents(beneficiary.totalAmount + proportionalAmount);
-        beneficiary.invoiceAmount = roundToCents(beneficiary.invoiceAmount + proportionalAmount);
+        beneficiary.totalAmount = roundToCents(beneficiary.totalAmount + amount);
+        beneficiary.invoiceAmount = roundToCents(beneficiary.invoiceAmount + amount);
         beneficiary.count += 1;
     });
 }
@@ -371,7 +290,7 @@ function getLinkedPurchasesByInvoiceId(lookupTransactions: Transaction[]): Map<s
             return;
         }
 
-        if (transaction.status === "cancelled" || transaction.status === "skipped") {
+        if (transaction.commitment === "forecast" || transaction.status === "cancelled" || transaction.status === "skipped") {
             return;
         }
 
@@ -443,7 +362,7 @@ function buildSpendingReports(
         }
 
         counters.invoicePaymentCount += 1;
-        const invoiceId = transaction.invoicePaymentMeta?.invoiceId ?? null;
+        const invoiceId = transaction.paymentForInvoiceId ?? transaction.invoicePaymentMeta?.invoiceId ?? null;
         const invoice = invoiceId ? invoicesById.get(invoiceId) : undefined;
         const linkedPurchases = invoiceId ? purchasesByInvoiceId.get(invoiceId) ?? [] : [];
         addInvoiceCategoryContribution(categoryReports, transaction, invoice, linkedPurchases);

@@ -31,6 +31,7 @@ export function PlanningReportsTab({ period, transactions, allTransactions, cred
             animate="visible"
             className="flex flex-1 flex-col gap-3 text-left"
         >
+            <p className="text-xs text-white/55">Valores pagos e pendentes pela data prevista. Gastos no cartão entram pelos pagamentos de fatura; fechamentos sem débito em carteira não compõem os totais.</p>
             {summary.transactionCount === 0 ? (
                 <motion.div variants={REPORTS_ENTRANCE_ITEM_VARIANTS}>
                     <PlanningReportsEmptyState />

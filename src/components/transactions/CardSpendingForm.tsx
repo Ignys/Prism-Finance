@@ -1,6 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
-import { ArrowRight, Copy, Eye, Info, Layers3, ReceiptText, Repeat, SquareSlash, Tags, Trash2, X } from "lucide-react";
-import type { Beneficiary, Category, CreditCard, CreditCardInvoice, Transaction, TransactionMode, TransactionSeriesScope, TransactionStatus } from "../../context/FinanceContext";
+import { buildCardInvoiceOptions, formatMonthLabel, shiftCycleKey } from "./cardInvoiceOptions";
+import { InvoiceOptionContent } from "./InvoiceOptionContent";
+import { occurrenceId } from "../../context/finance/recurrence/projectOccurrences";
+import { TransactionModeField } from "./TransactionModeField";
+import { defaultInvoiceOption, filterInvoiceOption } from "./invoiceSelection";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Copy, Eye, SquareSlash, Tags, Trash2, X } from "lucide-react";
+import type { Category, Transaction, TransactionMode, TransactionSeriesScope, TransactionStatus } from "../../context/FinanceContext";
 import {
     SYSTEM_EXPENSE_CARD_INVOICE_CATEGORY_ID,
     useFinanceActions,
@@ -14,41 +19,37 @@ import {
     useFinanceTransactions,
     useFinanceTransactionGroups,
 } from "../../context/FinanceContext";
-import { getCreditCardInvoiceReadState, type CreditCardInvoiceVisualStatus } from "../../context/finance/invoiceStatus";
 import { buildCreditCardInvoiceId, getCreditCardInvoiceMonthKey, parseCreditCardInvoiceId, resolveCreditCardInvoiceCycle, resolveCreditCardInvoiceCycleFromCycleKey } from "../../context/financeTypes";
 import { createId, findCurrentUserSelfBeneficiary, roundToCents, splitAmountAcrossInstallments } from "../../context/finance/helpers";
 import { useModal } from "../../context/ModalContext";
 import { extractCurrencyDigits, formatCurrencyFromDigits, parseCurrencyDigitsToNumber } from "../../lib/currencyMask";
-import { getCategoryIconComponent } from "../../lib/categoryIcons";
 import { getLocalTodayDate } from "../../lib/localDate";
-import { BeneficiaryAvatar } from "../common/BeneficiaryAvatar";
-import { WalletAvatar } from "../common/WalletAvatar";
 import { AnimatedTransactionFormPanel } from "./AnimatedTransactionFormPanel";
 import { DateField } from "./DateField";
 import { DescriptionAutocomplete } from "./DescriptionAutocomplete";
 import { MultiSelectCombobox } from "./MultiSelectCombobox";
-import { SingleSelectCombobox, type ComboboxOptionBase } from "./SingleSelectCombobox";
+import { SingleSelectCombobox } from "./SingleSelectCombobox";
 import { TransactionDetailsField } from "./TransactionDetailsField";
 import { TransactionFieldIcon } from "./TransactionFieldIcon";
 import type { TransactionFormTab } from "./TransactionFormTabs";
 import { FIELD_ICON_TRIGGER_CLASS, FIELD_LABEL_CLASS } from "./transactionForm.constants";
 import { getTransactionSubmitErrorMessage } from "./transactionSubmitError";
-import { formatCurrencyBRL } from "./transactionView";
 import { FooterButton } from "./TransactionForm";
 import { useTransactionDetails } from "./useTransactionDetails";
-
-const INVOICE_STATUS_LABELS: Record<CreditCardInvoiceVisualStatus, string> = {
-    open: "Aberta",
-    future: "Futura",
-    closed: "Fechada",
-    overdue: "Vencida",
-    paid: "Paga",
-};
-
-const monthLabelFormatter = new Intl.DateTimeFormat("pt-BR", {
-    month: "long",
-    year: "numeric",
-});
+import {
+    BeneficiaryOptionContent,
+    CategoryOptionContent,
+    CreditCardOptionContent,
+    EDIT_SCOPE_OPTIONS,
+    EditScopeOptionContent,
+    EditScopeSelectedContent,
+    TagOptionContent,
+    type BeneficiaryOption,
+    type CategoryOption,
+    type CreditCardOption,
+    type TagOption,
+} from "./CardSpendingOptions";
+import { InstallmentPreviewModal, type InstallmentPreviewData, type InstallmentPreviewRow } from "./InstallmentPreviewModal";
 
 interface CardSpendingFormProps {
     transaction?: Transaction | null;
@@ -62,250 +63,17 @@ export interface CardSpendingFormPrefill {
     initialInvoiceId?: string;
     initialCycleKey?: string;
     initialDate?: string;
+    initialValues?: Pick<Transaction, "value" | "description" | "category" | "beneficiaryId" | "tagIds">;
 }
-
-interface CreditCardOption extends ComboboxOptionBase {
-    creditCard: CreditCard;
-}
-
-interface InvoiceOption extends ComboboxOptionBase {
-    invoice: CreditCardInvoice;
-    visualStatus: CreditCardInvoiceVisualStatus;
-    monthLabel: string;
-    cycleKey: string;
-}
-
-interface CategoryOption extends ComboboxOptionBase {
-    category: Category;
-    level: 0 | 1;
-    rootCategoryId: string;
-    categoryId: string;
-}
-
-interface BeneficiaryOption extends ComboboxOptionBase {
-    beneficiary: Beneficiary;
-}
-
-interface TagOption extends ComboboxOptionBase {
-    color: string | null;
-}
-
-interface SpendingModeOption extends ComboboxOptionBase {
-    mode: TransactionMode;
-    icon: typeof ReceiptText;
-}
-
-interface EditScopeOption extends ComboboxOptionBase {
-    scope: TransactionSeriesScope;
-    icon: typeof ReceiptText;
-}
-
-interface InstallmentPreviewRow {
-    installmentNumber: number;
-    cycleKey: string;
-    monthLabel: string;
-    amount: number;
-    ignored: boolean;
-}
-
-interface InstallmentPreviewData {
-    rows: InstallmentPreviewRow[];
-    installmentCount: number;
-    ignoredInstallmentsCount: number;
-    totalAmount: number;
-    effectiveTotalAmount: number;
-    startMonthLabel: string;
-}
-
-const SPENDING_MODE_OPTIONS: SpendingModeOption[] = [
-    {
-        id: "single",
-        label: "Unica",
-        searchText: "unica unica avulsa single",
-        mode: "single",
-        icon: ReceiptText,
-    },
-    {
-        id: "recurring",
-        label: "Fixa mensal",
-        searchText: "fixa mensal recorrente recurring",
-        mode: "recurring",
-        icon: Repeat,
-    },
-    {
-        id: "installment",
-        label: "Parcelada",
-        searchText: "parcelada parcelas installment",
-        mode: "installment",
-        icon: Copy,
-    },
-];
-
-const EDIT_SCOPE_OPTIONS: EditScopeOption[] = [
-    {
-        id: "single",
-        label: "Apenas essa transação",
-        searchText: "so esta ocorrencia single",
-        scope: "single",
-        icon: ReceiptText,
-    },
-    {
-        id: "this_and_next",
-        label: "Essa e as próximas transações",
-        searchText: "esta e proximas this and next",
-        scope: "this_and_next",
-        icon: ArrowRight,
-    },
-    {
-        id: "all",
-        label: "Todas as transações",
-        searchText: "toda a serie all",
-        scope: "all",
-        icon: Layers3,
-    },
-];
 
 const DATE_SHORTCUTS = [
     { label: "Hoje", offsetInDays: 0 },
     { label: "Ontem", offsetInDays: -1 },
 ];
 
-function CreditCardOptionContent({ option }: { option: CreditCardOption }) {
-    return (
-        <div className="flex items-center gap-2">
-            <WalletAvatar wallet={option.creditCard} className="h-7 w-7 rounded-md border border-white/[0.12]" iconSize={14} iconStrokeWidth={1.7} />
-            <span className="truncate">{option.label}</span>
-        </div>
-    );
-}
-
-function InvoiceOptionContent({ option }: { option: InvoiceOption }) {
-    const statusClassNameByStatus: Record<CreditCardInvoiceVisualStatus, string> = {
-        open: "border-emerald-400/35 bg-emerald-500/15 text-emerald-100",
-        future: "border-violet-300/35 bg-violet-500/15 text-violet-100",
-        closed: "border-amber-400/30 bg-amber-500/15 text-amber-100",
-        overdue: "border-red-400/35 bg-red-500/15 text-red-100",
-        paid: "border-sky-400/30 bg-sky-500/15 text-sky-100",
-    };
-
-    return (
-        <div className="flex min-w-0 items-center justify-between gap-2 ">
-            <div className="min-w-0">
-                <p className="truncate text-sm text-white">{option.monthLabel}</p>
-            </div>
-            <span className={`shrink-0 rounded-full border px-2 py-1 text-[10px] uppercase tracking-[0.08em] ${statusClassNameByStatus[option.visualStatus]}`}>
-                {INVOICE_STATUS_LABELS[option.visualStatus]}
-            </span>
-        </div>
-    );
-}
-
-function CategoryOptionContent({ option }: { option: CategoryOption }) {
-    const Icon = getCategoryIconComponent(option.category.icon, option.category.type);
-
-    return (
-        <div className={`flex items-center gap-2 ${option.level === 1 ? "pl-3" : ""}`}>
-            {option.level === 1 && <span className="h-px w-2 rounded-full bg-white/25" />}
-            <span
-                className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-white/[0.12]"
-                style={{ color: option.category.color ?? "#CBD5E1", backgroundColor: `${option.category.color ?? "#64748B"}22` }}
-            >
-                <Icon size={14} />
-            </span>
-            <span className="truncate">{option.label}</span>
-        </div>
-    );
-}
-
-function BeneficiaryOptionContent({ option }: { option: BeneficiaryOption }) {
-    return (
-        <div className="flex items-center gap-2">
-            <BeneficiaryAvatar beneficiary={option.beneficiary} />
-            <span className="truncate">{option.label}</span>
-        </div>
-    );
-}
-
-function TagOptionContent({ option }: { option: TagOption }) {
-    return (
-        <div className="flex items-center gap-2">
-            <span className="inline-flex h-2.5 w-2.5 rounded-full" style={{ backgroundColor: option.color ?? "#64748B" }} />
-            <span className="truncate">{option.label}</span>
-        </div>
-    );
-}
-
-function SpendingModeOptionContent({ option }: { option: SpendingModeOption }) {
-    const Icon = option.icon;
-
-    return (
-        <div className="flex items-center gap-2">
-            <span className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-white/[0.12] bg-white/[0.04] text-white/80">
-                <Icon size={14} />
-            </span>
-            <span className="truncate">{option.label}</span>
-        </div>
-    );
-}
-
-function EditScopeOptionContent({ option }: { option: EditScopeOption }) {
-    const Icon = option.icon;
-
-    return (
-        <div className="flex items-center gap-2">
-            <span className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-white/[0.12] bg-white/[0.04] text-white/80">
-                <Icon size={14} />
-            </span>
-            <span className="truncate">{option.label}</span>
-        </div>
-    );
-}
-
-function EditScopeSelectedContent({ option }: { option: EditScopeOption }) {
-    return <span className="truncate">{option.label}</span>;
-}
-
 function formatAmountInputFromValue(value: number): string {
     const cents = Math.max(0, Math.round(Math.abs(value) * 100));
     return formatCurrencyFromDigits(String(cents));
-}
-
-function formatMonthLabel(monthKey: string): string {
-    const [yearPart, monthPart] = monthKey.split("-");
-    const year = Number(yearPart);
-    const month = Number(monthPart);
-
-    if (!Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12) {
-        return monthKey;
-    }
-
-    const formatted = monthLabelFormatter.format(new Date(year, month - 1, 1));
-    return formatted.charAt(0).toUpperCase() + formatted.slice(1);
-}
-
-function parseYearMonthKey(cycleKey: string): { year: number; month: number } | null {
-    const match = /^(\d{4})-(\d{2})$/.exec(cycleKey.trim());
-    if (!match) {
-        return null;
-    }
-
-    const year = Number(match[1]);
-    const month = Number(match[2]);
-    if (!Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12) {
-        return null;
-    }
-
-    return { year, month };
-}
-
-function shiftCycleKey(cycleKey: string, offset: number): string {
-    const parsed = parseYearMonthKey(cycleKey);
-    if (!parsed) {
-        return "";
-    }
-
-    const shifted = new Date(parsed.year, parsed.month - 1 + offset, 1);
-    return `${shifted.getFullYear()}-${String(shifted.getMonth() + 1).padStart(2, "0")}`;
 }
 
 function normalizeIgnoredInstallmentsCountInput(value: string, installmentCount: number | null): number {
@@ -316,116 +84,6 @@ function normalizeIgnoredInstallmentsCountInput(value: string, installmentCount:
     const parsedValue = Number(value);
     const safeValue = Number.isFinite(parsedValue) ? Math.floor(parsedValue) : 0;
     return Math.max(0, Math.min(installmentCount - 1, safeValue));
-}
-
-function formatPreviewCurrency(value: number): string {
-    return `R$ ${formatCurrencyBRL(value)}`;
-}
-
-function InstallmentPreviewModal({ data, onClose }: { data: InstallmentPreviewData; onClose: () => void }) {
-    useEffect(() => {
-        const handleKeyDown = (event: KeyboardEvent) => {
-            if (event.key === "Escape") {
-                onClose();
-            }
-        };
-
-        document.addEventListener("keydown", handleKeyDown, true);
-        return () => document.removeEventListener("keydown", handleKeyDown, true);
-    }, [onClose]);
-
-    return (
-        <div className="fixed inset-0 z-[150] flex items-center justify-center px-4 py-6 text-white" role="dialog" aria-modal="true" aria-labelledby="installment-preview-title">
-            <button type="button" className="absolute inset-0 cursor-default bg-black/70 backdrop-blur-sm" aria-label="Fechar preview de parcelas" onMouseDown={onClose} />
-            <div
-                className="relative flex max-h-[86vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-white/[0.1] bg-[#151515] shadow-[0_30px_90px_-35px_rgba(0,0,0,0.95)]"
-                onMouseDown={(event) => event.stopPropagation()}
-            >
-                <header className="flex items-start justify-between gap-4 border-b border-white/[0.08] px-5 py-4">
-                    <div>
-                        <p className="text-[11px] uppercase tracking-[0.14em] text-white/45">Preview</p>
-                        <h2 id="installment-preview-title" className="mt-1 text-lg font-semibold text-white">
-                            Parcelamento previsto
-                        </h2>
-                        <p className="mt-1 text-sm text-white/55">
-                            Comecando em {data.startMonthLabel}, com {data.installmentCount} parcelas.
-                        </p>
-                    </div>
-                    <button
-                        type="button"
-                        onClick={onClose}
-                        className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/[0.12] bg-white/[0.03] text-white/70 transition-colors hover:border-white/[0.22] hover:text-white"
-                        aria-label="Fechar preview"
-                    >
-                        <X size={15} />
-                    </button>
-                </header>
-
-                <div className="overflow-auto px-5 py-4">
-                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-                        <div className="rounded-xl border border-white/[0.08] bg-white/[0.03] p-3">
-                            <p className="text-[10px] uppercase tracking-[0.12em] text-white/40">Total parcelado</p>
-                            <p className="mt-1 font-semibold text-white">{formatPreviewCurrency(data.totalAmount)}</p>
-                        </div>
-                        <div className="rounded-xl border border-emerald-400/20 bg-emerald-500/10 p-3">
-                            <p className="text-[10px] uppercase tracking-[0.12em] text-emerald-100/55">Entra nas faturas</p>
-                            <p className="mt-1 font-semibold text-emerald-100">{formatPreviewCurrency(data.effectiveTotalAmount)}</p>
-                        </div>
-                        <div className="rounded-xl border border-slate-400/20 bg-slate-500/10 p-3">
-                            <p className="text-[10px] uppercase tracking-[0.12em] text-slate-100/55">Ignoradas</p>
-                            <p className="mt-1 font-semibold text-slate-100">{data.ignoredInstallmentsCount}</p>
-                        </div>
-                    </div>
-
-                    <div className="mt-4 overflow-hidden rounded-xl border border-white/[0.08]">
-                        <div className="max-h-[42vh] overflow-auto">
-                            <table className="min-w-full divide-y divide-white/[0.06] text-sm">
-                                <thead className="sticky top-0 bg-[#1b1b1b] text-[10px] uppercase tracking-[0.12em] text-white/45">
-                                    <tr>
-                                        <th className="px-3 py-2 text-left font-medium">Parcela</th>
-                                        <th className="px-3 py-2 text-left font-medium">Mes</th>
-                                        <th className="px-3 py-2 text-right font-medium">Valor</th>
-                                        <th className="px-3 py-2 text-left font-medium">Status</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-white/[0.05] bg-black/10">
-                                    {data.rows.map((row) => (
-                                        <tr key={`${row.cycleKey}-${row.installmentNumber}`} className={row.ignored ? "text-white/60" : "text-white/90"}>
-                                            <td className="whitespace-nowrap px-3 py-2">
-                                                {row.installmentNumber}/{data.installmentCount}
-                                            </td>
-                                            <td className="px-3 py-2">
-                                                <div className="flex flex-col">
-                                                    <span>{row.monthLabel}</span>
-                                                    <span className="text-[10px] uppercase tracking-[0.08em] text-white/35">{row.cycleKey}</span>
-                                                </div>
-                                            </td>
-                                            <td className="whitespace-nowrap px-3 py-2 text-right font-semibold">{formatPreviewCurrency(row.amount)}</td>
-                                            <td className="px-3 py-2">
-                                                <span
-                                                    className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] ${
-                                                        row.ignored
-                                                            ? "border-slate-400/25 bg-slate-500/10 text-slate-200"
-                                                            : "border-emerald-400/25 bg-emerald-500/10 text-emerald-200"
-                                                    }`}
-                                                >
-                                                    {row.ignored ? "Ignorada" : "Entra na fatura"}
-                                                </span>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-
-                    <p className="mt-3 text-xs leading-5 text-white/45">
-                        Parcelas ignoradas mantem o valor original no historico, mas nao entram no total da fatura.
-                    </p>
-                </div>
-            </div>
-        </div>
-    );
 }
 
 export function CardSpendingForm({ transaction = null, prefill, activeTab, onInstallmentPreviewOpenChange }: CardSpendingFormProps) {
@@ -482,22 +140,23 @@ export function CardSpendingForm({ transaction = null, prefill, activeTab, onIns
     const [installmentPreviewOpen, setInstallmentPreviewOpen] = useState(false);
     const [draftTransactionId] = useState(() => createId("tx"));
     const [transactionSaved, setTransactionSaved] = useState(false);
-    const [amountInput, setAmountInputState] = useState(() => (transaction ? formatAmountInputFromValue(transaction.value) : "R$ 0,00"));
-    const [description, setDescription] = useState(transaction?.description ?? "");
+    const financialFieldsDisabled = submitting || transactionSaved;
+    const [amountInput, setAmountInputState] = useState(() => formatAmountInputFromValue(transaction?.value ?? prefill?.initialValues?.value ?? 0));
+    const [description, setDescription] = useState(transaction?.description ?? prefill?.initialValues?.description ?? "");
     const [date, setDate] = useState(transaction?.date ?? (initialPrefillDate || getLocalTodayDate()));
     const [creditCardId, setCreditCardId] = useState(transaction?.creditCardId ?? (initialPrefillCreditCardId || favoriteCreditCardId || ""));
     const [invoiceId, setInvoiceId] = useState(transaction?.invoiceId ?? initialPrefillInvoiceId);
-    const [useInvoiceFromDate, setUseInvoiceFromDate] = useState(false);
-    const [categoryId, setCategoryId] = useState(transaction?.category.id ?? "");
-    const [beneficiaryId, setBeneficiaryId] = useState(transaction?.beneficiaryId ?? "");
-    const [selectedTagIds, setSelectedTagIds] = useState<string[]>(transaction?.tagIds ?? []);
+    const [categoryId, setCategoryId] = useState(transaction?.category.id ?? prefill?.initialValues?.category.id ?? "");
+    const [beneficiaryId, setBeneficiaryId] = useState(transaction?.beneficiaryId ?? prefill?.initialValues?.beneficiaryId ?? "");
+    const [selectedTagIds, setSelectedTagIds] = useState<string[]>(transaction?.tagIds ?? prefill?.initialValues?.tagIds ?? []);
+    const [recurrenceCountInput, setRecurrenceCountInput] = useState(() => sourceGroup?.recurrenceRule?.end.type === "count" ? String(sourceGroup.recurrenceRule.end.count) : "");
     const [spendingMode, setSpendingMode] = useState<TransactionMode>(() => sourceGroup?.transactionMode ?? "single");
     const [installmentCountInput, setInstallmentCountInput] = useState(() =>
         sourceGroup?.transactionMode === "installment" && sourceGroup.installmentCount ? String(sourceGroup.installmentCount) : "2",
     );
     const [ignoredInstallmentsCountInput, setIgnoredInstallmentsCountInput] = useState(() => (sourceGroup?.transactionMode === "installment" ? String(leadingSkippedInstallmentsCount) : "0"));
     const [editScope, setEditScope] = useState<TransactionSeriesScope>("single");
-    const details = useTransactionDetails({ transactionId: transaction?.id ?? draftTransactionId, userId: user?.uid, loadExisting: isEditing });
+    const details = useTransactionDetails({ transactionId: transaction?.id ?? (spendingMode === "recurring" ? occurrenceId(`group-${draftTransactionId}`, 1) : draftTransactionId), userId: user?.uid, loadExisting: isEditing });
     const activeCreditCards = useMemo(() => creditCards.filter((card) => card.isActive), [creditCards]);
     const selectableCreditCards = useMemo(() => creditCards.filter((card) => card.isActive || (isEditing && card.id === creditCardId)), [creditCardId, creditCards, isEditing]);
 
@@ -513,7 +172,7 @@ export function CardSpendingForm({ transaction = null, prefill, activeTab, onIns
         setDate(transaction.date ?? getLocalTodayDate());
         setCreditCardId(transaction.creditCardId ?? favoriteCreditCardId ?? "");
         setInvoiceId(transaction.invoiceId ?? "");
-        setUseInvoiceFromDate(false);
+        previousDateRef.current = transaction.date ?? getLocalTodayDate();
         setCategoryId(transaction.category.id ?? "");
         setBeneficiaryId(transaction.beneficiaryId ?? "");
         setSelectedTagIds(transaction.tagIds ?? []);
@@ -689,88 +348,32 @@ export function CardSpendingForm({ transaction = null, prefill, activeTab, onIns
         return "";
     }, [isEditing, prefillCycleKey, prefillInvoiceId, prefillParsedInvoice?.creditCardId, selectedCard]);
 
-    const invoiceOptions = useMemo<InvoiceOption[]>(() => {
-        if (!selectedCard) {
-            return [];
-        }
-
-        const cardInvoices = creditCardInvoices.filter((invoice) => invoice.creditCardId === selectedCard.id);
-        const invoicesById = new Map(cardInvoices.map((invoice) => [invoice.id, invoice]));
-
-        const ensureSyntheticInvoice = (cycleKey: string) => {
-            if (!cycleKey) {
-                return;
-            }
-
-            const invoiceId = buildCreditCardInvoiceId(selectedCard.id, cycleKey);
-            if (invoicesById.has(invoiceId)) {
-                return;
-            }
-
-            const cycle = resolveCreditCardInvoiceCycleFromCycleKey(cycleKey, selectedCard.closingDay, selectedCard.dueDay);
-            invoicesById.set(invoiceId, {
-                id: invoiceId,
-                creditCardId: selectedCard.id,
-                cycleKey: cycle.cycleKey,
-                closingDate: cycle.closingDate,
-                dueDate: cycle.dueDate,
-                totalAmount: 0,
-                paidAmount: 0,
-                status: "open",
-                paidAt: null,
-                createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString(),
-            });
-        };
-
-        if (openCycle) {
-            ensureSyntheticInvoice(openCycle.cycleKey);
-        }
-
-        if (automaticCycle?.cycleKey) {
-            ensureSyntheticInvoice(automaticCycle.cycleKey);
-        }
-
-        if (anchorCycleKey) {
-            for (let offset = 0; offset <= 4; offset += 1) {
-                const cycleKey = offset === 0 ? anchorCycleKey : shiftCycleKey(anchorCycleKey, offset);
-                ensureSyntheticInvoice(cycleKey);
-            }
-        }
-
-        return Array.from(invoicesById.values())
-            .sort((a, b) => {
-                if (a.dueDate === b.dueDate) {
-                    return a.id.localeCompare(b.id);
-                }
-                return a.dueDate.localeCompare(b.dueDate);
-            })
-            .map((invoice) => {
-                const visualStatus = getCreditCardInvoiceReadState(invoice, selectedCard).visualStatus;
-                const monthKey = getCreditCardInvoiceMonthKey(invoice);
-                const monthLabel = formatMonthLabel(monthKey);
-                return {
-                    id: invoice.id,
-                    searchText: `${monthLabel} ${invoice.cycleKey} ${INVOICE_STATUS_LABELS[visualStatus]}`,
-                    visualStatus,
-                    label: `${monthLabel} (${invoice.cycleKey})`,
-                    monthLabel,
-                    cycleKey: invoice.cycleKey,
-                    invoice,
-                };
-            });
-    }, [anchorCycleKey, automaticCycle?.cycleKey, creditCardInvoices, openCycle, selectedCard]);
+    const invoiceOptions = useMemo(() => buildCardInvoiceOptions(selectedCard, creditCardInvoices, [
+        openCycle?.cycleKey ?? "", automaticCycle?.cycleKey ?? "",
+        ...Array.from({ length: 5 }, (_, offset) => anchorCycleKey ? shiftCycleKey(anchorCycleKey, offset) : ""),
+    ]), [anchorCycleKey, automaticCycle?.cycleKey, creditCardInvoices, openCycle?.cycleKey, selectedCard]);
 
     const automaticInvoiceId = useMemo(() => {
         if (!selectedCard || !automaticCycle?.cycleKey) {
             return "";
         }
 
-        return buildCreditCardInvoiceId(selectedCard.id, automaticCycle.cycleKey);
-    }, [automaticCycle?.cycleKey, selectedCard]);
+        const option = invoiceOptions.find((item) => item.cycleKey === automaticCycle.cycleKey);
+        return option && (!option.disabled || option.id === transaction?.invoiceId) ? option.id : "";
+    }, [automaticCycle?.cycleKey, invoiceOptions, selectedCard, transaction?.invoiceId]);
 
-    const resolvedInvoiceSelectionId = useInvoiceFromDate ? automaticInvoiceId : invoiceId;
-    const selectedResolvedInvoiceOption = useMemo(() => invoiceOptions.find((option) => option.id === resolvedInvoiceSelectionId) ?? null, [invoiceOptions, resolvedInvoiceSelectionId]);
+    const previousDateRef = useRef(date);
+
+    useEffect(() => {
+        if (previousDateRef.current === date) {
+            return;
+        }
+        previousDateRef.current = date;
+        if (automaticInvoiceId) {
+            setInvoiceId(automaticInvoiceId);
+        }
+    }, [automaticInvoiceId, date]);
+    const selectedResolvedInvoiceOption = useMemo(() => invoiceOptions.find((option) => option.id === invoiceId) ?? null, [invoiceOptions, invoiceId]);
     const installmentPreviewData = useMemo<InstallmentPreviewData | null>(() => {
         if (spendingMode !== "installment" || !selectedCard || !selectedResolvedInvoiceOption) {
             return null;
@@ -819,16 +422,13 @@ export function CardSpendingForm({ transaction = null, prefill, activeTab, onIns
             setInvoiceId("");
             return;
         }
-        if (invoiceOptions.some((option) => option.id === invoiceId)) {
+        if (invoiceOptions.some((option) => option.id === invoiceId && (option.invoice.status !== "paid" || option.id === transaction?.invoiceId))) {
             return;
         }
-        if (preferredPrefillInvoiceId && invoiceOptions.some((option) => option.id === preferredPrefillInvoiceId)) {
-            setInvoiceId(preferredPrefillInvoiceId);
-            return;
-        }
+        const preferred = defaultInvoiceOption(invoiceOptions, preferredPrefillInvoiceId);
         const openOption = invoiceOptions.find((option) => option.visualStatus === "open");
-        setInvoiceId(openOption?.id ?? invoiceOptions[0].id);
-    }, [invoiceId, invoiceOptions, preferredPrefillInvoiceId]);
+        setInvoiceId((preferredPrefillInvoiceId ? preferred : openOption ?? preferred)?.invoice.id ?? "");
+    }, [invoiceId, invoiceOptions, preferredPrefillInvoiceId, transaction?.invoiceId]);
 
     const creditCardOptions = useMemo<CreditCardOption[]>(
         () =>
@@ -897,26 +497,28 @@ export function CardSpendingForm({ transaction = null, prefill, activeTab, onIns
         const resolvedMode: TransactionMode = spendingMode === "installment" ? "installment" : spendingMode === "recurring" ? "recurring" : "single";
         const requiresInvoiceSelection = resolvedMode === "single" || resolvedMode === "installment";
         const selectedInvoiceOption = selectedResolvedInvoiceOption;
-        if (requiresInvoiceSelection && (!resolvedInvoiceSelectionId || !selectedInvoiceOption)) {
+        if (requiresInvoiceSelection && (!invoiceId || !selectedInvoiceOption)) {
             return null;
         }
 
-        const resolvedStatus: TransactionStatus =
-            resolvedMode === "single" && selectedInvoiceOption ? (selectedInvoiceOption.visualStatus === "open" || selectedInvoiceOption.visualStatus === "future" ? "pending" : "paid") : "pending";
+        const resolvedStatus: TransactionStatus = transaction?.status ?? "pending";
         const finalStatus = statusOverride ?? resolvedStatus;
         const parsedInstallmentCount = Number(installmentCountInput);
         const resolvedInstallmentCount = resolvedMode === "installment" && Number.isInteger(parsedInstallmentCount) && parsedInstallmentCount >= 2 ? parsedInstallmentCount : null;
         const resolvedIgnoredInstallmentsCount = resolvedMode === "installment" ? normalizeIgnoredInstallmentsCountInput(ignoredInstallmentsCountInput, resolvedInstallmentCount) : null;
 
         return {
-            id: transaction ? undefined : draftTransactionId,
+            id: transaction ? undefined : spendingMode === "recurring" ? occurrenceId(`group-${draftTransactionId}`, 1) : draftTransactionId,
+            groupId: !transaction && spendingMode === "recurring" ? `group-${draftTransactionId}` : undefined,
             type: "spending" as const,
             value: numericValue,
             date: date || getLocalTodayDate(),
             inWallet: selectedCard.bankWalletId ?? "default",
             paymentMethod: "credit_card" as const,
             creditCardId: selectedCard.id,
-            invoiceId: requiresInvoiceSelection && selectedInvoiceOption ? selectedInvoiceOption.invoice.id : null,
+            // Keep the invoice chosen in the form. Recurrence controls future
+            // occurrences, but must not reroute this charge by date.
+            invoiceId: selectedInvoiceOption?.invoice.id ?? transaction?.invoiceId ?? null,
             categoryId: categoryId || null,
             beneficiaryId: beneficiaryId || null,
             tagIds: selectedTagIds,
@@ -929,7 +531,8 @@ export function CardSpendingForm({ transaction = null, prefill, activeTab, onIns
             recurrenceRule:
                 resolvedMode === "recurring"
                     ? {
-                          frequency: "monthly",
+                          frequency: "monthly" as const,
+                          end: recurrenceCountInput ? { type: "count" as const, count: Number(recurrenceCountInput) } : sourceGroup?.recurrenceRule?.end.type === "until" ? sourceGroup.recurrenceRule.end : { type: "never" as const },
                           interval: 1,
                           anchorDate: date || getLocalTodayDate(),
                           amount: Math.abs(numericValue),
@@ -976,7 +579,7 @@ export function CardSpendingForm({ transaction = null, prefill, activeTab, onIns
             return false;
         }
 
-        await addTransaction(draft);
+        await addTransaction(duplicateTransactionDraft(draft));
         return true;
     };
     
@@ -1038,40 +641,6 @@ export function CardSpendingForm({ transaction = null, prefill, activeTab, onIns
         setSubmitting(false);
     };
 
-    const invoiceLabelContent = (
-        <div className="flex items-center justify-end gap-2 pr-1">
-                <button
-                    type="button"
-                    disabled={!selectedCard}
-                    onClick={() => setUseInvoiceFromDate((current) => !current)}
-                    className={`${FIELD_LABEL_CLASS} inline-flex items-center gap-2 transition-colors`}
-                    aria-pressed={useInvoiceFromDate}
-                    aria-label="Selecionar fatura pela data"
-                >
-                    <span
-                        className={`relative inline-flex h-4 w-8 shrink-0 items-center rounded-full border transition-colors ${
-                            useInvoiceFromDate ? "border-emerald-300/45 bg-emerald-400/30" : "border-white/[0.14] bg-black/30"
-                        }`}
-                    >
-                        <span
-                            className={`inline-flex h-3.5 w-3.5 rounded-full bg-white shadow-[0_2px_10px_rgba(0,0,0,0.35)] transition-transform ${
-                                useInvoiceFromDate ? "translate-x-4" : "translate-x-0.5"
-                            }`}
-                        />
-                    </span>
-                    <span className={FIELD_LABEL_CLASS}>Calcular fatura pela data</span>
-                    <div className="group relative">
-                        <span className="inline-flex items-center justify-center rounded-ful text-white/55 transition-colors group-hover:border-white/[0.24] group-hover:text-white/80">
-                            <Info size={15} />
-                        </span>
-                        <div className="pointer-events-none absolute right-0 top-full z-20 mt-2 w-64 rounded-lg border border-white/[0.12] bg-[#101010] p-2 text-[11px] normal-case tracking-normal text-white/75 opacity-0 shadow-[0_18px_45px_-25px_rgba(0,0,0,0.95)] transition-opacity group-hover:opacity-100">
-                            Quando ativo, a fatura deixa de ser escolhida manualmente e passa a ser calculada pela data do gasto e pelos dias de fechamento e vencimento do cartao.
-                        </div>
-                    </div>
-                </button>
-        </div>
-    );
-
     return (
         <>
             {installmentPreviewOpen && installmentPreviewData && <InstallmentPreviewModal data={installmentPreviewData} onClose={() => setInstallmentPreviewOpen(false)} />}
@@ -1104,26 +673,28 @@ export function CardSpendingForm({ transaction = null, prefill, activeTab, onIns
                                 placeholder="R$ 0,00"
                                 value={amountInput}
                                 onChange={(event) => setAmountInput(event.target.value)}
-                                disabled={submitting}
+                                disabled={financialFieldsDisabled}
                             />
                             <div className="grid grid-cols-1 items-end gap-2 md:grid-cols-2">
-                                <DateField hideLabel value={date} onChange={setDate} shortcuts={DATE_SHORTCUTS} />
+                                <DateField hideLabel value={date} onChange={setDate} shortcuts={DATE_SHORTCUTS} disabled={financialFieldsDisabled} />
                                 <SingleSelectCombobox
+                                    hideLabel
                                     label="Fatura"
-                                    value={resolvedInvoiceSelectionId}
+                                    value={invoiceId}
                                     placeholder="Selecione uma fatura"
                                     emptyMessage="Nenhuma fatura disponível."
                                     options={invoiceOptions}
+                                    filterOption={filterInvoiceOption}
                                     onChange={setInvoiceId}
                                     renderOptionContent={(option) => <InvoiceOptionContent option={option} />}
                                     labelClassName={FIELD_LABEL_CLASS}
-                                    labelContent={invoiceLabelContent}
-                                    disabled={useInvoiceFromDate}
+                                    disabled={financialFieldsDisabled}
                                 />
                             </div>
 
                             <div className="grid grid-cols-1 items-end gap-2 md:grid-cols-2">
                                 <SingleSelectCombobox
+                                    hideLabel
                                     label="Cartão"
                                     value={creditCardId}
                                     placeholder="Selecione um cartão"
@@ -1132,6 +703,7 @@ export function CardSpendingForm({ transaction = null, prefill, activeTab, onIns
                                     onChange={setCreditCardId}
                                     renderOptionContent={(option) => <CreditCardOptionContent option={option} />}
                                     labelClassName={FIELD_LABEL_CLASS}
+                                    disabled={financialFieldsDisabled}
                                 />
                                 <SingleSelectCombobox
                                     hideLabel
@@ -1143,6 +715,7 @@ export function CardSpendingForm({ transaction = null, prefill, activeTab, onIns
                                     onChange={setBeneficiaryId}
                                     renderOptionContent={(option) => <BeneficiaryOptionContent option={option} />}
                                     labelClassName={FIELD_LABEL_CLASS}
+                                    disabled={financialFieldsDisabled}
                                 />
                             </div>
 
@@ -1156,6 +729,7 @@ export function CardSpendingForm({ transaction = null, prefill, activeTab, onIns
                                 onChange={handleCategorySelect}
                                 renderOptionContent={(option) => <CategoryOptionContent option={option} />}
                                 labelClassName={FIELD_LABEL_CLASS}
+                                disabled={financialFieldsDisabled}
                             />
 
                             <DescriptionAutocomplete
@@ -1166,7 +740,7 @@ export function CardSpendingForm({ transaction = null, prefill, activeTab, onIns
                                 type="spending"
                                 allowedCategoryIds={descriptionSuggestionCategoryIds}
                                 excludeTransactionId={transaction?.id}
-                                disabled={submitting}
+                                disabled={financialFieldsDisabled}
                             />
                             {isEditing && isSeriesTransaction ? (
                                 <SingleSelectCombobox
@@ -1179,7 +753,7 @@ export function CardSpendingForm({ transaction = null, prefill, activeTab, onIns
                                     onChange={(value) => setEditScope(value === "all" || value === "this_and_next" ? value : "single")}
                                     renderOptionContent={(option) => <EditScopeOptionContent option={option} />}
                                     renderSelectedContent={(option) => <EditScopeSelectedContent option={option} />}
-                                    disabled={submitting}
+                                    disabled={financialFieldsDisabled}
                                     labelClassName={FIELD_LABEL_CLASS}
                                 />
                             ) : null}
@@ -1200,27 +774,10 @@ export function CardSpendingForm({ transaction = null, prefill, activeTab, onIns
                                         onChange={setSelectedTagIds}
                                         renderOptionContent={(option) => <TagOptionContent option={option} />}
                                         labelClassName={FIELD_LABEL_CLASS}
+                                        disabled={financialFieldsDisabled}
                                     />
                                     <div>
-                                            <SingleSelectCombobox
-                                                disableSearch
-                                                hideLabel
-                                                label="Tipo"
-                                                value={spendingMode}
-                                                placeholder="Selecione um modo"
-                                                emptyMessage="Nenhum modo encontrado."
-                                                options={SPENDING_MODE_OPTIONS}
-                                                onChange={(value) => {
-                                                    if (value === "installment" || value === "recurring" || value === "single") {
-                                                        setSpendingMode(value);
-                                                        return;
-                                                    }
-
-                                                    setSpendingMode("single");
-                                                }}
-                                                renderOptionContent={(option) => <SpendingModeOptionContent option={option} />}
-                                                labelClassName={FIELD_LABEL_CLASS}
-                                            />
+                                        <TransactionModeField mode={spendingMode} installmentCountInput={installmentCountInput} onModeChange={setSpendingMode} onInstallmentCountChange={setInstallmentCountInput} recurrenceCountInput={recurrenceCountInput} onRecurrenceCountChange={setRecurrenceCountInput} hideInstallmentCount disabled={financialFieldsDisabled} />
                                         {spendingMode === "installment" && (
                                                 <div className="mx-0.5 flex flex-col gap-2 rounded-b border-x border-b border-dashed border-white/10 bg-black/20 px-3 py-3">
                                                     <label className="flex items-center justify-between gap-3">
@@ -1240,7 +797,7 @@ export function CardSpendingForm({ transaction = null, prefill, activeTab, onIns
                                                                 const normalizedIgnoredCount = normalizeIgnoredInstallmentsCountInput(ignoredInstallmentsCountInput, resolvedInstallmentCount);
                                                                 setIgnoredInstallmentsCountInput(String(normalizedIgnoredCount));
                                                             }}
-                                                            disabled={submitting}
+                                                            disabled={financialFieldsDisabled}
                                                         />
                                                     </label>
                                                     <label className="flex items-center justify-between gap-3">
@@ -1252,13 +809,13 @@ export function CardSpendingForm({ transaction = null, prefill, activeTab, onIns
                                                             step={1}
                                                             value={installmentCountInput}
                                                             onChange={(event) => setInstallmentCountInput(event.target.value)}
-                                                            disabled={submitting}
+                                                            disabled={financialFieldsDisabled}
                                                         />
                                                     </label>
                                                     <button
                                                         type="button"
                                                         onClick={() => setInstallmentPreviewOpen(true)}
-                                                        disabled={!installmentPreviewData}
+                                                        disabled={financialFieldsDisabled || !installmentPreviewData}
                                                         className="mt-2 inline-flex items-center justify-center gap-2 rounded-xl border border-white/[0.12] bg-white/[0.04] py-2 text-[11px] font-medium uppercase tracking-[0.08em] text-white/70 transition-colors hover:border-white/[0.24] hover:text-white disabled:cursor-not-allowed disabled:opacity-45"
                                                     >
                                                         <Eye size={13} />
@@ -1280,13 +837,13 @@ export function CardSpendingForm({ transaction = null, prefill, activeTab, onIns
                         <div className="flex gap-1">
                             {isEditing && (
                                 <>
-                                    <FooterButton onClick={() => void runAction(remove)} disabled={transactionSaved}>
+                                    <FooterButton onClick={() => void runAction(remove)} disabled={submitting || transactionSaved}>
                                         <Trash2 size={15} /> Excluir
                                     </FooterButton>
-                                    <FooterButton onClick={() => void runAction(duplicate)} disabled={transactionSaved}>
+                                    <FooterButton onClick={() => void runAction(duplicate)} disabled={submitting || transactionSaved}>
                                         <Copy size={15} /> Duplicar
                                     </FooterButton>
-                                    <FooterButton onClick={() => void runAction(ignore, true)}>
+                                    <FooterButton onClick={() => void runAction(ignore, true)} disabled={submitting || transactionSaved}>
                                         <SquareSlash size={15} /> Ignorar
                                     </FooterButton>
                                 </>
@@ -1316,3 +873,4 @@ export function CardSpendingForm({ transaction = null, prefill, activeTab, onIns
         </>
     );
 }
+import { duplicateTransactionDraft } from "./duplicateTransactionDraft";

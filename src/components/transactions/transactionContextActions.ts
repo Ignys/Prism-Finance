@@ -1,6 +1,7 @@
-import type { Transaction, TransactionDraft, TransactionGroup, TransactionSeriesScope, TransactionStatus } from "../../context/FinanceContext";
+import { getLocalTodayDate } from "../../lib/localDate";
+import type { Transaction, TransactionGroup, TransactionSeriesScope, TransactionStatus } from "../../context/FinanceContext";
 
-export type TransactionContextActionId = "open" | "select" | "toggle_status" | "pay_today" | "ignore" | "duplicate" | "delete_single" | "delete_this_and_next" | "delete_all";
+export type TransactionContextActionId = "open" | "select" | "toggle_status" | "pay_today" | "post_card" | "ignore" | "duplicate" | "delete_single" | "delete_this_and_next" | "delete_all";
 
 export interface TransactionContextAction {
     id: TransactionContextActionId;
@@ -49,7 +50,7 @@ function getPaidLabel(transaction: Transaction): string {
 }
 
 function canShowPayTodayAction(transaction: Transaction): boolean {
-    return transaction.type === "spending" && transaction.status === "pending" && !isInvoicePayment(transaction) && !isCreditCardSpending(transaction);
+    return (transaction.type === "spending" || transaction.type === "income") && transaction.status === "pending" && !isInvoicePayment(transaction) && !isCreditCardSpending(transaction);
 }
 
 function getIgnoreLabel(transaction: Transaction): string {
@@ -119,10 +120,14 @@ export function buildTransactionContextActions({ transaction, group, isSelected 
         });
     }
 
+    if (isCreditCardSpending(transaction) && transaction.commitment === "forecast" && transaction.status === "pending" && transaction.date <= getLocalTodayDate()) {
+        actions.push({ id: "post_card", label: "Confirmar cobrança no cartão" });
+    }
+
     if (canShowPayTodayAction(transaction)) {
         actions.push({
             id: "pay_today",
-            label: "Pagar hoje",
+            label: transaction.type === "income" ? "Marcar como recebida hoje" : "Marcar como paga hoje",
             nextStatus: "paid",
         });
     }
@@ -198,27 +203,4 @@ export function buildTransactionContextActions({ transaction, group, isSelected 
     }
 
     return actions;
-}
-
-export function buildDuplicateTransactionDraft(transaction: Transaction): TransactionDraft {
-    return {
-        type: transaction.type,
-        value: transaction.value,
-        date: transaction.date,
-        inWallet: transaction.inWallet,
-        destinationWalletId: transaction.destinationWalletId,
-        paymentMethod: transaction.paymentMethod,
-        creditCardId: transaction.creditCardId,
-        invoiceId: transaction.invoiceId,
-        categoryId: transaction.category.id,
-        beneficiaryId: transaction.beneficiaryId,
-        tagIds: transaction.tagIds,
-        description: transaction.description,
-        status: transaction.status === "paid" || transaction.status === "pending" ? transaction.status : "pending",
-        notes: transaction.description || undefined,
-        transactionMode: "single",
-        installmentCount: null,
-        recurrenceRule: null,
-        recurrenceEndDate: null,
-    };
 }

@@ -1,7 +1,7 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { useMemo } from "react";
 import type { Transaction } from "../../../context/FinanceContext";
-import { parseAppDate } from "../../../lib/localDate";
+import { transactionSettlementDate } from "../../../lib/transactionSettlementDate";
 import { MiniTransactionBlock } from "./SmTransactionBlock";
 
 interface RecentTransactionsPanelProps {
@@ -11,10 +11,10 @@ interface RecentTransactionsPanelProps {
 export function RecentTransactionsPanel({ transactions }: RecentTransactionsPanelProps) {
     const recentPaidTransactions = useMemo(() => {
         return [...transactions]
-            .filter((transaction) => transaction.status === "paid")
+            .filter((transaction) => transaction.status === "paid" && !transaction.isNonCashSettlement)
             .sort((a, b) => {
-                const dateA = parseAppDate(a.date)?.getTime() ?? 0;
-                const dateB = parseAppDate(b.date)?.getTime() ?? 0;
+                const dateA = transactionSettlementDate(a)?.getTime() ?? 0;
+                const dateB = transactionSettlementDate(b)?.getTime() ?? 0;
                 return dateB - dateA;
             })
             .slice(0, 5);

@@ -158,7 +158,7 @@ export function downloadFinanceBackupFile(backup: FinanceBackupFile, label: stri
     URL.revokeObjectURL(objectUrl);
 }
 
-export function saveLocalFinanceBackup(params: SaveLocalFinanceBackupParams): void {
+export function saveLocalFinanceBackup(params: SaveLocalFinanceBackupParams): Promise<void> {
     const nextBackup: LocalFinanceBackupRecord = {
         ...buildFinanceBackupFile(params),
         id: createBackupId(),
@@ -199,6 +199,7 @@ export function saveLocalFinanceBackup(params: SaveLocalFinanceBackupParams): vo
                 backupSaveOperations.delete(params.uid);
             }
         });
+    return current;
 }
 
 export async function listLocalFinanceBackups(uid: string): Promise<LocalFinanceBackupRecord[]> {

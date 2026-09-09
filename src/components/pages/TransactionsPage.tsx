@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type SetStateAction } from "react";
+import { Plus } from "lucide-react";
 import { useFinanceSession, useFinanceTransactions, useFinanceWallets } from "../../context/FinanceContext";
 import { normalizeComparisonText } from "../../context/finance/helpers";
 import { useModal } from "../../context/ModalContext";
@@ -11,7 +12,7 @@ import { EditTransaction } from "../modal/EditTransaction";
 import { useTransactionContextActionHandler } from "../transactions/useTransactionContextActionHandler";
 import { TransactionsFiltersPanel } from "./transactions/TransactionsFiltersPanel";
 import { TransactionsListPanel } from "./transactions/TransactionsListPanel";
-import { TransactionsSummaryCards } from "./transactions/TransactionsSummaryCards";
+import { TransactionsOverviewPanel } from "./transactions/TransactionsOverviewPanel";
 import {
     INITIAL_FILTER_STATE,
     compareTransactions,
@@ -41,6 +42,7 @@ const DEFAULT_TRANSACTIONS_PAGE_PREFERENCES: TransactionsPagePreferences = {
 };
 const VALID_TRANSACTION_TABS = new Set<TransactionsTabKey>(["income", "spending", "transfer"]);
 const VALID_TRANSACTION_STATUS_FILTERS = new Set<TransactionsFilterState["selectedStatus"]>(["all", "pending", "paid", "cancelled", "skipped"]);
+const VALID_TRANSACTION_DATE_MODES = new Set<TransactionsFilterState["dateMode"]>(["month", "period"]);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -61,14 +63,16 @@ function normalizeTransactionsFilterState(value: unknown): TransactionsFilterSta
 
     const sortMode = asString(value.sortMode, INITIAL_FILTER_STATE.sortMode);
     const selectedStatus = asString(value.selectedStatus, INITIAL_FILTER_STATE.selectedStatus) as TransactionsFilterState["selectedStatus"];
+    const dateMode = asString(value.dateMode, INITIAL_FILTER_STATE.dateMode) as TransactionsFilterState["dateMode"];
 
     return {
         selectedMonth: /^\d{4}-(0[1-9]|1[0-2])$/.test(asString(value.selectedMonth, "")) ? asString(value.selectedMonth, INITIAL_FILTER_STATE.selectedMonth) : INITIAL_FILTER_STATE.selectedMonth,
+        dateMode: VALID_TRANSACTION_DATE_MODES.has(dateMode) ? dateMode : INITIAL_FILTER_STATE.dateMode,
         sortMode: /^(date|value|status|category|beneficiary)-(asc|desc)$/.test(sortMode) ? (sortMode as TransactionsFilterState["sortMode"]) : INITIAL_FILTER_STATE.sortMode,
         showAdvancedFilters: typeof value.showAdvancedFilters === "boolean" ? value.showAdvancedFilters : INITIAL_FILTER_STATE.showAdvancedFilters,
         searchQuery: asString(value.searchQuery, INITIAL_FILTER_STATE.searchQuery),
         selectedCategoryKey: asString(value.selectedCategoryKey, INITIAL_FILTER_STATE.selectedCategoryKey),
-        selectedWalletId: asString(value.selectedWalletId, INITIAL_FILTER_STATE.selectedWalletId),
+        selectedWalletIds: asStringArray(value.selectedWalletIds),
         selectedBeneficiary: asString(value.selectedBeneficiary, INITIAL_FILTER_STATE.selectedBeneficiary),
         selectedStatus: VALID_TRANSACTION_STATUS_FILTERS.has(selectedStatus) ? selectedStatus : INITIAL_FILTER_STATE.selectedStatus,
         selectedTagIds: asStringArray(value.selectedTagIds),
@@ -150,6 +154,7 @@ export function TransactionsPage() {
                 filters: {
                     ...current.filters,
                     selectedMonth: pendingNavigation.selectedMonth ?? current.filters.selectedMonth,
+                    dateMode: "month",
                 },
             }));
             setPendingOpenTransactionId(pendingNavigation.targetTransactionId ?? null);
@@ -186,11 +191,12 @@ export function TransactionsPage() {
 
     const {
         selectedMonth,
+        dateMode,
         sortMode,
         showAdvancedFilters,
         searchQuery,
         selectedCategoryKey,
-        selectedWalletId,
+        selectedWalletIds,
         selectedBeneficiary,
         selectedStatus,
         selectedTagIds,
@@ -219,12 +225,9 @@ export function TransactionsPage() {
         setFilters((current) => ({
             ...current,
             selectedCategoryKey: "all",
-            selectedWalletId: "all",
             selectedBeneficiary: "all",
             selectedStatus: "all",
             selectedTagIds: [],
-            dateFrom: "",
-            dateTo: "",
             minAmount: "",
             maxAmount: "",
         }));
@@ -283,7 +286,7 @@ export function TransactionsPage() {
         setPagePreferences((current) => {
             const nextFilters: TransactionsFilterState = {
                 ...current.filters,
-                selectedWalletId: current.filters.selectedWalletId === "all" || validWalletIds.has(current.filters.selectedWalletId) ? current.filters.selectedWalletId : "all",
+                selectedWalletIds: current.filters.selectedWalletIds.filter((walletId) => validWalletIds.has(walletId)),
                 selectedCategoryKey:
                     current.filters.selectedCategoryKey === "all" || validCategoryKeys.has(current.filters.selectedCategoryKey) ? current.filters.selectedCategoryKey : "all",
                 selectedBeneficiary:
@@ -314,9 +317,10 @@ export function TransactionsPage() {
                 return false;
             }
 
-            const matchesSelectedWallet = transaction.inWallet === selectedWalletId || (transaction.type === "transfer" && transaction.destinationWalletId === selectedWalletId);
+            const matchesSelectedWallet =
+                selectedWalletIds.includes(transaction.inWallet) || (transaction.type === "transfer" && Boolean(transaction.destinationWalletId) && selectedWalletIds.includes(transaction.destinationWalletId as string));
 
-            if (selectedWalletId !== "all" && !matchesSelectedWallet) {
+            if (selectedWalletIds.length > 0 && !matchesSelectedWallet) {
                 return false;
             }
 
@@ -329,14 +333,6 @@ export function TransactionsPage() {
             }
 
             if (selectedTagIds.length > 0 && !selectedTagIds.some((tagId) => transaction.tagIds.includes(tagId))) {
-                return false;
-            }
-
-            if (dateFrom && transaction.date < dateFrom) {
-                return false;
-            }
-
-            if (dateTo && transaction.date > dateTo) {
                 return false;
             }
 
@@ -356,28 +352,27 @@ export function TransactionsPage() {
             const destinationWalletName = transaction.destinationWalletId ? (walletNameById.get(transaction.destinationWalletId) ?? "Carteira removida") : "Nenhuma carteira";
             return normalizeComparisonText(getTransactionSearchSource(transaction, walletName, destinationWalletName)).includes(normalizedSearch);
         });
-    }, [dateFrom, dateTo, maxAmount, minAmount, searchQuery, selectedBeneficiary, selectedCategoryKey, selectedStatus, selectedTagIds, selectedWalletId, nonCreditCardTransactions, walletNameById]);
+    }, [maxAmount, minAmount, searchQuery, selectedBeneficiary, selectedCategoryKey, selectedStatus, selectedTagIds, selectedWalletIds, nonCreditCardTransactions, walletNameById]);
 
     const monthlyTransactions = useMemo(() => {
-        const filtered = advancedFilteredTransactions.filter((transaction) => getTransactionMonthKey(transaction.date) === selectedMonth);
+        const filtered =
+            dateMode === "period"
+                ? advancedFilteredTransactions.filter((transaction) => (!dateFrom || transaction.date >= dateFrom) && (!dateTo || transaction.date <= dateTo))
+                : advancedFilteredTransactions.filter((transaction) => getTransactionMonthKey(transaction.date) === selectedMonth);
         filtered.sort((a, b) => compareTransactions(a, b, sortMode));
         return filtered;
-    }, [advancedFilteredTransactions, selectedMonth, sortMode]);
+    }, [advancedFilteredTransactions, dateFrom, dateMode, dateTo, selectedMonth, sortMode]);
 
     const incomeTransactions = useMemo(() => monthlyTransactions.filter((transaction) => transaction.type === "income"), [monthlyTransactions]);
     const spendingTransactions = useMemo(() => monthlyTransactions.filter((transaction) => transaction.type === "spending"), [monthlyTransactions]);
     const transferTransactions = useMemo(() => monthlyTransactions.filter((transaction) => transaction.type === "transfer"), [monthlyTransactions]);
 
     const activeTabTransactions = useMemo(() => {
-        if (activeTab === "spending") {
-            return spendingTransactions;
-        }
-
         if (activeTab === "transfer") {
             return transferTransactions;
         }
 
-        return incomeTransactions;
+        return activeTab === "spending" ? spendingTransactions : incomeTransactions;
     }, [activeTab, incomeTransactions, spendingTransactions, transferTransactions]);
 
     const summary = useMemo<TransactionsSummary>(() => {
@@ -429,12 +424,13 @@ export function TransactionsPage() {
         );
     };
 
-    const handleTabChange = (tab: TransactionsTabKey) => {
-        setPagePreferences((current) => ({
-            ...current,
-            activeTab: tab,
-        }));
-        goToPage(tab);
+    const handleTypeSelect = (type: TransactionsTabKey) => {
+        if (type === activeTab) {
+            return;
+        }
+
+        setPagePreferences((current) => ({ ...current, activeTab: type }));
+        goToPage(type);
     };
 
     return (
@@ -442,55 +438,68 @@ export function TransactionsPage() {
             <div className="flex flex-col gap-3 2xl:flex-row w-full">
                 <div className="min-w-0 flex-1 space-y-1.5">
                     <TransactionsFiltersPanel
-                        activeTab={activeTab}
-                        selectedMonth={selectedMonth}
                         showAdvancedFilters={showAdvancedFilters}
                         searchQuery={searchQuery}
                         selectedCategoryKey={selectedCategoryKey}
-                        selectedWalletId={selectedWalletId}
                         selectedBeneficiary={selectedBeneficiary}
                         selectedStatus={selectedStatus}
                         selectedTagIds={selectedTagIds}
-                        dateFrom={dateFrom}
-                        dateTo={dateTo}
                         minAmount={minAmount}
                         maxAmount={maxAmount}
                         categoryOptions={categoryOptions}
                         beneficiaryOptions={beneficiaryOptions}
                         tagOptions={tagOptions}
-                        wallets={wallets}
                         hasAdvancedFilters={hasAdvancedFilters}
-                        onTabChange={handleTabChange}
                         onToggleAdvancedFilters={toggleAdvancedFilters}
                         onClearAdvancedFilters={clearAdvancedFilters}
-                        onMonthChange={(value) => setFilter("selectedMonth", value)}
                         onSearchQueryChange={(value) => setFilter("searchQuery", value)}
                         onCategoryChange={(value) => setFilter("selectedCategoryKey", value)}
-                        onWalletChange={(value) => setFilter("selectedWalletId", value)}
                         onBeneficiaryChange={(value) => setFilter("selectedBeneficiary", value)}
                         onStatusChange={(value) => setFilter("selectedStatus", value)}
-                        onDateFromChange={(value) => setFilter("dateFrom", value)}
-                        onDateToChange={(value) => setFilter("dateTo", value)}
                         onMinAmountChange={(value) => setFilter("minAmount", value)}
                         onMaxAmountChange={(value) => setFilter("maxAmount", value)}
                         onTagToggle={toggleTagFilter}
-                        onCreateFromActiveTab={handleCreateFromActiveTab}
                     />
 
-                    <div className="flex flex-row w-full gap-2 shrink-0">
-                        <TransactionsListPanel
-                            activeTab={activeTab}
-                            incomeTransactions={incomeTransactions}
-                            spendingTransactions={spendingTransactions}
-                            transferTransactions={transferTransactions}
-                            wallets={wallets}
-                            sortMode={sortMode}
-                            onSortModeChange={(value) => setFilter("sortMode", value)}
-                            onAction={handleTransactionContextAction}
-                            selectedMonth={selectedMonth}
-                        />
-                        <div className="w-1/7">
-                            <TransactionsSummaryCards activeTab={activeTab} summary={summary} />
+                    <div className="flex flex-col gap-3 lg:flex-row lg:items-start w-full shrink-0">
+                        <div className="min-w-0 flex-1">
+                            <TransactionsListPanel
+                                activeTab={activeTab}
+                                incomeTransactions={incomeTransactions}
+                                spendingTransactions={spendingTransactions}
+                                transferTransactions={transferTransactions}
+                                wallets={wallets}
+                                sortMode={sortMode}
+                                onSortModeChange={(value) => setFilter("sortMode", value)}
+                                onAction={handleTransactionContextAction}
+                                selectedMonth={selectedMonth}
+                            />
+                        </div>
+                        <div className="w-full lg:w-64 lg:shrink-0">
+                            <TransactionsOverviewPanel
+                                wallets={wallets}
+                                selectedWalletIds={selectedWalletIds}
+                                onWalletIdsChange={(value) => setFilter("selectedWalletIds", value)}
+                                activeTab={activeTab}
+                                onTypeSelect={handleTypeSelect}
+                                dateMode={dateMode}
+                                onDateModeChange={(value) => setFilter("dateMode", value)}
+                                selectedMonth={selectedMonth}
+                                onMonthChange={(value) => setFilter("selectedMonth", value)}
+                                dateFrom={dateFrom}
+                                dateTo={dateTo}
+                                onDateFromChange={(value) => setFilter("dateFrom", value)}
+                                onDateToChange={(value) => setFilter("dateTo", value)}
+                                summary={summary}
+                            />
+                            <button
+                                type="button"
+                                onClick={handleCreateFromActiveTab}
+                                className="mt-2 inline-flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl border border-emerald-300/30 bg-emerald-500/15 px-3 py-2 text-xs font-semibold uppercase tracking-[0.05em] text-emerald-100 transition-all hover:border-emerald-300/45 hover:bg-emerald-500/20"
+                            >
+                                <Plus size={14} />
+                                {activeTab === "income" ? "Adicionar receita" : activeTab === "spending" ? "Adicionar despesa" : "Adicionar transferência"}
+                            </button>
                         </div>
                     </div>
                 </div>

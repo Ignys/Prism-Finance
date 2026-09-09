@@ -1,316 +1,50 @@
+import { resolveTransactionTitle, resolveTransactionCategoryId, resolveTransactionBeneficiaryId, resolveTransactionSourceWalletId, resolveTransactionDestinationWalletId, resolveTransactionCreditCardId } from "./transactionResolution";
+export { resolveTransactionTitle, resolveTransactionCategoryId, resolveTransactionBeneficiaryId, resolveTransactionSourceWalletId, resolveTransactionDestinationWalletId, resolveTransactionCreditCardId } from "./transactionResolution";
+import { formatYearMonth, buildDateString, parseYearMonthKey, getMonthKeyFromDateValue, resolveCreditCardInvoiceCycle, buildCreditCardInvoiceId } from "./invoiceCycles";
+export { getMonthKeyFromDateValue, resolveCreditCardInvoiceCycle, resolveCreditCardInvoiceCycleFromCycleKey, parseCreditCardInvoiceId, resolveOpenCreditCardInvoiceCycle, getCreditCardInvoiceMonthKey, buildCreditCardInvoiceId, resolveExpectedCreditCardInvoiceId, calculateCreditCardInvoiceOpenAmount, resolveCreditCardInvoiceStatus } from "./invoiceCycles";
+import { asString, asNumber, asDayOfMonth } from "./valueNormalization";
+import { DEFAULT_WALLET_ID, DEFAULT_BENEFICIARY_ID, DEFAULT_BENEFICIARY_NAME, DEFAULT_EXPENSE_CATEGORY_ID, SYSTEM_EXPENSE_CARD_INVOICE_CATEGORY_ID, DEFAULT_INCOME_CATEGORY_ID, INVOICE_PAYMENT_NOTE_PREFIX } from "./domainConstants";
+export * from "./domainConstants";
+import { syncCreditCardInvoices } from "./syncCreditCardInvoices";
+import { parseRecurrenceRule } from "./recurrence/rule";
 import { getDefaultCategoryIconName, normalizeCategoryIconName } from "../../lib/categoryIcons";
 import { formatLocalDateInput, getLocalTodayDate, parseAppDate } from "../../lib/localDate";
-import { normalizeWishItemPriority, type WishItemPriority } from "../../lib/wishlistPriority";
+import { normalizeWishItemPriority } from "../../lib/wishlistPriority";
 import { DEFAULT_CREDIT_CARD_ICON, DEFAULT_WALLET_COLOR, DEFAULT_WALLET_ICON } from "../../lib/walletVisual";
 
-export type TransactionType = "income" | "spending" | "transfer";
-export type TransactionGroupType = "income" | "expense" | "transfer";
-export type TransactionMode = "single" | "installment" | "recurring";
-export type TransactionStatus = "pending" | "paid" | "cancelled" | "skipped";
-export type PaymentMethod = "wallet" | "credit_card";
-export type TransactionSystemKind = "invoice_payment";
-export type TransactionSeriesScope = "single" | "this_and_next" | "all";
-export type InvoiceStatus = "open" | "paid";
-export type WalletType = "checking" | "savings" | "cash" | "investment";
-export type BeneficiaryType = "person" | "cost_center" | "pet" | "other";
-export type BeneficiarySource = "personal" | "family_shared";
-export type CategoryType = "income" | "expense";
-export type { WishItemPriority };
-
-export interface TransactionEntity {
-    id: string;
-    groupId: string;
-    type: TransactionType;
-    value: number;
-    date: string;
-    inWallet: string;
-    destinationWalletId: string | null;
-    categoryId: string | null;
-    beneficiaryId: string | null;
-    tagIds: string[];
-    description: string;
-    status: TransactionStatus;
-    installmentNumber: number | null;
-    invoiceId: string | null;
-    paymentMethod: PaymentMethod;
-    creditCardId: string | null;
-    systemKind: TransactionSystemKind | null;
-    invoicePaymentMeta: InvoicePaymentMeta | null;
-    meta: {
-        criado_em: string;
-        atualizado_em: string | null;
-    };
-}
-
-export interface ResolvedTransactionCategory {
-    id: string | null;
-    label: string;
-    parentLabel: string | null;
-    icon: string;
-    color: string | null;
-    type: CategoryType;
-}
-
-export interface TransactionListItem extends TransactionEntity {
-    category: ResolvedTransactionCategory;
-    beneficiary: string;
-    tags: Tag[];
-}
-
-export type Transaction = TransactionListItem;
-
-export interface StoredTransaction {
-    id: string;
-    groupId: string;
-    installmentNumber: number | null;
-    amount: number;
-    scheduledDate: string;
-    status: TransactionStatus;
-    paidAt: string | null;
-    invoiceId: string | null;
-    paymentForInvoiceId?: string | null;
-    notes: string | null;
-    title: string | null;
-    categoryId: string | null;
-    beneficiaryId: string | null;
-    sourceWalletId: string | null;
-    destinationWalletId: string | null;
-    creditCardId: string | null;
-    createdAt: string;
-}
-
-export interface TransactionGroup {
-    id: string;
-    userId: string | null;
-    beneficiaryId: string | null;
-    beneficiaryName: string;
-    categoryId: string | null;
-    categoryName: string;
-    subcategoryName: string | null;
-    title: string;
-    notes: string | null;
-    type: TransactionGroupType;
-    transactionMode: TransactionMode;
-    totalAmount: number;
-    installmentCount: number | null;
-    recurrenceRule: Record<string, unknown> | null;
-    recurrenceEndDate: string | null;
-    sourceWalletId: string | null;
-    destinationWalletId: string | null;
-    creditCardId: string | null;
-    createdAt: string;
-}
-
-export interface LedgerEntry {
-    id: string;
-    walletId: string;
-    transactionId: string | null;
-    invoiceId: string | null;
-    amount: number;
-    balanceAfter: number;
-    description: string;
-    createdAt: string;
-}
-
-export interface CreditCard {
-    id: string;
-    name: string;
-    icon: string;
-    color: string;
-    limit: number;
-    closingDay: number;
-    dueDay: number;
-    bankWalletId: string | null;
-    isActive: boolean;
-    createdAt: string;
-}
-
-export interface CreditCardInvoice {
-    id: string;
-    creditCardId: string;
-    cycleKey: string;
-    closingDate: string;
-    dueDate: string;
-    totalAmount: number;
-    paidAmount: number;
-    status: InvoiceStatus;
-    paidAt: string | null;
-    createdAt: string;
-    updatedAt: string;
-}
-
-export interface Wallet {
-    id: string;
-    name: string;
-    icon: string;
-    type: WalletType;
-    balance: number;
-    initialBalance: number;
-    currency: string;
-    color: string;
-    isActive: boolean;
-    includeInMainTotals: boolean;
-    createdAt: string;
-}
-
-export interface Beneficiary {
-    id: string;
-    userId: string | null;
-    familyId: string | null;
-    source: BeneficiarySource;
-    isSelfProfile: boolean;
-    name: string;
-    type: BeneficiaryType;
-    avatarColor: string | null;
-    avatarImage: string | null;
-    isActive: boolean;
-    sortOrder: number;
-    createdAt: string;
-}
-
-export interface Category {
-    id: string;
-    userId: string | null;
-    parentId: string | null;
-    name: string;
-    type: CategoryType;
-    icon: string;
-    color: string | null;
-    isActive: boolean;
-    isSystem: boolean;
-    sortOrder: number;
-    createdAt: string;
-}
-
-export interface Tag {
-    id: string;
-    userId: string | null;
-    name: string;
-    color: string | null;
-    isActive: boolean;
-    sortOrder: number;
-    createdAt: string;
-}
-
-export interface WishItem {
-    id: string;
-    userId: string | null;
-    value: number;
-    categoryId: string;
-    priority: WishItemPriority;
-    description: string;
-    link: string | null;
-    imageUrl: string | null;
-    isActive: boolean;
-    createdAt: string;
-}
-
-export interface TransactionTag {
-    transactionId: string;
-    tagId: string;
-}
-
-export interface PlanningSimulatedExpense {
-    id: string;
-    monthKey: string;
-    description: string;
-    amount: number;
-    createdAt: string;
-}
-
-export interface PlanningSimulatedIncome {
-    id: string;
-    monthKey: string;
-    description: string;
-    amount: number;
-    createdAt: string;
-}
-
-export interface PlanningWishlistSelection {
-    id: string;
-    wishItemId: string;
-    monthKey: string;
-    createdAt: string;
-}
-
-export interface PlanningRevenueOverride {
-    monthKey: string;
-    amount: number;
-    updatedAt: string;
-}
-
-export interface ReportPeriod {
-    startMonth: string;
-    endMonth: string;
-}
-
-export interface PlanningState {
-    simulatedExpenses: PlanningSimulatedExpense[];
-    simulatedIncomes: PlanningSimulatedIncome[];
-    wishlistSelections: PlanningWishlistSelection[];
-    revenueOverrides: PlanningRevenueOverride[];
-    disabledInheritedExpenseIds: string[];
-    disabledIncomeIds: string[];
-    disabledSimulatedExpenseIds: string[];
-    disabledSimulatedIncomeIds: string[];
-    timelineSelectedWalletIds: string[];
-    timelineCompareMode: boolean;
-    timelineHorizontalMode: boolean;
-    timelineMonthCount: 3 | 6 | 9 | 12;
-    reportsSelectedWalletIds: string[];
-    reportsSelectedCreditCardIds: string[];
-    reportsPeriod: ReportPeriod;
-}
-
-export interface FinanceSnapshot {
-    despesas: number;
-    receitas: number;
-    wallets: Wallet[];
-    creditCards: CreditCard[];
-    creditCardInvoices: CreditCardInvoice[];
-    favoriteCreditCardId: string | null;
-    transactionGroups: TransactionGroup[];
-    transactions: StoredTransaction[];
-    ledgerEntries: LedgerEntry[];
-    beneficiaries: Beneficiary[];
-    categories: Category[];
-    tags: Tag[];
-    wishItems: WishItem[];
-    transactionTags: TransactionTag[];
-    planning: PlanningState;
-}
-
-export interface TransactionDraft {
-    id?: string;
-    type?: TransactionType | TransactionGroupType;
-    value?: number;
-    amount?: number;
-    date?: string;
-    scheduledDate?: string;
-    inWallet?: string;
-    walletId?: string;
-    destinationWalletId?: string | null;
-    paymentMethod?: PaymentMethod;
-    creditCardId?: string | null;
-    invoiceId?: string | null;
-    categoryId?: string | null;
-    category?: {
-        principal?: string;
-        sub?: string | null;
-    };
-    beneficiaryId?: string | null;
-    beneficiary?: string;
-    tagIds?: string[];
-    description?: string;
-    status?: TransactionStatus | boolean;
-    notes?: string;
-    groupId?: string;
-    transactionMode?: TransactionMode;
-    installmentCount?: number | null;
-    ignoredInstallmentsCount?: number | null;
-    recurrenceRule?: Record<string, unknown> | null;
-    recurrenceEndDate?: string | null;
-}
+import type {
+    TransactionType,
+    TransactionGroupType,
+    TransactionMode,
+    TransactionStatus,
+    InvoiceStatus,
+    WalletType,
+    BeneficiaryType,
+    CategoryType,
+    TransactionEntity,
+    ResolvedTransactionCategory,
+    TransactionListItem,
+    StoredTransaction,
+    TransactionGroup,
+    LedgerEntry,
+    CreditCard,
+    CreditCardInvoice,
+    Wallet,
+    Beneficiary,
+    Category,
+    Tag,
+    WishItem,
+    TransactionTag,
+    PlanningSimulatedExpense,
+    PlanningSimulatedIncome,
+    PlanningWishlistSelection,
+    PlanningRevenueOverride,
+    ReportPeriod,
+    PlanningState,
+    FinanceSnapshot,
+    InvoicePaymentMeta,
+ } from "./domainTypes";
+export type * from "./domainTypes";
 
 interface NormalizeFinanceResult {
     snapshot: FinanceSnapshot;
@@ -368,14 +102,6 @@ interface WishItemInput extends Partial<WishItem> {
 
 const LEGACY_DEFAULT_WALLET_ID = "first_wallet";
 const TRANSACTION_STATUSES = new Set<TransactionStatus>(["pending", "paid", "cancelled", "skipped"]);
-
-export const DEFAULT_WALLET_ID = "default";
-export const DEFAULT_BENEFICIARY_ID = "beneficiary-self";
-export const DEFAULT_BENEFICIARY_NAME = "Eu";
-export const DEFAULT_EXPENSE_CATEGORY_ID = "system-category-expense-uncategorized";
-export const SYSTEM_EXPENSE_CARD_INVOICE_CATEGORY_ID = "system-category-expense-card-invoice";
-export const DEFAULT_INCOME_CATEGORY_ID = "system-category-income-other";
-export const INVOICE_PAYMENT_NOTE_PREFIX = "[prism-invoice-payment]";
 
 export const DEFAULT_WALLET: Wallet = {
     id: DEFAULT_WALLET_ID,
@@ -446,10 +172,6 @@ const SYSTEM_CATEGORY_SEED: SystemCategorySeed[] = [
 
 const INVOICE_PAYMENT_CATEGORY_SEED = SYSTEM_CATEGORY_SEED.find((item) => item.id === SYSTEM_EXPENSE_CARD_INVOICE_CATEGORY_ID) as SystemCategorySeed;
 
-export interface InvoicePaymentMeta {
-    invoiceId: string;
-    creditCardId: string;
-}
 
 export function buildInvoicePaymentNote(payload: InvoicePaymentMeta): string {
     return `${INVOICE_PAYMENT_NOTE_PREFIX}|${payload.invoiceId}|${payload.creditCardId}`;
@@ -475,9 +197,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === "object" && value !== null;
 }
 
-function asString(value: unknown, fallback: string): string {
-    return typeof value === "string" && value.trim() ? value.trim() : fallback;
-}
 
 function asNullableString(value: unknown, fallback: string | null): string | null {
     if (typeof value !== "string") {
@@ -487,10 +206,6 @@ function asNullableString(value: unknown, fallback: string | null): string | nul
     return normalized ? normalized : fallback;
 }
 
-function asNumber(value: unknown, fallback: number): number {
-    const numeric = typeof value === "number" ? value : Number(value);
-    return Number.isFinite(numeric) ? numeric : fallback;
-}
 
 function asSortOrder(value: unknown, fallback: number): number {
     const safeFallback = Number.isFinite(fallback) ? fallback : 0;
@@ -502,13 +217,6 @@ function asBoolean(value: unknown, fallback: boolean): boolean {
     return typeof value === "boolean" ? value : fallback;
 }
 
-function asDayOfMonth(value: unknown, fallback: number): number {
-    const numeric = Math.round(asNumber(value, fallback));
-    if (!Number.isFinite(numeric)) {
-        return Math.min(31, Math.max(1, fallback));
-    }
-    return Math.min(31, Math.max(1, numeric));
-}
 
 function asArray(value: unknown): unknown[] {
     return Array.isArray(value) ? value : [];
@@ -609,7 +317,7 @@ export function resolveLedgerEntryDateIso(dateValue: string, fallbackIso: string
 }
 
 function getTransactionLedgerEntryDateIso(transaction: Pick<StoredTransaction, "scheduledDate" | "paidAt" | "createdAt">): string {
-    return resolveLedgerEntryDateIso(transaction.scheduledDate, transaction.paidAt ?? transaction.createdAt);
+    return transaction.paidAt ?? resolveLedgerEntryDateIso(transaction.scheduledDate, transaction.createdAt);
 }
 
 function asWalletId(value: unknown): string {
@@ -674,161 +382,6 @@ function toCategoryTypeFromGroupType(type: TransactionGroupType): CategoryType {
     return type === "income" ? "income" : "expense";
 }
 
-function toDateInput(value: string): Date {
-    const parsed = parseAppDate(value);
-    if (parsed) {
-        return parsed;
-    }
-
-    const fallback = new Date(value);
-    if (Number.isNaN(fallback.getTime())) {
-        return new Date();
-    }
-
-    return fallback;
-}
-
-function getMonthLength(year: number, monthIndex: number): number {
-    return new Date(year, monthIndex + 1, 0).getDate();
-}
-
-function clampDayForMonth(year: number, monthIndex: number, day: number): number {
-    return Math.min(getMonthLength(year, monthIndex), Math.max(1, Math.round(day)));
-}
-
-function formatYearMonth(year: number, monthIndex: number): string {
-    return `${String(year).padStart(4, "0")}-${String(monthIndex + 1).padStart(2, "0")}`;
-}
-
-function buildDateString(year: number, monthIndex: number, day: number): string {
-    const safeDay = clampDayForMonth(year, monthIndex, day);
-    return `${formatYearMonth(year, monthIndex)}-${String(safeDay).padStart(2, "0")}`;
-}
-
-function parseYearMonthKey(monthKey: string): { year: number; monthIndex: number } | null {
-    const match = /^(\d{4})-(\d{2})$/.exec(monthKey.trim());
-    if (!match) {
-        return null;
-    }
-
-    const year = Number(match[1]);
-    const month = Number(match[2]);
-    if (!Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12) {
-        return null;
-    }
-
-    return {
-        year,
-        monthIndex: month - 1,
-    };
-}
-
-export function getMonthKeyFromDateValue(dateValue: string, referenceDate = new Date()): string {
-    const parsedDate = parseAppDate(dateValue);
-    if (!parsedDate) {
-        return formatYearMonth(referenceDate.getFullYear(), referenceDate.getMonth());
-    }
-
-    return formatYearMonth(parsedDate.getFullYear(), parsedDate.getMonth());
-}
-
-export function resolveCreditCardInvoiceCycle(
-    transactionDate: string,
-    closingDay: number,
-    dueDay: number,
-): { cycleKey: string; closingDate: string; dueDate: string } {
-    const parsedDate = toDateInput(transactionDate);
-    const transactionYear = parsedDate.getFullYear();
-    const transactionMonth = parsedDate.getMonth();
-    const transactionDay = parsedDate.getDate();
-
-    const safeClosingDay = asDayOfMonth(closingDay, 1);
-    const safeDueDay = asDayOfMonth(dueDay, 1);
-
-    const dueMonthOffset = safeClosingDay <= safeDueDay ? (transactionDay > safeClosingDay ? 1 : 0) : transactionDay > safeClosingDay ? 2 : 1;
-    const cycleAnchor = new Date(transactionYear, transactionMonth + dueMonthOffset, 1);
-    const cycleYear = cycleAnchor.getFullYear();
-    const cycleMonth = cycleAnchor.getMonth();
-    const closingAnchor = new Date(cycleYear, cycleMonth + (safeClosingDay <= safeDueDay ? 0 : -1), 1);
-
-    return {
-        cycleKey: formatYearMonth(cycleYear, cycleMonth),
-        closingDate: buildDateString(closingAnchor.getFullYear(), closingAnchor.getMonth(), safeClosingDay),
-        dueDate: buildDateString(cycleYear, cycleMonth, safeDueDay),
-    };
-}
-
-export function resolveCreditCardInvoiceCycleFromCycleKey(
-    cycleKey: string,
-    closingDay: number,
-    dueDay: number,
-): { cycleKey: string; closingDate: string; dueDate: string } {
-    const parsedMonth = parseYearMonthKey(cycleKey);
-    if (!parsedMonth) {
-        return resolveCreditCardInvoiceCycle(getLocalTodayDate(), closingDay, dueDay);
-    }
-
-    const safeClosingDay = asDayOfMonth(closingDay, 1);
-    const safeDueDay = asDayOfMonth(dueDay, 1);
-    const closingAnchor = new Date(parsedMonth.year, parsedMonth.monthIndex + (safeClosingDay <= safeDueDay ? 0 : -1), 1);
-
-    return {
-        cycleKey: formatYearMonth(parsedMonth.year, parsedMonth.monthIndex),
-        closingDate: buildDateString(closingAnchor.getFullYear(), closingAnchor.getMonth(), safeClosingDay),
-        dueDate: buildDateString(parsedMonth.year, parsedMonth.monthIndex, safeDueDay),
-    };
-}
-
-export function parseCreditCardInvoiceId(invoiceId: string): { creditCardId: string; cycleKey: string } | null {
-    const normalizedInvoiceId = invoiceId.trim();
-    const match = /^invoice-(.+)-(\d{4}-\d{2})$/.exec(normalizedInvoiceId);
-    if (!match) {
-        return null;
-    }
-
-    const creditCardId = match[1]?.trim() ?? "";
-    const cycleKey = match[2]?.trim() ?? "";
-    if (!creditCardId || !parseYearMonthKey(cycleKey)) {
-        return null;
-    }
-
-    return {
-        creditCardId,
-        cycleKey,
-    };
-}
-
-export function resolveOpenCreditCardInvoiceCycle(
-    closingDay: number,
-    dueDay: number,
-    referenceDate = new Date(),
-): { cycleKey: string; closingDate: string; dueDate: string } {
-    return resolveCreditCardInvoiceCycle(formatLocalDateInput(referenceDate), closingDay, dueDay);
-}
-
-export function getCreditCardInvoiceMonthKey(invoice: Pick<CreditCardInvoice, "dueDate">, referenceDate = new Date()): string {
-    return getMonthKeyFromDateValue(invoice.dueDate, referenceDate);
-}
-
-export function buildCreditCardInvoiceId(creditCardId: string, cycleKey: string): string {
-    return `invoice-${creditCardId}-${cycleKey}`;
-}
-
-export function resolveExpectedCreditCardInvoiceId(params: {
-    creditCardId: string | null;
-    transactionDate: string;
-    closingDay: number;
-    dueDay: number;
-}): string | null {
-    const creditCardId = asString(params.creditCardId, "");
-    if (!creditCardId) {
-        return null;
-    }
-
-    const cycle = resolveCreditCardInvoiceCycle(params.transactionDate, params.closingDay, params.dueDay);
-    return buildCreditCardInvoiceId(creditCardId, cycle.cycleKey);
-}
-
 export interface CreditCardInvoiceAssignmentIssue {
     transactionId: string;
     creditCardId: string;
@@ -882,24 +435,6 @@ export function findCreditCardInvoiceAssignmentIssues(params: {
     });
 
     return issues;
-}
-
-export function calculateCreditCardInvoiceOpenAmount(invoice: CreditCardInvoice): number {
-    return roundToCents(Math.max(0, invoice.totalAmount - invoice.paidAmount));
-}
-
-export function resolveCreditCardInvoiceStatus(params: {
-    invoiceCycleKey: string;
-    cardClosingDay: number;
-    cardDueDay: number;
-    totalAmount: number;
-    paidAmount: number;
-    referenceDate?: Date;
-}): InvoiceStatus {
-    const { totalAmount, paidAmount } = params;
-    const safeTotalAmount = roundToCents(Math.max(0, totalAmount));
-    const safePaidAmount = roundToCents(Math.min(safeTotalAmount, Math.max(0, paidAmount)));
-    return safePaidAmount >= safeTotalAmount && safeTotalAmount > 0 ? "paid" : "open";
 }
 
 export function findDefaultCategoryId(groupType: TransactionGroupType, categories: Category[]): string {
@@ -1097,7 +632,7 @@ export function normalizeTransactionGroup(group: Partial<TransactionGroup> & { i
             Number.isInteger(group.installmentCount) && Number(group.installmentCount) > 0
                 ? Number(group.installmentCount)
                 : null,
-        recurrenceRule: isRecord(group.recurrenceRule) ? group.recurrenceRule : null,
+        recurrenceRule: parseRecurrenceRule(group.recurrenceRule),
         recurrenceEndDate: asNullableString(group.recurrenceEndDate, null),
         sourceWalletId,
         destinationWalletId,
@@ -1119,6 +654,10 @@ export function normalizeStoredTransaction(transaction: Partial<StoredTransactio
             Number.isInteger(transaction.installmentNumber) && Number(transaction.installmentNumber) > 0
                 ? Number(transaction.installmentNumber)
                 : null,
+        occurrenceNumber: Number.isInteger(transaction.occurrenceNumber) && Number(transaction.occurrenceNumber) > 0 ? Number(transaction.occurrenceNumber) : null,
+        routingOverride: transaction.routingOverride === true,
+        commitment: transaction.commitment === "forecast" ? "forecast" : "posted",
+        ...(transaction.isProjected ? { isProjected: true } : {}),
         amount: roundToCents(Math.abs(asNumber(transaction.amount, 0))),
         scheduledDate,
         status,
@@ -1137,45 +676,6 @@ export function normalizeStoredTransaction(transaction: Partial<StoredTransactio
         creditCardId: asNullableString(transaction.creditCardId, null),
         createdAt: asDateTimeString(transaction.createdAt, now),
     };
-}
-
-export function resolveTransactionTitle(transaction: Pick<StoredTransaction, "title">, group: Pick<TransactionGroup, "title"> | null | undefined): string {
-    return transaction.title?.trim() || group?.title || "Transacao";
-}
-
-export function resolveTransactionCategoryId(
-    transaction: Pick<StoredTransaction, "categoryId">,
-    group: Pick<TransactionGroup, "categoryId"> | null | undefined,
-): string | null {
-    return transaction.categoryId ?? group?.categoryId ?? null;
-}
-
-export function resolveTransactionBeneficiaryId(
-    transaction: Pick<StoredTransaction, "beneficiaryId">,
-    group: Pick<TransactionGroup, "beneficiaryId"> | null | undefined,
-): string | null {
-    return transaction.beneficiaryId ?? group?.beneficiaryId ?? null;
-}
-
-export function resolveTransactionSourceWalletId(
-    transaction: Pick<StoredTransaction, "sourceWalletId">,
-    group: Pick<TransactionGroup, "sourceWalletId"> | null | undefined,
-): string | null {
-    return transaction.sourceWalletId ?? group?.sourceWalletId ?? null;
-}
-
-export function resolveTransactionDestinationWalletId(
-    transaction: Pick<StoredTransaction, "destinationWalletId">,
-    group: Pick<TransactionGroup, "destinationWalletId"> | null | undefined,
-): string | null {
-    return transaction.destinationWalletId ?? group?.destinationWalletId ?? null;
-}
-
-export function resolveTransactionCreditCardId(
-    transaction: Pick<StoredTransaction, "creditCardId">,
-    group: Pick<TransactionGroup, "creditCardId"> | null | undefined,
-): string | null {
-    return transaction.creditCardId ?? group?.creditCardId ?? null;
 }
 
 export function normalizeLedgerEntry(entry: Partial<LedgerEntry> & { id: string; walletId: string }): LedgerEntry {
@@ -1506,7 +1006,7 @@ export function createLedgerEntriesForPaidTransaction(transaction: StoredTransac
         // A manual invoice close is an explicit settlement without a cash
         // account movement. PostgreSQL applies the same rule and therefore no
         // synthetic default-wallet ledger row may be recreated during hydrate.
-        if (parseInvoicePaymentNote(transaction.notes) && !sourceWalletId) {
+        if ((transaction.paymentForInvoiceId || parseInvoicePaymentNote(transaction.notes)) && !sourceWalletId) {
             return [];
         }
         const walletId = sourceWalletId ?? DEFAULT_WALLET_ID;
@@ -1630,6 +1130,7 @@ export function calculateFinanceSummary(wallets: Wallet[], transactionGroups: Tr
             if (!shouldIncludeWalletInMainTotals(walletById, resolveTransactionSourceWalletId(transaction, group))) {
                 return acc;
             }
+            if ((transaction.paymentForInvoiceId || parseInvoicePaymentNote(transaction.notes)) && !resolveTransactionSourceWalletId(transaction, group)) return acc;
 
             if (group.type === "income") {
                 acc.receitas += Math.abs(transaction.amount);
@@ -1717,7 +1218,8 @@ export function toTransactionList(
               };
 
         const invoicePaymentMeta = parseInvoicePaymentNote(transaction.notes);
-        const systemKind = invoicePaymentMeta ? "invoice_payment" : null;
+        const paymentForInvoiceId = transaction.paymentForInvoiceId ?? invoicePaymentMeta?.invoiceId ?? null;
+        const systemKind = paymentForInvoiceId ? "invoice_payment" : null;
         const transactionEntity: TransactionEntity = {
             id: transaction.id,
             groupId: transaction.groupId,
@@ -1732,10 +1234,15 @@ export function toTransactionList(
             description: resolveTransactionTitle(transaction, group),
             status: transaction.status,
             installmentNumber: transaction.installmentNumber,
+            occurrenceNumber: transaction.occurrenceNumber,
+            commitment: transaction.commitment,
+            isProjected: transaction.isProjected,
             invoiceId: transaction.invoiceId,
             paymentMethod: resolvedCreditCardId ? "credit_card" : "wallet",
             creditCardId: resolvedCreditCardId,
             systemKind,
+            paymentForInvoiceId,
+            isNonCashSettlement: Boolean(paymentForInvoiceId && !resolveTransactionSourceWalletId(transaction, group)),
             invoicePaymentMeta,
             meta: {
                 criado_em: transaction.createdAt,
@@ -2572,7 +2079,7 @@ export function normalizeFinanceSnapshot(rawFinance: unknown, userId: string | n
                 transactionMode: asTransactionMode(rawGroup.transactionMode),
                 totalAmount: Math.abs(asNumber(rawGroup.totalAmount, 0)),
                 installmentCount: asNumber(rawGroup.installmentCount, NaN),
-                recurrenceRule: isRecord(rawGroup.recurrenceRule) ? rawGroup.recurrenceRule : null,
+                recurrenceRule: parseRecurrenceRule(rawGroup.recurrenceRule),
                 recurrenceEndDate: asNullableString(rawGroup.recurrenceEndDate, null),
                 sourceWalletId: asNullableString(rawGroup.sourceWalletId, null),
                 destinationWalletId: asNullableString(rawGroup.destinationWalletId, null),
@@ -2618,6 +2125,16 @@ export function normalizeFinanceSnapshot(rawFinance: unknown, userId: string | n
             let normalizedTransaction = normalizeStoredTransaction({
                 id: asString(rawTransaction.id, `tx-${index}-${Date.now()}`),
                 groupId: asString(rawTransaction.groupId, `group-${index}-${Date.now()}`),
+                occurrenceNumber: asNumber(rawTransaction.occurrenceNumber, NaN),
+                routingOverride: rawTransaction.routingOverride === true,
+                commitment: rawTransaction.commitment === "forecast" ? "forecast" : "posted",
+                title: asNullableString(rawTransaction.title, null),
+                categoryId: asNullableString(rawTransaction.categoryId, null),
+                beneficiaryId: asNullableString(rawTransaction.beneficiaryId, null),
+                sourceWalletId: asNullableString(rawTransaction.sourceWalletId, null),
+                destinationWalletId: asNullableString(rawTransaction.destinationWalletId, null),
+                creditCardId: asNullableString(rawTransaction.creditCardId, null),
+                paymentForInvoiceId: asNullableString(rawTransaction.paymentForInvoiceId, null),
                 installmentNumber: asNumber(rawTransaction.installmentNumber, NaN),
                 amount: asNumber(rawTransaction.amount, asNumber(rawTransaction.value, 0)),
                 scheduledDate: asDateString(rawTransaction.scheduledDate ?? rawTransaction.date, today),
@@ -2663,7 +2180,7 @@ export function normalizeFinanceSnapshot(rawFinance: unknown, userId: string | n
             }
 
             const normalizedGroup = groupsById.get(normalizedTransaction.groupId);
-            if (!normalizedGroup?.creditCardId && normalizedTransaction.invoiceId) {
+            if (!resolveTransactionCreditCardId(normalizedTransaction, normalizedGroup) && normalizedTransaction.invoiceId) {
                 normalizedTransaction = normalizeStoredTransaction({
                     ...normalizedTransaction,
                     invoiceId: null,
@@ -2842,144 +2359,15 @@ export function normalizeFinanceSnapshot(rawFinance: unknown, userId: string | n
 
     const normalizedGroups = Array.from(groupsById.values()).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
     const sortedTransactions = [...normalizedTransactions].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-    const groupsByIdForInvoices = new Map(normalizedGroups.map((group) => [group.id, group]));
-    const existingInvoicesById = new Map(Array.from(creditCardInvoicesById.values()).map((invoice) => [invoice.id, invoice]));
-    const invoiceMetaById = new Map<
-        string,
-        {
-            creditCardId: string;
-            cycleKey: string;
-            closingDate: string;
-            dueDate: string;
-            createdAt: string;
-        }
-    >();
-    const invoiceTotalsById = new Map<string, number>();
-
-    const transactionsWithResolvedInvoices = sortedTransactions.map((transaction) => {
-        const group = groupsByIdForInvoices.get(transaction.groupId);
-        const creditCardId = resolveTransactionCreditCardId(transaction, group);
-
-        if (!creditCardId) {
-            if (!transaction.invoiceId) {
-                return transaction;
-            }
-
-            changed = true;
-            return normalizeStoredTransaction({
-                ...transaction,
-                invoiceId: null,
-            });
-        }
-
-        const creditCard = creditCardsById.get(creditCardId);
-        if (!creditCard) {
-            if (!transaction.invoiceId) {
-                return transaction;
-            }
-
-            changed = true;
-            return normalizeStoredTransaction({
-                ...transaction,
-                invoiceId: null,
-            });
-        }
-
-        const requestedInvoiceId = transaction.invoiceId?.trim() ?? "";
-        const parsedRequestedInvoice = requestedInvoiceId ? parseCreditCardInvoiceId(requestedInvoiceId) : null;
-        const hasExplicitCycle = Boolean(parsedRequestedInvoice && parsedRequestedInvoice.creditCardId === creditCard.id);
-        const resolvedCycle =
-            hasExplicitCycle && parsedRequestedInvoice
-                ? resolveCreditCardInvoiceCycleFromCycleKey(parsedRequestedInvoice.cycleKey, creditCard.closingDay, creditCard.dueDay)
-                : resolveCreditCardInvoiceCycle(transaction.scheduledDate, creditCard.closingDay, creditCard.dueDay);
-        const resolvedInvoiceId = hasExplicitCycle && requestedInvoiceId ? requestedInvoiceId : buildCreditCardInvoiceId(creditCard.id, resolvedCycle.cycleKey);
-        const existingInvoice = existingInvoicesById.get(resolvedInvoiceId);
-
-        invoiceMetaById.set(resolvedInvoiceId, {
-            creditCardId: creditCard.id,
-            cycleKey: existingInvoice?.cycleKey ?? resolvedCycle.cycleKey,
-            closingDate: resolvedCycle.closingDate,
-            dueDate: resolvedCycle.dueDate,
-            createdAt: existingInvoice?.createdAt ?? transaction.createdAt,
-        });
-
-        if (transaction.status !== "cancelled" && transaction.status !== "skipped") {
-            invoiceTotalsById.set(resolvedInvoiceId, roundToCents((invoiceTotalsById.get(resolvedInvoiceId) ?? 0) + Math.abs(transaction.amount)));
-        }
-
-        if (transaction.invoiceId === resolvedInvoiceId) {
-            return transaction;
-        }
-
-        changed = true;
-        return normalizeStoredTransaction({
-            ...transaction,
-            invoiceId: resolvedInvoiceId,
-        });
+    const invoiceProjection = syncCreditCardInvoices({
+        creditCards: Array.from(creditCardsById.values()),
+        transactionGroups: normalizedGroups,
+        transactions: sortedTransactions,
+        existingInvoices: Array.from(creditCardInvoicesById.values()),
     });
-
-    const normalizedCreditCardInvoices = Array.from(invoiceMetaById.entries())
-        .map(([invoiceId, meta]) => {
-            const existing = existingInvoicesById.get(invoiceId);
-            const totalAmount = roundToCents(invoiceTotalsById.get(invoiceId) ?? 0);
-            const paidAmount = roundToCents(Math.min(totalAmount, Math.max(0, existing?.paidAmount ?? 0)));
-            const creditCard = creditCardsById.get(meta.creditCardId);
-            const status: InvoiceStatus = creditCard
-                ? resolveCreditCardInvoiceStatus({
-                      invoiceCycleKey: meta.cycleKey,
-                      cardClosingDay: creditCard.closingDay,
-                      cardDueDay: creditCard.dueDay,
-                      totalAmount,
-                      paidAmount,
-                  })
-                : paidAmount >= totalAmount && totalAmount > 0
-                  ? "paid"
-                  : "open";
-            const paidAt = status === "paid" ? existing?.paidAt ?? now : null;
-
-            const invoice = normalizeCreditCardInvoice(
-                {
-                    id: invoiceId,
-                    creditCardId: meta.creditCardId,
-                    cycleKey: meta.cycleKey,
-                    closingDate: meta.closingDate,
-                    dueDate: meta.dueDate,
-                    totalAmount,
-                    paidAmount,
-                    status,
-                    paidAt,
-                    createdAt: existing?.createdAt ?? meta.createdAt,
-                    updatedAt: now,
-                },
-                creditCardIds,
-            );
-
-            if (
-                !existing ||
-                existing.totalAmount !== invoice.totalAmount ||
-                existing.paidAmount !== invoice.paidAmount ||
-                existing.status !== invoice.status ||
-                existing.creditCardId !== invoice.creditCardId ||
-                existing.cycleKey !== invoice.cycleKey ||
-                existing.closingDate !== invoice.closingDate ||
-                existing.dueDate !== invoice.dueDate ||
-                existing.paidAt !== invoice.paidAt
-            ) {
-                changed = true;
-            }
-
-            return invoice;
-        })
-        .sort((a, b) => {
-            if (a.dueDate === b.dueDate) {
-                return a.id.localeCompare(b.id);
-            }
-            return a.dueDate.localeCompare(b.dueDate);
-        });
-
-    if (existingInvoicesById.size !== normalizedCreditCardInvoices.length) {
-        changed = true;
-    }
+    const transactionsWithResolvedInvoices = invoiceProjection.transactions;
+    const normalizedCreditCardInvoices = invoiceProjection.creditCardInvoices;
+    changed ||= invoiceProjection.changed;
 
     const transactionIds = new Set(transactionsWithResolvedInvoices.map((item) => item.id));
     const tagIds = new Set(tagsById.keys());

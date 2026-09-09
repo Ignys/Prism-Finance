@@ -8,14 +8,8 @@ import { TransactionHeader } from "./TransactionFormParts";
 import type { TransactionFormTab } from "./TransactionFormTabs";
 import { getTransactionSubmitErrorMessage } from "./transactionSubmitError";
 import { useTransactionDetails } from "./useTransactionDetails";
-import { useTransactionForm } from "./useTransactionForm";
-
-export interface TransactionFormPrefill {
-    initialDate?: string;
-    initialAmount?: number;
-    initialCategoryId?: string;
-    initialDescription?: string;
-}
+import { useTransactionForm, type TransactionFormPrefill } from "./useTransactionForm";
+export type { TransactionFormPrefill } from "./useTransactionForm";
 
 interface TransactionFormProps {
     type?: TransactionType;
@@ -95,7 +89,14 @@ export function TransactionForm({ type, transaction, mode = "default", prefill, 
 
             <div className="mt-3 min-h-0 flex-1">
                 <AnimatedTransactionFormPanel activeTab={activeTab}>
-                    <TransactionFormFields activeTab={activeTab} form={form} transaction={transaction} details={details} disabled={submitting} />
+                    <TransactionFormFields
+                        activeTab={activeTab}
+                        form={form}
+                        transaction={transaction}
+                        details={details}
+                        disabled={submitting || Boolean(pendingDetailsCompletion)}
+                        detailsDisabled={submitting}
+                    />
                 </AnimatedTransactionFormPanel>
             </div>
 
@@ -105,8 +106,8 @@ export function TransactionForm({ type, transaction, mode = "default", prefill, 
                         <>
                             <FooterButton onClick={() => void runAction(form.remove, "close")} disabled={submitting || Boolean(pendingDetailsCompletion)}><Trash2 size={15} /> Excluir</FooterButton>
                             <FooterButton onClick={() => void runAction(form.duplicate, "close")} disabled={submitting || Boolean(pendingDetailsCompletion)}><Copy size={15} /> Duplicar</FooterButton>
-                            <FooterButton onClick={() => void runAction(form.ignore, "close", true)} disabled={submitting}><SquareSlash size={15} /> Ignorar</FooterButton>
-                            <FooterButton onClick={() => void runAction(form.cancelTransaction, "close", true)} disabled={submitting}><CircleX size={15} /> Cancelar transação</FooterButton>
+                            <FooterButton onClick={() => void runAction(form.ignore, "close", true)} disabled={submitting || Boolean(pendingDetailsCompletion)}><SquareSlash size={15} /> Ignorar</FooterButton>
+                            <FooterButton onClick={() => void runAction(form.cancelTransaction, "close", true)} disabled={submitting || Boolean(pendingDetailsCompletion)}><CircleX size={15} /> Cancelar transação</FooterButton>
                         </>
                     ) : null}
                 </div>
@@ -114,7 +115,7 @@ export function TransactionForm({ type, transaction, mode = "default", prefill, 
                 <div className="flex flex-wrap items-center justify-end gap-1.5">
                     <button type="button" onClick={closeModal} disabled={submitting} className="inline-flex min-w-24 items-center justify-center rounded-xl border border-white/[0.12] bg-white/[0.03] px-3 py-2 text-sm font-medium text-white/70 transition-colors hover:border-white/[0.2] hover:text-white disabled:cursor-not-allowed disabled:opacity-60">Cancelar</button>
                     {!form.isEditing ? (
-                        <button type="button" onClick={() => void runAction(form.saveAndContinue, "continue", true)} disabled={submitting} className="inline-flex items-center justify-center rounded-xl border border-emerald-400/25 bg-emerald-500/[0.08] px-3 py-2 text-sm font-semibold text-emerald-100/85 transition-colors hover:border-emerald-400/45 hover:bg-emerald-500/[0.13] disabled:cursor-not-allowed disabled:opacity-60">Salvar e continuar</button>
+                        <button type="button" onClick={() => void runAction(form.saveAndContinue, "continue", true)} disabled={submitting || Boolean(pendingDetailsCompletion)} className="inline-flex items-center justify-center rounded-xl border border-emerald-400/25 bg-emerald-500/[0.08] px-3 py-2 text-sm font-semibold text-emerald-100/85 transition-colors hover:border-emerald-400/45 hover:bg-emerald-500/[0.13] disabled:cursor-not-allowed disabled:opacity-60">Salvar e continuar</button>
                     ) : null}
                     <button type="button" onClick={() => void runAction(form.submit, "close", true)} disabled={submitting} className="inline-flex min-w-28 items-center justify-center rounded-xl border border-emerald-300/35 bg-emerald-400/[0.14] px-3 py-2 text-sm font-semibold text-emerald-50 transition-colors hover:border-emerald-300/55 hover:bg-emerald-400/[0.2] disabled:cursor-not-allowed disabled:opacity-60">
                         {submitting ? "Salvando..." : pendingDetailsCompletion ? "Salvar detalhes" : "Salvar e fechar"}

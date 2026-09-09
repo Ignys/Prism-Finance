@@ -1,4 +1,5 @@
 import { parseInvoicePaymentNote, type Beneficiary, type Category, type CreditCard, type CreditCardInvoice, type LedgerEntry, type StoredTransaction, type Tag, type TransactionGroup, type TransactionTag, type Wallet, type WishItem } from "./financeCore";
+import { excludeRemovedOccurrences } from "./recurrence/excludeRemovedOccurrences";
 
 interface TransactionPruneParams {
     transactionGroups: TransactionGroup[];
@@ -77,7 +78,10 @@ function pruneTransactionsAndRelatedData(params: TransactionPruneParams): Transa
     );
 
     const nextTransactions = params.transactions.filter((transaction) => !removedTransactionIds.has(transaction.id));
-    const nextTransactionGroups = params.transactionGroups.filter((group) => !targetGroupIds.has(group.id));
+    const nextTransactionGroups = excludeRemovedOccurrences(
+        params.transactionGroups.filter((group) => !targetGroupIds.has(group.id)),
+        params.transactions.filter((transaction) => removedTransactionIds.has(transaction.id)), params.transactionGroups,
+    );
 
     return {
         transactionGroups: nextTransactionGroups,
@@ -116,7 +120,8 @@ export function permanentlyDeleteWalletData(params: PermanentlyDeleteWalletParam
         transactions: params.transactions,
         transactionTags: params.transactionTags,
         ledgerEntries: params.ledgerEntries,
-        shouldRemoveGroup: (group) => group.sourceWalletId === params.walletId || group.destinationWalletId === params.walletId,
+        shouldRemoveGroup: (group) => group.sourceWalletId === params.walletId || group.destinationWalletId === params.walletId ||
+            group.recurrenceRule?.sourceWalletId === params.walletId || group.recurrenceRule?.destinationWalletId === params.walletId,
         shouldRemoveTransaction: (transaction) =>
             transaction.sourceWalletId === params.walletId || transaction.destinationWalletId === params.walletId,
     });
@@ -144,7 +149,7 @@ export function permanentlyDeleteCreditCardData(params: PermanentlyDeleteCreditC
         transactions: params.transactions,
         transactionTags: params.transactionTags,
         ledgerEntries: params.ledgerEntries,
-        shouldRemoveGroup: (group) => group.creditCardId === params.creditCardId,
+        shouldRemoveGroup: (group) => group.creditCardId === params.creditCardId || group.recurrenceRule?.creditCardId === params.creditCardId,
         shouldRemoveTransaction: (transaction) =>
             transaction.creditCardId === params.creditCardId ||
             (transaction.paymentForInvoiceId !== null &&

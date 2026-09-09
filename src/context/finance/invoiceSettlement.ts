@@ -14,7 +14,8 @@ import {
     type StoredTransaction,
     type TransactionGroup,
 } from "../financeTypes";
-import { createId, findBeneficiaryByName, findCurrentUserSelfBeneficiary, getTodayDate, roundToCents } from "./helpers";
+import { createId, findBeneficiaryByName, findCurrentUserSelfBeneficiary, roundToCents } from "./helpers";
+import { getLocalTodayDate } from "../../lib/localDate";
 
 interface BuildInvoiceSettlementParams {
     invoiceIds: string[];
@@ -72,6 +73,7 @@ export function buildInvoiceSettlement(params: BuildInvoiceSettlementParams): In
         }
 
         const transactions = params.transactions.filter((transaction) => !removedTransactionIds.has(transaction.id));
+        const removedPaymentGroupIds = new Set(params.transactions.filter((transaction) => removedTransactionIds.has(transaction.id)).map((transaction) => transaction.groupId));
         const retainedGroupIds = new Set(transactions.map((transaction) => transaction.groupId));
         const nowIso = params.nowIso ?? new Date().toISOString();
         const cardIds = new Set(params.invoices.map((invoice) => invoice.creditCardId));
@@ -86,7 +88,7 @@ export function buildInvoiceSettlement(params: BuildInvoiceSettlementParams): In
                       )
                     : invoice,
             ),
-            transactionGroups: params.transactionGroups.filter((group) => retainedGroupIds.has(group.id)),
+            transactionGroups: params.transactionGroups.filter((group) => !removedPaymentGroupIds.has(group.id) || retainedGroupIds.has(group.id)),
             transactions,
             ledgerEntries: params.ledgerEntries.filter(
                 (entry) => !entry.transactionId || !removedTransactionIds.has(entry.transactionId),
@@ -100,7 +102,7 @@ export function buildInvoiceSettlement(params: BuildInvoiceSettlementParams): In
     }
 
     const nowIso = params.nowIso ?? new Date().toISOString();
-    const today = getTodayDate();
+    const today = getLocalTodayDate(new Date(nowIso));
     const beneficiary =
         findCurrentUserSelfBeneficiary(params.beneficiaries, params.userId ?? undefined) ??
         findBeneficiaryByName(params.beneficiaries, DEFAULT_BENEFICIARY_NAME) ??

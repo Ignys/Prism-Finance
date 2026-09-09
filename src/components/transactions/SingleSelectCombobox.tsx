@@ -7,6 +7,7 @@ export interface ComboboxOptionBase {
     id: string;
     label: string;
     searchText: string;
+    disabled?: boolean;
 }
 
 interface SingleSelectComboboxProps<T extends ComboboxOptionBase> {
@@ -15,16 +16,17 @@ interface SingleSelectComboboxProps<T extends ComboboxOptionBase> {
     placeholder: string;
     emptyMessage: string;
     options: T[];
+    filterOption?: (option: T, query: string) => boolean;
     onChange: (value: string) => void;
     renderOptionContent: (option: T) => ReactNode;
     renderSelectedContent?: (option: T) => ReactNode;
     labelClassName?: string;
-    labelContent?: ReactNode;
     hideLabel?: boolean;
     disabled?: boolean;
     disableSearch?: boolean;
     compactTrigger?: boolean;
     triggerClassName?: string;
+    leadingIcon?: ReactNode;
 }
 
 const DEFAULT_LABEL_CLASS = "text-[11px] uppercase tracking-[0.12em] text-white/50";
@@ -35,16 +37,17 @@ export function SingleSelectCombobox<T extends ComboboxOptionBase>({
     placeholder,
     emptyMessage,
     options,
+    filterOption,
     onChange,
     renderOptionContent,
     renderSelectedContent,
     labelClassName = DEFAULT_LABEL_CLASS,
-    labelContent,
     hideLabel = false,
     disabled = false,
     disableSearch = false,
     compactTrigger = false,
     triggerClassName,
+    leadingIcon,
 }: SingleSelectComboboxProps<T>) {
     const [isOpen, setIsOpen] = useState(false);
     const [query, setQuery] = useState("");
@@ -55,13 +58,14 @@ export function SingleSelectCombobox<T extends ComboboxOptionBase>({
 
     const selectedOption = useMemo(() => options.find((option) => option.id === value) ?? null, [options, value]);
     const filteredOptions = useMemo(() => {
+        if (filterOption) return options.filter((option) => filterOption(option, query));
         const normalizedQuery = normalizeComparisonText(query);
         if (!normalizedQuery) {
             return options;
         }
 
         return options.filter((option) => normalizeComparisonText(option.searchText).includes(normalizedQuery));
-    }, [options, query]);
+    }, [filterOption, options, query]);
 
     useEffect(() => {
         if (!isOpen) {
@@ -130,7 +134,7 @@ export function SingleSelectCombobox<T extends ComboboxOptionBase>({
 
     return (
         <div ref={wrapperRef} className={`relative flex flex-col ${hideLabel ? "" : "gap-1.5"}`}>
-            {!hideLabel && (labelContent ? labelContent : <span className={labelClassName}>{label}</span>)}
+            {!hideLabel && <span className={labelClassName}>{label}</span>}
             <button
                 ref={triggerRef}
                 type="button"
@@ -144,8 +148,11 @@ export function SingleSelectCombobox<T extends ComboboxOptionBase>({
                 aria-label={hideLabel ? label : undefined}
                 className={`${resolvedTriggerClassName} ${disabled ? "cursor-not-allowed opacity-60" : "hover:border-white/[0.2]"}`}
             >
-                <div className="min-w-0 flex-1">
-                    {selectedOption ? renderSelectedContent ? renderSelectedContent(selectedOption) : renderOptionContent(selectedOption) : <span className="text-white/40">{placeholder}</span>}
+                <div className="flex min-w-0 flex-1 items-center gap-2">
+                    {leadingIcon}
+                    <div className="min-w-0 flex-1">
+                        {selectedOption ? renderSelectedContent ? renderSelectedContent(selectedOption) : renderOptionContent(selectedOption) : <span className="text-white/40">{placeholder}</span>}
+                    </div>
                 </div>
                 <ChevronsUpDown size={15} className="ml-2 shrink-0 text-white/55" />
             </button>
@@ -171,6 +178,7 @@ export function SingleSelectCombobox<T extends ComboboxOptionBase>({
                                 <button
                                     key={option.id}
                                     type="button"
+                                    disabled={option.disabled}
                                     onClick={() => handleSelect(option.id)}
                                     className={`flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-left text-sm transition-colors ${
                                         selected ? "bg-white/[0.1] text-white" : "text-white/80 hover:bg-white/[0.06]"

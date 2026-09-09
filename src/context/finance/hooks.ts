@@ -1,3 +1,8 @@
+import { monthPeriod } from "./recurrence/period";
+import { projectInvoiceForecasts } from "./invoiceForecasts";
+import { projectOccurrences } from "./recurrence/projectOccurrences";
+import type { OccurrencePeriod } from "./recurrence/types";
+import { toTransactionList } from "./financeCore";
 import { useMemo } from "react";
 import type { FamilySummary, SharedWishlistSnapshot } from "../familyTypes";
 import {
@@ -112,8 +117,11 @@ export function useFinanceCreditCards() {
     return useRequiredContext(FinanceCreditCardsContext, "useFinanceCreditCards");
 }
 
-export function useFinanceCreditCardInvoices() {
-    return useRequiredContext(FinanceCreditCardInvoicesContext, "useFinanceCreditCardInvoices");
+export function useFinanceCreditCardInvoices(period?: OccurrencePeriod) {
+    const invoices = useRequiredContext(FinanceCreditCardInvoicesContext, "useFinanceCreditCardInvoices");
+    const transactions = useFinanceTransactions(period ?? monthPeriod(undefined, 2));
+    const cards = useFinanceCreditCards();
+    return useMemo(() => projectInvoiceForecasts(invoices, transactions, cards), [invoices, transactions, cards]);
 }
 
 export function useFinanceBeneficiaries() {
@@ -148,8 +156,22 @@ export function useFinanceLedgerEntries() {
     return useRequiredContext(FinanceLedgerEntriesContext, "useFinanceLedgerEntries");
 }
 
-export function useFinanceTransactions() {
-    return useRequiredContext(FinanceTransactionsContext, "useFinanceTransactions");
+export function useFinanceTransactions(period?: OccurrencePeriod) {
+    const storedList = useRequiredContext(FinanceTransactionsContext, "useFinanceTransactions");
+    const invoices = useRequiredContext(FinanceCreditCardInvoicesContext, "useFinanceTransactions");
+    const groups = useFinanceTransactionGroups();
+    const stored = useFinanceStoredTransactions();
+    const links = useFinanceTransactionTags();
+    const cards = useFinanceCreditCards();
+    const categories = useFinanceCategories();
+    const beneficiaries = useFinanceBeneficiaries();
+    const tags = useFinanceTags();
+    const { startDate, endDate: resolvedEndDate } = period ?? monthPeriod();
+    return useMemo(() => {
+        const projected = projectOccurrences({ groups, transactions: stored, transactionTags: links, creditCards: cards, creditCardInvoices: invoices, period: { startDate, endDate: resolvedEndDate } });
+        const forecasts = projected.transactions.filter((transaction) => transaction.isProjected);
+        return storedList.concat(toTransactionList(forecasts, groups, categories, beneficiaries, tags, projected.transactionTags));
+    }, [storedList, groups, stored, links, cards, invoices, categories, beneficiaries, tags, startDate, resolvedEndDate]);
 }
 
 export function useFinancePlanning() {
@@ -177,6 +199,7 @@ export function useFinance(): FinanceContextType {
     const wallets = useFinanceWallets();
     const creditCards = useFinanceCreditCards();
     const creditCardInvoices = useFinanceCreditCardInvoices();
+    const canonicalInvoices = useRequiredContext(FinanceCreditCardInvoicesContext, "useFinance");
     const beneficiaries = useFinanceBeneficiaries();
     const categories = useFinanceCategories();
     const tags = useFinanceTags();
@@ -198,7 +221,7 @@ export function useFinance(): FinanceContextType {
         return createFinanceSnapshot(
             wallets,
             creditCards,
-            creditCardInvoices,
+            canonicalInvoices,
             favoriteCreditCardId,
             transactionGroups,
             storedTransactions,
@@ -210,7 +233,7 @@ export function useFinance(): FinanceContextType {
             transactionTags,
             planning,
         );
-    }, [beneficiaries, categories, creditCardInvoices, creditCards, favoriteCreditCardId, ledgerEntries, planning, storedTransactions, tags, transactionGroups, transactionTags, user, wallets, wishItems]);
+    }, [beneficiaries, categories, canonicalInvoices, creditCards, favoriteCreditCardId, ledgerEntries, planning, storedTransactions, tags, transactionGroups, transactionTags, user, wallets, wishItems]);
 
     return useMemo(
         () => ({

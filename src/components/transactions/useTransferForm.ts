@@ -14,6 +14,12 @@ import { extractCurrencyDigits, formatCurrencyFromDigits, parseCurrencyDigitsToN
 
 export interface TransferFormPrefill {
     initialDate?: string;
+    initialAmount?: number;
+    initialSourceWalletId?: string;
+    initialDestinationWalletId?: string | null;
+    initialDescription?: string;
+    initialTagIds?: string[];
+    initialStatus?: TransactionStatus;
 }
 
 interface UseTransferFormOptions {
@@ -48,13 +54,13 @@ export function useTransferForm({ prefill, transaction }: UseTransferFormOptions
         return activeWallets.length > 0 ? activeWallets : wallets;
     }, [transaction?.destinationWalletId, transaction?.inWallet, wallets]);
 
-    const [amountInput, setAmountInputState] = useState(() => (transaction ? formatAmountInputFromValue(transaction.value) : "R$ 0,00"));
-    const [status, setStatus] = useState<TransactionStatus>(transaction?.status ?? "paid");
-    const [sourceWalletId, setSourceWalletId] = useState(() => transaction?.inWallet ?? favoriteWalletId ?? DEFAULT_WALLET_ID);
-    const [destinationWalletId, setDestinationWalletId] = useState<string | null>(transaction?.destinationWalletId ?? null);
+    const [amountInput, setAmountInputState] = useState(() => transaction ? formatAmountInputFromValue(transaction.value) : typeof prefill?.initialAmount === "number" ? formatAmountInputFromValue(prefill.initialAmount) : "R$ 0,00");
+    const [status, setStatus] = useState<TransactionStatus>(transaction?.status ?? prefill?.initialStatus ?? "paid");
+    const [sourceWalletId, setSourceWalletId] = useState(() => transaction?.inWallet ?? prefill?.initialSourceWalletId ?? favoriteWalletId ?? DEFAULT_WALLET_ID);
+    const [destinationWalletId, setDestinationWalletId] = useState<string | null>(transaction?.destinationWalletId ?? prefill?.initialDestinationWalletId ?? null);
     const [date, setDate] = useState(() => transaction?.date ?? resolveInitialDate(prefill?.initialDate));
-    const [description, setDescription] = useState(transaction?.description ?? "");
-    const [selectedTagIds, setSelectedTagIds] = useState<string[]>(transaction?.tagIds ?? []);
+    const [description, setDescription] = useState(transaction?.description ?? prefill?.initialDescription ?? "");
+    const [selectedTagIds, setSelectedTagIds] = useState<string[]>(transaction?.tagIds ?? prefill?.initialTagIds ?? []);
     const [draftTransactionId] = useState(() => createId("tx"));
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
 

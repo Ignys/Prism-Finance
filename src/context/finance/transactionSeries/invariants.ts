@@ -68,9 +68,15 @@ function assertUnrelatedLedgerPreserved(before: FinanceSnapshot, after: FinanceS
 }
 
 function assertNoDuplicateOccurrences(snapshot: FinanceSnapshot): void {
+    const groups = new Map(snapshot.transactionGroups.map((group) => [group.id, group]));
     const occurrenceKeys = new Set<string>();
     snapshot.transactions.forEach((transaction) => {
-        const key = `${transaction.groupId}\u0000${transaction.scheduledDate}`;
+        const group = groups.get(transaction.groupId);
+        // Card installments retain the purchase date; their ordinal identifies them.
+        const recurring = group?.transactionMode === "recurring" && transaction.occurrenceNumber != null;
+        const occurrence = recurring ? transaction.occurrenceNumber : group?.transactionMode === "installment" ? transaction.installmentNumber : transaction.scheduledDate;
+        const seriesId = recurring ? group.recurrenceRule?.seriesId ?? group.id : transaction.groupId;
+        const key = `${seriesId}\u0000${occurrence}`;
         if (occurrenceKeys.has(key)) {
             throw new TransactionSeriesInvariantError(`Existem ocorrencias duplicadas no grupo ${transaction.groupId} em ${transaction.scheduledDate}.`);
         }

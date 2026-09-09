@@ -13,7 +13,7 @@ import {
     type TransactionGroup,
     type Wallet,
 } from "../../financeTypes";
-import { ensureRecurringTransactionsHorizon } from "../recurringTransactions";
+import { projectOccurrences } from "../recurrence/projectOccurrences";
 import { persistTransactionSeriesSnapshotAtomically } from "./atomicPersistence";
 import { updateTransactionSeriesSnapshot } from "./updateTransactionSeriesSnapshot";
 
@@ -79,6 +79,7 @@ function recurringGroup(id: string, title: string, amount: number, day: string):
         installmentCount: null,
         recurrenceRule: {
             frequency: "monthly",
+            end: { type: "never" },
             interval: 1,
             anchorDate: `2026-06-${day}`,
             amount,
@@ -99,6 +100,8 @@ function occurrence(groupId: string, id: string, date: string, amount: number, s
         id,
         groupId,
         installmentNumber: null,
+        occurrenceNumber: Number(date.slice(5, 7)) - 5,
+        commitment: "forecast",
         amount,
         scheduledDate: date,
         status,
@@ -199,11 +202,11 @@ describe("updateTransactionSeriesSnapshot", () => {
         expect(result.snapshot.transactions.filter((transaction) => transaction.status === "paid").map((transaction) => transaction.id)).toEqual(["tx-june", "tx-july"]);
         expect(result.snapshot.ledgerEntries.map((entry) => entry.id)).toEqual(beforeLedgerIds);
         expect(result.snapshot.wallets.map((item) => item.balance)).toEqual(beforeBalances);
-        expect(result.snapshot.transactionGroups).toHaveLength(1);
-        const group = result.snapshot.transactionGroups[0];
+        expect(result.snapshot.transactionGroups).toHaveLength(2);
         result.snapshot.transactions.forEach((transaction) => {
-            expect(resolveTransactionTitle(transaction, group)).toBe("ChatGPT Premium");
-            expect(resolveTransactionCategoryId(transaction, group)).toBe(subscriptionCategory.id);
+            const group = result.snapshot.transactionGroups.find((item) => item.id === transaction.groupId)!;
+            expect(resolveTransactionTitle(transaction, group)).toBe(transaction.status === "paid" ? "ChatGPT Plus" : "ChatGPT Premium");
+            expect(resolveTransactionCategoryId(transaction, group)).toBe(transaction.status === "paid" ? oldCategory.id : subscriptionCategory.id);
         });
     });
 
@@ -224,19 +227,16 @@ describe("updateTransactionSeriesSnapshot", () => {
         expect(result.snapshot.transactions.find((transaction) => transaction.id === "tx-july")?.groupId).toBe(oldGroup.id);
         expect(result.snapshot.transactions.find((transaction) => transaction.id === "tx-august")?.groupId).toBe(newGroup.id);
         expect(result.snapshot.transactions.find((transaction) => transaction.id === "tx-september")?.groupId).toBe(newGroup.id);
-        expect(oldGroup.recurrenceEndDate).toBe("2026-08-09");
+        expect(oldGroup.recurrenceRule?.stopNumber).toBe(2);
         expect(newGroup.recurrenceRule?.anchorDate).toBe("2026-08-10");
         expect(result.snapshot.ledgerEntries).toEqual(before.ledgerEntries.map((entry) => ({ ...entry })));
 
-        let sequence = 0;
-        const hydrated = ensureRecurringTransactionsHorizon({
+        const hydrated = projectOccurrences({
             groups: result.snapshot.transactionGroups,
             transactions: result.snapshot.transactions,
             transactionTags: result.snapshot.transactionTags,
-            tags: result.snapshot.tags,
-            today: "2026-08-01",
-            now: "2026-08-06T12:00:00.000Z",
-            createTransactionId: () => `tx-hydrated-${sequence++}`,
+            creditCards: result.snapshot.creditCards,
+            period: { startDate: "2026-06-01", endDate: "2027-07-31" },
         });
         const keys = hydrated.transactions.map((transaction) => `${transaction.groupId}:${transaction.scheduledDate}`);
         expect(new Set(keys).size).toBe(keys.length);
@@ -338,9 +338,10 @@ describe("updateTransactionSeriesSnapshot", () => {
 
         expect(resolveTransactionSourceWalletId(nextPaid, nextGroup)).toBe(wallet.id);
         expect(nextPaid.invoiceId).toBe(paid.invoiceId);
-        expect(nextPaid.creditCardId).toBe(creditCard.id);
+        expect(nextPaid).toEqual(paid);
+        expect(nextGroup.creditCardId).toBe(creditCard.id);
         expect(nextPending.invoiceId).toBeNull();
         expect(nextPending.creditCardId).toBeNull();
-        expect(nextGroup.creditCardId).toBeNull();
+        expect(result.snapshot.transactionGroups.find((item) => item.id === nextPending.groupId)?.creditCardId).toBeNull();
     });
 });

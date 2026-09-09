@@ -7,7 +7,7 @@ export type StatementInvoiceVisualStatus = CreditCardInvoiceVisualStatus;
 export interface StatementFilterState {
     // Month key (YYYY-MM) used by statement page filters, always based on invoice due date.
     selectedMonth: string;
-    selectedCardId: string;
+    selectedCardIds: string[];
 }
 
 export interface StatementFocusedInvoiceSummary {
@@ -68,12 +68,31 @@ export const STATEMENT_STATUS_LABELS: Record<StatementInvoiceVisualStatus, strin
     paid: "Paga",
 };
 
+// Paleta pensada pelo significado de cada status para o usuario:
+// paga = positivo (verde), vencida = perigo (vermelho), fechada = requer atencao/pagamento (ambar),
+// aberta = em andamento/neutro (azul), futura = ainda nao relevante (cinza).
+export const STATEMENT_STATUS_DOT_CLASS: Record<StatementInvoiceVisualStatus, string> = {
+    paid: "bg-emerald-300",
+    overdue: "bg-red-400",
+    closed: "bg-amber-300",
+    open: "bg-sky-300",
+    future: "bg-zinc-400",
+};
+
 export const STATEMENT_STATUS_BADGE_CLASS: Record<StatementInvoiceVisualStatus, string> = {
-    open: "border-emerald-300/30 bg-emerald-500/10 text-emerald-200",
-    future: "border-violet-300/30 bg-violet-500/10 text-violet-200",
-    closed: "border-sky-300/30 bg-sky-500/10 text-sky-200",
+    paid: "border-emerald-300/30 bg-emerald-500/10 text-emerald-200",
     overdue: "border-red-400/30 bg-red-500/10 text-red-200",
-    paid: "border-zinc-300/30 bg-zinc-500/10 text-zinc-200",
+    closed: "border-amber-300/30 bg-amber-500/10 text-amber-200",
+    open: "border-sky-300/30 bg-sky-500/10 text-sky-200",
+    future: "border-zinc-400/30 bg-zinc-500/10 text-zinc-300",
+};
+
+export const STATEMENT_STATUS_TEXT_CLASS: Record<StatementInvoiceVisualStatus, string> = {
+    paid: "text-emerald-300",
+    overdue: "text-red-400",
+    closed: "text-amber-300",
+    open: "text-sky-300",
+    future: "text-zinc-400",
 };
 
 const monthLabelFormatter = new Intl.DateTimeFormat("pt-BR", {
@@ -89,7 +108,7 @@ const currencyFormatter = new Intl.NumberFormat("pt-BR", {
 
 export const INITIAL_STATEMENT_FILTER_STATE: StatementFilterState = {
     selectedMonth: getCurrentMonthKey(),
-    selectedCardId: "",
+    selectedCardIds: [],
 };
 
 function padMonthPart(value: number): string {
@@ -140,6 +159,69 @@ export function resolveInvoiceVisualStatus(
     referenceDate = new Date(),
 ): StatementInvoiceVisualStatus {
     return getCreditCardInvoiceReadState(invoice, creditCard, referenceDate).visualStatus;
+}
+
+export const STATEMENT_STATUS_SORT_ORDER: Record<StatementInvoiceVisualStatus, number> = {
+    overdue: 0,
+    closed: 1,
+    open: 2,
+    future: 3,
+    paid: 4,
+};
+
+export interface StatementInvoiceActionState {
+    payableInvoice: CreditCardInvoice | null;
+    payableCreditCard: CreditCard | null;
+    payButtonLabel: string;
+    manualActionMode: "close" | "reopen" | null;
+    manualActionInvoices: CreditCardInvoice[];
+    manualActionLabel: string;
+}
+
+// Compartilhado entre o painel de overview e o painel de conteudo da fatura: decide
+// qual fatura pode ser paga e se ha faturas vencidas/pagas para fechar/reabrir manualmente.
+export function resolveInvoiceActionState(invoices: CreditCardInvoice[], cardById: Map<string, CreditCard>): StatementInvoiceActionState {
+    const snapshots = invoices.map((invoice) => {
+        const creditCard = cardById.get(invoice.creditCardId) ?? null;
+        return {
+            invoice,
+            creditCard,
+            openAmount: getInvoiceOpenAmount(invoice),
+            visualStatus: resolveInvoiceVisualStatus(invoice, creditCard),
+        };
+    });
+
+    const payable = snapshots.filter((snapshot): snapshot is (typeof snapshots)[number] & { creditCard: CreditCard } => Boolean(snapshot.creditCard) && snapshot.openAmount > 0);
+    const payableSnapshot =
+        payable.length < 1
+            ? null
+            : [...payable].sort((a, b) => {
+                  const priorityDifference = STATEMENT_STATUS_SORT_ORDER[a.visualStatus] - STATEMENT_STATUS_SORT_ORDER[b.visualStatus];
+                  if (priorityDifference !== 0) {
+                      return priorityDifference;
+                  }
+
+                  if (a.invoice.dueDate === b.invoice.dueDate) {
+                      return a.invoice.id.localeCompare(b.invoice.id);
+                  }
+
+                  return a.invoice.dueDate.localeCompare(b.invoice.dueDate);
+              })[0];
+
+    const closeableSnapshots = snapshots.filter((snapshot) => Boolean(snapshot.creditCard) && snapshot.visualStatus === "overdue" && snapshot.openAmount > 0);
+    const reopenableSnapshots = snapshots.filter((snapshot) => snapshot.visualStatus === "paid");
+    const manualActionMode: "close" | "reopen" | null = closeableSnapshots.length > 0 ? "close" : reopenableSnapshots.length > 0 ? "reopen" : null;
+    const manualActionInvoices =
+        manualActionMode === "close" ? closeableSnapshots.map((snapshot) => snapshot.invoice) : manualActionMode === "reopen" ? reopenableSnapshots.map((snapshot) => snapshot.invoice) : [];
+
+    return {
+        payableInvoice: payableSnapshot?.invoice ?? null,
+        payableCreditCard: payableSnapshot?.creditCard ?? null,
+        payButtonLabel: payableSnapshot?.visualStatus === "open" || payableSnapshot?.visualStatus === "future" ? "Pagar adiantado" : "Pagar fatura",
+        manualActionMode,
+        manualActionInvoices,
+        manualActionLabel: manualActionMode === "close" ? "Fechar vencida" : manualActionMode === "reopen" ? "Reabrir paga" : "",
+    };
 }
 
 export function compareInvoicesByDueDate(a: CreditCardInvoice, b: CreditCardInvoice): number {
@@ -194,7 +276,7 @@ export function resolveDefaultStatementFilters(params: {
 
     if (!selectedCard) {
         return {
-            selectedCardId: "",
+            selectedCardIds: [],
             selectedMonth: fallbackMonth,
         };
     }
@@ -202,7 +284,7 @@ export function resolveDefaultStatementFilters(params: {
     const cardInvoices = creditCardInvoices.filter((invoice) => invoice.creditCardId === selectedCard.id);
 
     return {
-        selectedCardId: selectedCard.id,
+        selectedCardIds: [selectedCard.id],
         selectedMonth: resolveDefaultStatementMonth(selectedCard, cardInvoices, fallbackMonth),
     };
 }

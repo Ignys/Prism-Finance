@@ -2,6 +2,12 @@ import { describe, expect, it } from "vitest";
 import { buildInstallmentSchedule, resolveNewTransactionMode } from "./installmentTransactions";
 
 describe("buildInstallmentSchedule", () => {
+    it("rejects quantities that would create zero-value installments", () => {
+        const options = { totalAmount: 0.01, installmentCount: 2, startDate: "2026-01-05", initialStatus: "pending" as const, advanceDatesMonthly: false };
+        expect(() => buildInstallmentSchedule(options)).toThrow(/0,01/);
+        expect(() => buildInstallmentSchedule({ ...options, totalAmount: 100, installmentCount: 2.5 })).toThrow(/inteira/);
+        expect(buildInstallmentSchedule({ ...options, totalAmount: 0.02 }).map((item) => item.amount)).toEqual([0.01, 0.01]);
+    });
     it("divide o total em centavos e agenda parcelas mensais de carteira", () => {
         const schedule = buildInstallmentSchedule({
             totalAmount: 100,

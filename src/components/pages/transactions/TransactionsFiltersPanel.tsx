@@ -1,130 +1,58 @@
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowDownRight, ArrowRightLeft, ArrowUpRight, FunnelPlus, Plus, Search, X } from "lucide-react";
-import type { TransactionStatus, Wallet } from "../../../context/FinanceContext";
-import { StatementMonthSelector } from "../../common/StatementMonthSelector";
-import { INPUT_CLASS, SELECT_CLASS, STATUS_LABELS, STATUS_ORDER, type SelectOption, type TagOption, type TransactionsTabKey } from "./transactionsPageShared";
+import { FunnelPlus, Search, X } from "lucide-react";
+import type { TransactionStatus } from "../../../context/FinanceContext";
+import { INPUT_CLASS, SELECT_CLASS, STATUS_LABELS, STATUS_ORDER, type SelectOption, type TagOption } from "./transactionsPageShared";
 
 interface TransactionsFiltersPanelProps {
-    activeTab: TransactionsTabKey;
-    selectedMonth: string;
     showAdvancedFilters: boolean;
     searchQuery: string;
     selectedCategoryKey: string;
-    selectedWalletId: string;
     selectedBeneficiary: string;
     selectedStatus: "all" | TransactionStatus;
     selectedTagIds: string[];
-    dateFrom: string;
-    dateTo: string;
     minAmount: string;
     maxAmount: string;
     categoryOptions: SelectOption[];
     beneficiaryOptions: string[];
     tagOptions: TagOption[];
-    wallets: Wallet[];
     hasAdvancedFilters: boolean;
-    onTabChange: (tab: TransactionsTabKey) => void;
     onToggleAdvancedFilters: () => void;
     onClearAdvancedFilters: () => void;
-    onMonthChange: (value: string) => void;
     onSearchQueryChange: (value: string) => void;
     onCategoryChange: (value: string) => void;
-    onWalletChange: (value: string) => void;
     onBeneficiaryChange: (value: string) => void;
     onStatusChange: (value: "all" | TransactionStatus) => void;
-    onDateFromChange: (value: string) => void;
-    onDateToChange: (value: string) => void;
     onMinAmountChange: (value: string) => void;
     onMaxAmountChange: (value: string) => void;
     onTagToggle: (tagId: string) => void;
-    onCreateFromActiveTab: () => void;
 }
 
 export function TransactionsFiltersPanel({
-    activeTab,
-    selectedMonth,
     showAdvancedFilters,
     searchQuery,
     selectedCategoryKey,
-    selectedWalletId,
     selectedBeneficiary,
     selectedStatus,
     selectedTagIds,
-    dateFrom,
-    dateTo,
     minAmount,
     maxAmount,
     categoryOptions,
     beneficiaryOptions,
     tagOptions,
-    wallets,
     hasAdvancedFilters,
-    onTabChange,
     onToggleAdvancedFilters,
     onClearAdvancedFilters,
-    onMonthChange,
     onSearchQueryChange,
     onCategoryChange,
-    onWalletChange,
     onBeneficiaryChange,
     onStatusChange,
-    onDateFromChange,
-    onDateToChange,
     onMinAmountChange,
     onMaxAmountChange,
     onTagToggle,
-    onCreateFromActiveTab,
 }: TransactionsFiltersPanelProps) {
-    const createLabel = activeTab === "income" ? "Adicionar receita" : activeTab === "spending" ? "Adicionar despesa" : "Adicionar transferencia";
-    const tabs = [
-        { key: "income" as const, label: "Receitas", icon: ArrowUpRight },
-        { key: "spending" as const, label: "Despesas", icon: ArrowDownRight },
-        { key: "transfer" as const, label: "Transferências", icon: ArrowRightLeft },
-    ];
-
     return (
         <section className="">
             <div className="relative flex flex-col gap-1">
-                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                    <div className="flex flex-wrap gap-2 overflow-x-auto pb-1">
-                        {tabs.map((tab) => {
-                            const isActive = activeTab === tab.key;
-                            const Icon = tab.icon;
-                            const iconContainerClass =
-                                tab.key === "income"
-                                    ? isActive
-                                        ? "border-emerald-300/45 bg-emerald-500/18 text-emerald-100"
-                                        : "border-emerald-400/20 bg-emerald-500/10 text-emerald-300/85 group-hover:border-emerald-300/35 group-hover:bg-emerald-500/16 group-hover:text-emerald-200"
-                                    : tab.key === "spending"
-                                      ? isActive
-                                          ? "border-red-300/45 bg-red-500/18 text-red-100"
-                                          : "border-red-400/20 bg-red-500/10 text-red-300/85 group-hover:border-red-300/35 group-hover:bg-red-500/16 group-hover:text-red-200"
-                                      : isActive
-                                        ? "border-neutral-300/45 text-neutral-50"
-                                        : "border-white/[0.14] text-white/80 group-hover:border-white/[0.24] group-hover:text-white";
-
-                            return (
-                                <button
-                                    type="button"
-                                    key={tab.key}
-                                    onClick={() => onTabChange(tab.key)}
-                                    aria-pressed={isActive}
-                                    className={`group inline-flex shrink-0 items-center gap-2 rounded-xl border py-2 pl-2 pr-3 text-left transition-all duration-200 ${
-                                        isActive
-                                            ? "border-neutral-300/45 bg-neutral-500/15 text-neutral-50"
-                                            : "border-white/[0.09] bg-white/[0.02] text-white/80 hover:-translate-y-0.5 hover:border-white/[0.22] hover:bg-white/[0.06] hover:text-white"
-                                    }`}
-                                >
-                                    <span className={`inline-flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${iconContainerClass}`}>
-                                        <Icon size={18} strokeWidth={2.2} />
-                                    </span>
-                                    <span className="text-xs md:text-sm">{tab.label}</span>
-                                </button>
-                            );
-                        })}
-                    </div>
-                    <StatementMonthSelector selectedMonth={selectedMonth} onMonthChange={onMonthChange} ariaLabel="Selecionar mês e ano das transações" />
-                </div>
                 <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
                     <div className="w-full min-w-0">
                         <div className="relative w-full">
@@ -157,14 +85,6 @@ export function TransactionsFiltersPanel({
                                 Limpar filtros
                             </button>
                         )}
-                        <button
-                            type="button"
-                            onClick={onCreateFromActiveTab}
-                            className="inline-flex flex-1 cursor-pointer items-center justify-center gap-2 truncate rounded-full border border-emerald-300/30 bg-emerald-500/15 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.05em] text-emerald-100 transition-all hover:border-emerald-300/45 hover:bg-emerald-500/20 sm:flex-none"
-                        >
-                            <Plus size={14} />
-                            {createLabel}
-                        </button>
                     </div>
                 </div>
 
@@ -185,18 +105,6 @@ export function TransactionsFiltersPanel({
                                         {categoryOptions.map((option) => (
                                             <option key={option.value} value={option.value}>
                                                 {option.label}
-                                            </option>
-                                        ))}
-                                    </select>
-                                </label>
-
-                                <label>
-                                    <span className="mb-1 block text-[11px] uppercase tracking-[0.12em] text-white/45">Carteira</span>
-                                    <select value={selectedWalletId} onChange={(event) => onWalletChange(event.target.value)} className={SELECT_CLASS}>
-                                        <option value="all">Todas</option>
-                                        {wallets.map((wallet) => (
-                                            <option key={wallet.id} value={wallet.id}>
-                                                {wallet.name}
                                             </option>
                                         ))}
                                     </select>
@@ -224,16 +132,6 @@ export function TransactionsFiltersPanel({
                                             </option>
                                         ))}
                                     </select>
-                                </label>
-
-                                <label>
-                                    <span className="mb-1 block text-[11px] uppercase tracking-[0.12em] text-white/45">Data inicial</span>
-                                    <input type="date" value={dateFrom} onChange={(event) => onDateFromChange(event.target.value)} className={INPUT_CLASS} />
-                                </label>
-
-                                <label>
-                                    <span className="mb-1 block text-[11px] uppercase tracking-[0.12em] text-white/45">Data final</span>
-                                    <input type="date" value={dateTo} onChange={(event) => onDateToChange(event.target.value)} className={INPUT_CLASS} />
                                 </label>
 
                                 <label>

@@ -27,6 +27,7 @@ const ACTION_ICONS: Record<TransactionContextActionId, typeof Eye> = {
     select: ListChecks,
     toggle_status: CircleCheckBig,
     pay_today: CheckCheck,
+    post_card: CheckCheck,
     ignore: SquareSlash,
     duplicate: Copy,
     delete_single: Trash2,

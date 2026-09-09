@@ -1,11 +1,14 @@
 import type { Transaction } from "../../context/FinanceContext";
 import { useFinanceActions } from "../../context/FinanceContext";
-import { getTodayDate } from "../../context/finance/helpers";
 import { useModal } from "../../context/ModalContext";
 import { ConfirmActionModal } from "../modal/ConfirmActionModal";
 import { EditTransaction } from "../modal/EditTransaction";
+import { AddCardSpending } from "../modal/AddCardSpending";
+import { AddTransactionModal } from "../modal/AddTransaction";
+import { AddTransferModal } from "../modal/AddTransferModal";
 import { buildDeleteTransactionImpactPreview, useDeleteTransactionImpactData } from "./deleteTransactionImpact";
-import { buildDuplicateTransactionDraft, type TransactionContextAction } from "./transactionContextActions";
+import type { TransactionContextAction } from "./transactionContextActions";
+import { buildDuplicateTransactionPrefill, buildDuplicateTransferPrefill } from "./duplicateTransactionPrefill";
 
 function getTransactionDisplayLabel(transaction: Transaction): string {
     return transaction.description.trim() || transaction.category.label;
@@ -31,11 +34,11 @@ function getDeleteDescription(transaction: Transaction, action: TransactionConte
     }
 
     if (action.scope === "all") {
-        return `Essa ação remove toda a série de "${label}" em definitivo.`;
+        return `Essa ação encerra a série de "${label}" e remove as ocorrências futuras. O histórico pago ou consolidado é preservado.`;
     }
 
     if (action.scope === "this_and_next") {
-        return `Essa ação remove "${label}" e as próximas ocorrências da série.`;
+        return `Essa ação encerra "${label}" a partir desta ocorrência. O histórico pago ou consolidado é preservado.`;
     }
 
     return `Essa ação remove "${label}" em definitivo.`;
@@ -45,7 +48,7 @@ function getStatusDescription(transaction: Transaction, action: TransactionConte
     const label = getTransactionDisplayLabel(transaction);
 
     if (action.id === "pay_today") {
-        return `Essa ação marca "${label}" como paga e move a data da transação para hoje.`;
+        return `Registra hoje o ${transaction.type === "income" ? "recebimento" : "pagamento"} de "${label}", preservando a data prevista.`;
     }
 
     if (action.nextStatus === "skipped") {
@@ -60,7 +63,7 @@ function getStatusDescription(transaction: Transaction, action: TransactionConte
 }
 
 export function useTransactionContextActionHandler() {
-    const { addTransaction, deleteTransactionWithScope, setTransactionStatus, updateTransaction } = useFinanceActions();
+    const { deleteTransactionWithScope, setTransactionStatus, markTransactionAsPaid, updateTransaction } = useFinanceActions();
     const { openModal } = useModal();
     const deleteImpactData = useDeleteTransactionImpactData();
 
@@ -71,29 +74,31 @@ export function useTransactionContextActionHandler() {
         }
 
         if (action.id === "duplicate") {
-            void addTransaction(buildDuplicateTransactionDraft(transaction));
+            if (transaction.paymentMethod === "credit_card") {
+                openModal(<AddCardSpending prefill={{ initialCreditCardId: transaction.creditCardId ?? undefined, initialValues: transaction }} />);
+                return;
+            }
+            if (transaction.type === "transfer") {
+                openModal(<AddTransferModal prefill={buildDuplicateTransferPrefill(transaction)} />);
+                return;
+            }
+            openModal(<AddTransactionModal type={transaction.type} prefill={buildDuplicateTransactionPrefill(transaction)} />);
+            return;
+        }
+
+        if (action.id === "post_card") {
+            openModal(<ConfirmActionModal title="Confirmar cobrança?" description="O valor passará a compor a fatura e o limite utilizado do cartão." confirmLabel="Confirmar cobrança" tone="success" onConfirm={() => updateTransaction({ transaction, draft: { commitment: "posted" }, scope: "single" })} />);
             return;
         }
 
         if (action.id === "pay_today") {
-            const today = getTodayDate();
             openModal(
                 <ConfirmActionModal
                     title={`${action.label}?`}
                     description={getStatusDescription(transaction, action)}
                     confirmLabel={action.label}
                     tone="success"
-                    onConfirm={() =>
-                        updateTransaction({
-                            transaction,
-                            draft: {
-                                ...buildDuplicateTransactionDraft(transaction),
-                                date: today,
-                                scheduledDate: today,
-                                status: "paid",
-                            },
-                        })
-                    }
+                    onConfirm={() => markTransactionAsPaid(transaction)}
                 />,
             );
             return;

@@ -47,9 +47,10 @@ interface TransactionFormFieldsProps {
     transaction?: Transaction | null;
     details: TransactionDetailsController;
     disabled: boolean;
+    detailsDisabled?: boolean;
 }
 
-export function TransactionFormFields({ activeTab, form, transaction, details, disabled }: TransactionFormFieldsProps) {
+export function TransactionFormFields({ activeTab, form, transaction, details, disabled, detailsDisabled = disabled }: TransactionFormFieldsProps) {
     const transactions = useFinanceTransactions();
     const walletOptions = useMemo<WalletOption[]>(() => form.wallets.map((wallet) => ({ id: wallet.id, label: wallet.name, searchText: wallet.name, wallet })), [form.wallets]);
     const categoryOptions = useMemo<CategoryOption[]>(() => {
@@ -86,10 +87,10 @@ export function TransactionFormFields({ activeTab, form, transaction, details, d
             <section className="flex flex-col gap-3">
                 <div className="grid gap-3 md:grid-cols-2">
                     <MultiSelectCombobox hideLabel leadingIcon={<TransactionFieldIcon icon={Tags} />} triggerClassName={FIELD_ICON_TRIGGER_CLASS} label="Tags" values={form.selectedTagIds} placeholder="Nenhuma tag selecionada" emptyMessage="Nenhuma tag cadastrada." options={tagOptions} onChange={form.setSelectedTagIds} renderOptionContent={(option) => <TagOptionContent option={option} />} />
-                    <TransactionModeField mode={form.transactionMode} installmentCountInput={form.installmentCountInput} onModeChange={form.setTransactionMode} onInstallmentCountChange={form.setInstallmentCountInput} disabled={form.isInvoicePaymentEdit || form.isTransfer || form.isEditing || disabled} />
+                    <TransactionModeField recurrenceCountInput={form.recurrenceCountInput} onRecurrenceCountChange={form.setRecurrenceCountInput} mode={form.transactionMode} installmentCountInput={form.installmentCountInput} onModeChange={form.setTransactionMode} onInstallmentCountChange={form.setInstallmentCountInput} disabled={form.isInvoicePaymentEdit || form.isTransfer || disabled} />
                 </div>
                 <div className="h-px bg-white/[0.06]" />
-                <TransactionDetailsField details={details} disabled={disabled} />
+                <TransactionDetailsField details={details} disabled={detailsDisabled} />
             </section>
         );
     }

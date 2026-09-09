@@ -1,6 +1,7 @@
 import type { TransactionAttachment, TransactionDetails } from "../../types/transactionDetails";
 import { getSupabaseClient } from "../supabaseClient";
 import { drainAttachmentDeletionQueue } from "./attachmentCleanupService";
+import { createTransactionAttachmentId } from "./transactionAttachmentIdentity";
 
 const ATTACHMENTS_BUCKET = "transaction-attachments";
 const DETAILS_TABLE = "transaction_details";
@@ -26,10 +27,6 @@ interface SaveTransactionDetailsParams {
     annotation: string;
     files: File[];
     attachmentsToRemove: TransactionAttachment[];
-}
-
-function createAttachmentId(): string {
-    return typeof crypto.randomUUID === "function" ? crypto.randomUUID() : `attachment-${Date.now()}-${Math.floor(Math.random() * 1_000_000)}`;
 }
 
 function sanitizeFileName(fileName: string): string {
@@ -92,12 +89,12 @@ export async function loadTransactionDetails(userId: string, transactionId: stri
 
 async function uploadAttachment(userId: string, transactionId: string, file: File): Promise<TransactionAttachment> {
     const client = getSupabaseClient();
-    const attachmentId = createAttachmentId();
+    const attachmentId = await createTransactionAttachmentId(transactionId, file);
     const storagePath = `${userId}/${transactionId}/${attachmentId}-${sanitizeFileName(file.name)}`;
     const uploadResult = await client.storage.from(ATTACHMENTS_BUCKET).upload(storagePath, file, {
         cacheControl: "3600",
         contentType: file.type || undefined,
-        upsert: false,
+        upsert: true,
     });
 
     if (uploadResult.error) {
@@ -115,10 +112,11 @@ async function uploadAttachment(userId: string, transactionId: string, file: Fil
         size_bytes: file.size,
         created_at: createdAt,
     };
-    const metadataResult = await client.from(ATTACHMENTS_TABLE).insert(row);
+    const metadataResult = await client.from(ATTACHMENTS_TABLE).upsert(row, { onConflict: "user_id,id" });
 
     if (metadataResult.error) {
-        await client.storage.from(ATTACHMENTS_BUCKET).remove([storagePath]);
+        // Keep the deterministically named object so retrying can finish the
+        // metadata write without uploading a duplicate attachment.
         throw metadataResult.error;
     }
 

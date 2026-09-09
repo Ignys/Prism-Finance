@@ -130,7 +130,9 @@ export function buildDeleteTransactionImpactPreview(params: {
     const targetTransactions = buildTargetTransactions(transaction, normalizeScope(scope), storedTransactions, transactionGroups);
     const walletsById = new Map(wallets.map((wallet) => [wallet.id, wallet]));
     const groupsById = new Map(transactionGroups.map((group) => [group.id, group]));
-    const paidTransactions = targetTransactions.filter((item) => item.status === "paid");
+    // Series deletion preserves paid history; only an explicit individual
+    // deletion can reverse a settled wallet movement.
+    const paidTransactions = normalizeScope(scope) === "single" ? targetTransactions.filter((item) => item.status === "paid") : [];
     const balanceDelta = roundToCents(
         paidTransactions.reduce((sum, item) => sum + resolveWalletImpactDelta(item, groupsById.get(item.groupId) ?? null, walletsById), 0),
     );

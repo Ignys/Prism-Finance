@@ -1,5 +1,5 @@
-import type { Beneficiary, Category, TransactionDraft, TransactionGroup, Wallet } from "../financeTypes";
-import { DEFAULT_BENEFICIARY_ID, DEFAULT_WALLET_ID, SYSTEM_EXPENSE_CARD_INVOICE_CATEGORY_ID } from "../financeTypes";
+import type { Beneficiary, Category, TransactionDraft, TransactionGroup, Wallet } from "./domainTypes";
+import { DEFAULT_BENEFICIARY_ID, DEFAULT_WALLET_ID, SYSTEM_EXPENSE_CARD_INVOICE_CATEGORY_ID } from "./domainConstants";
 import { getLocalTodayDate } from "../../lib/localDate";
 
 export function roundToCents(value: number): number {

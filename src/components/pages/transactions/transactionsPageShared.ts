@@ -5,6 +5,7 @@ export type SortField = "date" | "value" | "status" | "category" | "beneficiary"
 export type SortDirection = "asc" | "desc";
 export type SortMode = `${SortField}-${SortDirection}`;
 export type TransactionsTabKey = "income" | "spending" | "transfer";
+export type TransactionsDateMode = "month" | "period";
 
 export interface SelectOption {
     value: string;
@@ -34,11 +35,12 @@ export interface TransactionsSummary {
 
 export interface TransactionsFilterState {
     selectedMonth: string;
+    dateMode: TransactionsDateMode;
     sortMode: SortMode;
     showAdvancedFilters: boolean;
     searchQuery: string;
     selectedCategoryKey: string;
-    selectedWalletId: string;
+    selectedWalletIds: string[];
     selectedBeneficiary: string;
     selectedStatus: "all" | TransactionStatus;
     selectedTagIds: string[];
@@ -112,11 +114,12 @@ export function formatMonthLabel(monthKey: string): string {
 
 export const INITIAL_FILTER_STATE: TransactionsFilterState = {
     selectedMonth: getCurrentMonthKey(),
+    dateMode: "month",
     sortMode: "date-desc",
     showAdvancedFilters: false,
     searchQuery: "",
     selectedCategoryKey: "all",
-    selectedWalletId: "all",
+    selectedWalletIds: [],
     selectedBeneficiary: "all",
     selectedStatus: "all",
     selectedTagIds: [],
@@ -125,6 +128,21 @@ export const INITIAL_FILTER_STATE: TransactionsFilterState = {
     minAmount: "",
     maxAmount: "",
 };
+
+export function shiftMonth(monthKey: string, offset: number): string {
+    const match = /^(\d{4})-(\d{2})$/.exec(monthKey.trim());
+    if (!match) {
+        return getCurrentMonthKey();
+    }
+
+    const year = Number(match[1]);
+    const month = Number(match[2]);
+    if (!Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12) {
+        return getCurrentMonthKey();
+    }
+
+    return getCurrentMonthKey(new Date(year, month - 1 + offset, 1));
+}
 
 export const currencyFormatter = new Intl.NumberFormat("pt-BR", {
     style: "currency",
@@ -135,12 +153,9 @@ export const currencyFormatter = new Intl.NumberFormat("pt-BR", {
 export function hasActiveAdvancedFilters(filters: TransactionsFilterState): boolean {
     return (
         filters.selectedCategoryKey !== "all" ||
-        filters.selectedWalletId !== "all" ||
         filters.selectedBeneficiary !== "all" ||
         filters.selectedStatus !== "all" ||
         filters.selectedTagIds.length > 0 ||
-        Boolean(filters.dateFrom) ||
-        Boolean(filters.dateTo) ||
         Boolean(filters.minAmount.trim()) ||
         Boolean(filters.maxAmount.trim())
     );

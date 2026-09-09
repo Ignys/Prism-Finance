@@ -37,10 +37,24 @@ export function buildInstallmentSchedule({
     ignoredInstallmentsCount = 0,
     advanceDatesMonthly,
 }: BuildInstallmentScheduleOptions): InstallmentScheduleItem[] {
+    if (!Number.isInteger(installmentCount) || installmentCount < 2) throw new Error("Informe uma quantidade inteira de pelo menos duas parcelas.");
+    if (!Number.isFinite(totalAmount) || Math.round(Math.abs(totalAmount) * 100) < installmentCount) {
+        throw new Error("Cada parcela deve ter valor de pelo menos R$ 0,01.");
+    }
     return splitAmountAcrossInstallments(totalAmount, installmentCount).map((amount, index) => ({
         installmentNumber: index + 1,
         amount,
         scheduledDate: advanceDatesMonthly ? addMonthsToLocalDate(startDate, index) : startDate,
         status: index < ignoredInstallmentsCount ? "skipped" : index === ignoredInstallmentsCount ? initialStatus : "pending",
     }));
+}
+
+export function normalizeIgnoredInstallmentsCount(value: unknown, installmentCount: number | null): number {
+    if (!installmentCount || installmentCount < 2) {
+        return 0;
+    }
+
+    const parsedValue = Number(value);
+    const safeValue = Number.isFinite(parsedValue) ? Math.floor(parsedValue) : 0;
+    return Math.max(0, Math.min(installmentCount - 1, safeValue));
 }

@@ -28,6 +28,7 @@ export function ConfirmActionModal({
 }: ConfirmActionModalProps) {
     const { closeModal } = useModal();
     const [submitting, setSubmitting] = useState(false);
+    const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
     const handleConfirm = async () => {
         if (submitting) {
@@ -35,12 +36,14 @@ export function ConfirmActionModal({
         }
 
         setSubmitting(true);
+        setErrorMessage(null);
 
         try {
             await onConfirm();
             closeModal();
         } catch (error) {
             console.error("Failed to confirm modal action:", error);
+            setErrorMessage(error instanceof Error ? error.message : "Não foi possível concluir a ação. Tente novamente.");
             setSubmitting(false);
         }
     };
@@ -63,6 +66,7 @@ export function ConfirmActionModal({
                     ) : null}
                 </div>
 
+                {errorMessage ? <p role="alert" className="mt-3 text-sm text-red-200">{errorMessage}</p> : null}
                 <div className="mt-5 flex justify-end gap-2">
                     <button
                         type="button"

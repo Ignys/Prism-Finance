@@ -10,7 +10,8 @@ interface TransactionModeOption extends ComboboxOptionBase {
 const TRANSACTION_MODE_OPTIONS: TransactionModeOption[] = [
     { id: "single", label: "Única", searchText: "unica avulsa single", icon: ReceiptText },
     { id: "installment", label: "Parcelada", searchText: "parcelada parcelas installment", icon: CalendarRange },
-    { id: "recurring", label: "Fixa mensal", searchText: "fixa mensal recorrente recurring", icon: Repeat },
+    { id: "fixed", label: "Fixa mensal", searchText: "fixa mensal", icon: Repeat },
+    { id: "recurring", label: "Recorrente", searchText: "recorrente quantidade meses", icon: Repeat },
 ];
 
 interface TransactionModeFieldProps {
@@ -18,6 +19,9 @@ interface TransactionModeFieldProps {
     installmentCountInput: string;
     onModeChange: (mode: TransactionMode) => void;
     onInstallmentCountChange: (value: string) => void;
+    recurrenceCountInput: string;
+    onRecurrenceCountChange: (value: string) => void;
+    hideInstallmentCount?: boolean;
     disabled?: boolean;
 }
 
@@ -39,6 +43,9 @@ export function TransactionModeField({
     installmentCountInput,
     onModeChange,
     onInstallmentCountChange,
+    recurrenceCountInput,
+    onRecurrenceCountChange,
+    hideInstallmentCount = false,
     disabled = false,
 }: TransactionModeFieldProps) {
     const normalizeInstallmentCount = () => {
@@ -51,12 +58,17 @@ export function TransactionModeField({
             <SingleSelectCombobox
                 disableSearch
                 label="Tipo"
-                value={mode}
+                value={mode === "recurring" && !recurrenceCountInput ? "fixed" : mode}
                 placeholder="Selecione um modo"
                 emptyMessage="Nenhum modo encontrado."
                 options={TRANSACTION_MODE_OPTIONS}
                 onChange={(value) => {
-                    if (value === "installment" || value === "recurring" || value === "single") {
+                    if (value === "fixed" || value === "recurring") {
+                        onRecurrenceCountChange(value === "fixed" ? "" : recurrenceCountInput || "6");
+                        onModeChange("recurring");
+                        return;
+                    }
+                    if (value === "installment" || value === "single") {
                         onModeChange(value);
                     }
                 }}
@@ -65,7 +77,14 @@ export function TransactionModeField({
                 disabled={disabled}
             />
 
-            {mode === "installment" && (
+            {mode === "recurring" && recurrenceCountInput !== "" && (
+                <label className="flex flex-col gap-1.5 rounded-xl border border-dashed border-white/[0.1] bg-black/20 p-3">
+                    <span className={FIELD_LABEL_CLASS}>Quantidade de meses</span>
+                    <input className={FIELD_INPUT_CLASS} type="number" min={1} step={1} value={recurrenceCountInput} onChange={(event) => onRecurrenceCountChange(event.target.value || "0")} disabled={disabled} />
+                    <span className="text-xs text-white/45">O valor inteiro se repete em cada mês.</span>
+                </label>
+            )}
+            {mode === "installment" && !hideInstallmentCount && (
                 <label className="flex flex-col gap-1.5 rounded-xl border border-dashed border-white/[0.1] bg-black/20 p-3">
                     <span className={FIELD_LABEL_CLASS}>Quantidade de parcelas</span>
                     <input

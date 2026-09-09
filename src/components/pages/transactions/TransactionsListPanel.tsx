@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState, type MouseEvent } from "react";
 import { ArrowDown, ArrowUp, Circle, CircleSlash, Repeat2 } from "lucide-react";
 import { type Beneficiary, type Transaction, type Wallet, useFinanceActions, useFinanceBeneficiaries, useFinanceSession, useFinanceTransactionGroups } from "../../../context/FinanceContext";
-import { getTodayDate } from "../../../context/finance/helpers";
 import { useModal } from "../../../context/ModalContext";
 import { getCategoryIconComponent } from "../../../lib/categoryIcons";
 import { useLocalPreferenceSection } from "../../../lib/localPreferences";
@@ -13,7 +12,7 @@ import { BulkTransactionEditModal } from "../../modal/BulkTransactionEditModal";
 import { ConfirmActionModal } from "../../modal/ConfirmActionModal";
 import { BulkHeaderCheckbox, BulkRowCheckbox, FloatingTransactionBulkFooter } from "../../transactions/TransactionBulkSelectionControls";
 import { TransactionContextMenu, type TransactionContextMenuState } from "../../transactions/TransactionContextMenu";
-import { buildDuplicateTransactionDraft, buildTransactionContextActions, type TransactionContextAction } from "../../transactions/transactionContextActions";
+import { buildTransactionContextActions, type TransactionContextAction } from "../../transactions/transactionContextActions";
 import { formatCurrencyBRL, formatTransactionDate, getTransactionTypeMeta, resolveTransactionWallet } from "../../transactions/transactionView";
 import { isTransactionEligibleForBulkEdit, useTransactionBulkSelection } from "../../transactions/useTransactionBulkSelection";
 import {
@@ -203,7 +202,7 @@ function TransactionsTable({ tabs, activeTab, wallets, beneficiariesById, transa
     const [contextMenu, setContextMenu] = useState<TransactionContextMenuState | null>(null);
     const { user } = useFinanceSession();
     const { openModal } = useModal();
-    const { updateTransaction, updateTransactionsBulk } = useFinanceActions();
+    const { updateTransactionsBulk } = useFinanceActions();
     const bulkSelection = useTransactionBulkSelection(transactions);
     const [selectionMode, setSelectionMode] = useState(false);
     const [viewPreferences, setViewPreferences] = useLocalPreferenceSection(
@@ -316,22 +315,14 @@ function TransactionsTable({ tabs, activeTab, wallets, beneficiariesById, transa
         openModal(
             <ConfirmActionModal
                 title="Pagar todas hoje?"
-                description={`Essa acao marca ${selectedTransactionsLabel} como pagas, move a data delas para hoje e atualiza os saldos.`}
+                description={`Registra hoje o pagamento ou recebimento de ${selectedTransactionsLabel}, preservando as datas previstas e atualizando os saldos.`}
                 confirmLabel="Pagar todas hoje"
                 tone="success"
                 onConfirm={async () => {
-                    const today = getTodayDate();
-                    for (const transaction of selectedTransactions) {
-                        await updateTransaction({
-                            transaction,
-                            draft: {
-                                ...buildDuplicateTransactionDraft(transaction),
-                                date: today,
-                                scheduledDate: today,
-                                status: "paid",
-                            },
-                        });
-                    }
+                    await updateTransactionsBulk({
+                        transactionIds: selectedTransactions.filter((transaction) => transaction.status === "pending").map((transaction) => transaction.id),
+                        status: "paid",
+                    });
                     handleClearBulkSelection();
                 }}
             />,
@@ -347,7 +338,7 @@ function TransactionsTable({ tabs, activeTab, wallets, beneficiariesById, transa
     };
 
     return (
-        <section className="rounded-2xl border border-white/[0.08] bg-[#111111] ">
+        <section className="min-w-0 rounded-2xl border border-white/[0.08] bg-[#111111] ">
             <div className="flex flex-wrap items-center justify-between gap-3 p-3">
                 <div className="flex items-center gap-3 flex-wrap">
                     <h2 className="text-sm uppercase text-white/60">
@@ -373,17 +364,17 @@ function TransactionsTable({ tabs, activeTab, wallets, beneficiariesById, transa
             {transactions.length < 1 ? (
                 <div className="rounded-2xl bg-white/[0.02] px-3 py-6 text-center text-sm text-white/55">{activeTabConfig.emptyMessage}</div>
             ) : (
-                <div className="elegant-scrollbar overflow-x-auto rounded-2xl pb-4">
-                    <table className={`${selectionMode ? "min-w-[1200px]" : "min-w-[1150px]"} w-full table-fixed border-separate border-spacing-0 text-sm text-white/85`}>
+                <div className="elegant-scrollbar min-w-0 overflow-x-auto rounded-2xl pb-4">
+                    <table className="w-full max-w-full table-fixed border-separate border-spacing-0 text-sm text-white/85">
                         <colgroup>
-                            {selectionMode && <col className="w-[40px]" />}
-                            {showStatus && <col className="w-[172px]" />}
-                            {showDate && <col className="w-[116px]" />}
+                            {selectionMode && <col className="w-[4%]" />}
+                            {showStatus && <col className="w-[17%]" />}
+                            {showDate && <col className="w-[10%]" />}
                             {showDescription && <col />}
-                            {showCategory && <col className="w-[180px]" />}
-                            {showTags && <col className="w-[130px]" />}
-                            {showBeneficiary && <col className="w-[135px]" />}
-                            {showValue && <col className="w-[120px] border-2 border-white" />}
+                            {showCategory && <col className="w-[14%]" />}
+                            {showTags && <col className="w-[10%]" />}
+                            {showBeneficiary && <col className="w-[13%]" />}
+                            {showValue && <col className="w-[12%]" />}
                         </colgroup>
                         <thead>
                             <tr>
@@ -463,7 +454,7 @@ function TransactionsTable({ tabs, activeTab, wallets, beneficiariesById, transa
                                                     <span
                                                         className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[11px]/4 uppercase tracking-[0.08em] ${STATUS_BADGE_CLASS[transaction.status]}`}
                                                     >
-                                                        {STATUS_LABELS[transaction.status]}
+                                                        {transaction.status === "pending" && transaction.isProjected ? "Prevista" : STATUS_LABELS[transaction.status]}
                                                     </span>
                                                     {seriesIndicator?.kind === "installment" && <span className="text-xs text-white/55">{seriesIndicator.label}</span>}
                                                     {seriesIndicator?.kind === "recurring" && (
@@ -629,7 +620,7 @@ export function TransactionsListPanel({
     );
 
     return (
-        <div className="flex flex-col gap-3 w-full">
+        <div className="flex w-full min-w-0 flex-col gap-3">
             <TransactionsTable
                 tabs={tabs}
                 activeTab={activeTab}

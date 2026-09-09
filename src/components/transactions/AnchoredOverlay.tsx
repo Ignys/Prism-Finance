@@ -16,6 +16,10 @@ interface AnchoredOverlayProps<T extends HTMLElement> {
     isOpen: boolean;
     overlayRef: RefObject<HTMLDivElement | null>;
     preferredMaxHeight?: number;
+    /** Largura fixa do overlay, independente da largura do elemento-gatilho (ex.: gatilho pequeno abrindo um popover maior). */
+    overlayWidth?: number;
+    /** Alinhamento horizontal do overlay em relação ao gatilho quando `overlayWidth` é usado. */
+    align?: "start" | "center" | "end";
 }
 
 const VIEWPORT_PADDING = 12;
@@ -28,6 +32,8 @@ export function AnchoredOverlay<T extends HTMLElement>({
     isOpen,
     overlayRef,
     preferredMaxHeight = 360,
+    overlayWidth,
+    align = "start",
 }: AnchoredOverlayProps<T>) {
     const [position, setPosition] = useState<AnchoredOverlayPosition | null>(null);
 
@@ -51,9 +57,10 @@ export function AnchoredOverlay<T extends HTMLElement>({
             const minimumComfortableHeight = Math.min(220, preferredMaxHeight);
             const placeBelow = availableBelow >= minimumComfortableHeight || availableBelow >= availableAbove;
             const availableHeight = placeBelow ? availableBelow : availableAbove;
-            const width = Math.min(anchorRect.width, viewportWidth - VIEWPORT_PADDING * 2);
+            const width = Math.min(overlayWidth ?? anchorRect.width, viewportWidth - VIEWPORT_PADDING * 2);
+            const anchorLeft = align === "end" ? anchorRect.right - width : align === "center" ? anchorRect.left + anchorRect.width / 2 - width / 2 : anchorRect.left;
             const left = Math.min(
-                Math.max(VIEWPORT_PADDING, anchorRect.left),
+                Math.max(VIEWPORT_PADDING, anchorLeft),
                 Math.max(VIEWPORT_PADDING, viewportWidth - width - VIEWPORT_PADDING),
             );
 
@@ -81,7 +88,7 @@ export function AnchoredOverlay<T extends HTMLElement>({
             window.removeEventListener("resize", updatePosition);
             window.removeEventListener("scroll", updatePosition, true);
         };
-    }, [anchorRef, isOpen, preferredMaxHeight]);
+    }, [anchorRef, isOpen, preferredMaxHeight, overlayWidth, align]);
 
     if (!isOpen) {
         return null;

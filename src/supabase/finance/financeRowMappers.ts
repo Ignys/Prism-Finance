@@ -1,3 +1,4 @@
+import { parseRecurrenceRule } from "../../context/finance/recurrence/rule";
 import {
     parseInvoicePaymentNote,
     type Beneficiary,
@@ -41,10 +42,6 @@ import type {
 function toNumber(value: number | string): number {
     const numericValue = typeof value === "number" ? value : Number(value);
     return Number.isFinite(numericValue) ? numericValue : 0;
-}
-
-function toNullableRecord(value: unknown): Record<string, unknown> | null {
-    return typeof value === "object" && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
 }
 
 export function toPreferenceRow(params: {
@@ -285,7 +282,7 @@ export function fromTransactionGroupRow(row: TransactionGroupRow): TransactionGr
         transactionMode: row.transaction_mode as TransactionMode,
         totalAmount: toNumber(row.total_amount),
         installmentCount: row.installment_count,
-        recurrenceRule: toNullableRecord(row.recurrence_rule),
+        recurrenceRule: parseRecurrenceRule(row.recurrence_rule),
         recurrenceEndDate: row.recurrence_end_date,
         sourceWalletId: row.source_wallet_id,
         destinationWalletId: row.destination_wallet_id,
@@ -328,11 +325,15 @@ export function fromCreditCardInvoiceRow(row: CreditCardInvoiceRow): CreditCardI
 }
 
 export function toTransactionRow(userId: string, transaction: StoredTransaction): TransactionRow {
+    if (transaction.isProjected) throw new Error("Materialize a ocorrência antes de persistir seu estado.");
     return {
         user_id: userId,
         id: transaction.id,
         group_id: transaction.groupId,
         installment_number: transaction.installmentNumber,
+        occurrence_number: transaction.occurrenceNumber ?? null,
+        routing_override: transaction.routingOverride ?? false,
+        commitment: transaction.commitment ?? "posted",
         amount: transaction.amount,
         scheduled_date: transaction.scheduledDate,
         status: transaction.status,
@@ -355,6 +356,9 @@ export function fromTransactionRow(row: TransactionRow): StoredTransaction {
         id: row.id,
         groupId: row.group_id,
         installmentNumber: row.installment_number,
+        occurrenceNumber: row.occurrence_number ?? null,
+        routingOverride: row.routing_override ?? false,
+        commitment: row.commitment ?? "posted",
         amount: toNumber(row.amount),
         scheduledDate: row.scheduled_date,
         status: row.status as TransactionStatus,
