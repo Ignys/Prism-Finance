@@ -19,6 +19,14 @@ describe("wallet settlement actions", () => {
         });
     });
 
+    it("moves a pay-today occurrence to the effective date and records the timestamp", () => {
+        const snapshot = fixtureSnapshot();
+        const paidAt = "2026-09-05T01:30:00.000Z";
+        const paid = applyTransactionStatus(snapshot, "tx-test", "paid", paidAt, "2026-09-04");
+        expect(paid.transactions[0]).toMatchObject({ scheduledDate: "2026-09-04", paidAt, status: "paid" });
+        expect(paid.ledgerEntries[0]).toMatchObject({ transactionId: "tx-test", createdAt: paidAt });
+    });
+
     it("does not offer settlement for paid, skipped, transfer, card or invoice-payment transactions", () => {
         const snapshot = fixtureSnapshot();
         const transaction = toTransactionList(snapshot.transactions, snapshot.transactionGroups, [], [], [], [])[0];
@@ -32,5 +40,16 @@ describe("wallet settlement actions", () => {
         expect(() => applyTransactionStatus(cardSnapshot, "tx-test", "paid")).toThrow("fatura");
         const paymentSnapshot = fixtureSnapshot([fixtureGroup()], [fixtureTransaction({ paymentForInvoiceId: "invoice-test" })]);
         expect(() => applyTransactionStatus(paymentSnapshot, "tx-test", "paid")).toThrow("fatura");
+    });
+
+    it("offers navigation between both representations of an invoice payment", () => {
+        const snapshot = fixtureSnapshot([fixtureGroup()], [fixtureTransaction({ paymentForInvoiceId: "invoice-test" })]);
+        const payment = toTransactionList(snapshot.transactions, snapshot.transactionGroups, [], [], [], [])[0];
+        expect(buildTransactionContextActions({ transaction: payment, group: snapshot.transactionGroups[0] })).toContainEqual({
+            id: "view_invoice", label: "Ver na fatura",
+        });
+        expect(buildTransactionContextActions({ transaction: payment, group: snapshot.transactionGroups[0], context: "invoice" })).toContainEqual({
+            id: "view_expenses", label: "Ver nas despesas",
+        });
     });
 });

@@ -21,8 +21,15 @@ import { ConfirmActionModal } from "../modal/ConfirmActionModal";
 import { PayCreditCardInvoiceModal } from "../modal/PayCreditCardInvoiceModal";
 import { useTransactionContextActionHandler } from "../transactions/useTransactionContextActionHandler";
 import { StatementContentPanel } from "./statement/StatementContentPanel";
-import { StatementFiltersPanel } from "./statement/StatementFiltersPanel";
-import { buildStatementSummary, compareInvoicesByDueDate, INITIAL_STATEMENT_FILTER_STATE, resolveDefaultStatementFilters, type StatementFilterState } from "./statement/statementPageShared";
+import {
+    buildStatementSummary,
+    compareInvoicesByDueDate,
+    resolveCurrentInvoiceMonth,
+    INITIAL_STATEMENT_FILTER_STATE,
+    resolveDefaultStatementFilters,
+    selectInvoicePayments,
+    type StatementFilterState,
+} from "./statement/statementPageShared";
 import { StatementOverviewPanel } from "./statement/StatementOverviewPanel";
 
 const STATEMENT_PAGE_PREFERENCES_SECTION = "statement";
@@ -200,6 +207,12 @@ export function StatementPage() {
             .sort((a, b) => b.date.localeCompare(a.date));
     }, [monthInvoiceIds, selectedCardId, transactions]);
 
+    const monthInvoicePayments = useMemo(() => {
+        return selectInvoicePayments(transactions, monthInvoiceIds);
+    }, [monthInvoiceIds, transactions]);
+
+    const monthInvoiceItems = useMemo(() => [...monthTransactions, ...monthInvoicePayments], [monthInvoicePayments, monthTransactions]);
+
     const summary = useMemo(
         () =>
             buildStatementSummary({
@@ -213,6 +226,8 @@ export function StatementPage() {
             }),
         [selectedDueMonth, selectedCardName, scopedCards, scopedInvoices, monthInvoices, monthTransactions, cardNameById],
     );
+
+    const currentInvoiceMonth = useMemo(() => resolveCurrentInvoiceMonth(scopedCards[0] ?? null, scopedInvoices, selectedDueMonth), [scopedCards, scopedInvoices, selectedDueMonth]);
 
     const handlePayInvoice = (invoice: CreditCardInvoice, creditCard: CreditCard, settleWithoutWallet = false) => {
         openModal(<PayCreditCardInvoiceModal invoice={invoice} creditCard={creditCard} defaultSettleWithoutWallet={settleWithoutWallet} />);
@@ -283,18 +298,10 @@ export function StatementPage() {
         <div className="flex">
             <div className="flex flex-col gap-3 2xl:flex-row w-full">
                 <div className="min-w-0 flex-1 space-y-3">
-                    <StatementFiltersPanel
-                        selectedMonth={selectedDueMonth}
-                        selectedCardId={selectedCardId}
-                        creditCards={creditCards}
-                        onMonthChange={(value) => setFilter("selectedMonth", value)}
-                        onCardChange={(value) => setFilter("selectedCardIds", [value])}
-                    />
-
                     <StatementContentPanel
                         selectedMonth={selectedDueMonth}
                         invoices={monthInvoices}
-                        transactions={monthTransactions}
+                        transactions={monthInvoiceItems}
                         cardById={cardById}
                         invoiceById={invoiceById}
                         onAction={handleTransactionContextAction}
@@ -305,6 +312,7 @@ export function StatementPage() {
                                     selectedCardIds={selectedCardIds}
                                     onCardIdsChange={(value) => setFilter("selectedCardIds", value)}
                                     selectedMonth={selectedDueMonth}
+                                    currentInvoiceMonth={currentInvoiceMonth}
                                     onMonthChange={(value) => setFilter("selectedMonth", value)}
                                     summary={summary}
                                     invoices={monthInvoices}

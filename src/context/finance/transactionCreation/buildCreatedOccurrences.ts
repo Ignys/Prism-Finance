@@ -22,7 +22,7 @@ export function buildCreatedOccurrences(params: {
     const today = getLocalTodayDate(new Date(now));
     const hasInvoiceOverride = Boolean(group.creditCardId && draft.invoiceId &&
         creationInvoiceId(snapshot, group, draft, scheduledDate, 0) !== creationInvoiceId(snapshot, group, { ...draft, invoiceId: null }, scheduledDate, 0));
-    if (group.transactionMode === "recurring" && status === "pending" && (!group.creditCardId || scheduledDate > today) && !hasInvoiceOverride) return [];
+    if (group.transactionMode === "recurring" && status === "pending" && (!group.creditCardId || draft.commitment === "forecast" || scheduledDate > today) && !hasInvoiceOverride) return [];
     const schedule = group.transactionMode === "installment" && group.installmentCount
         ? buildInstallmentSchedule({ totalAmount: amount, installmentCount: group.installmentCount, startDate: scheduledDate, initialStatus: status,
             ignoredInstallmentsCount, advanceDatesMonthly: !group.creditCardId })
@@ -30,7 +30,7 @@ export function buildCreatedOccurrences(params: {
     return schedule.map((item, index) => normalizeStoredTransaction({
         ...item, id: index === 0 ? transactionId : createId("tx"), groupId: group.id,
         occurrenceNumber: group.transactionMode === "recurring" ? 1 : null,
-        commitment: item.status !== "paid" && group.transactionMode === "recurring" && item.scheduledDate > today ? "forecast" : "posted",
+        commitment: item.status === "paid" ? "posted" : group.creditCardId ? draft.commitment ?? (group.transactionMode === "recurring" && item.scheduledDate > today ? "forecast" : "posted") : "posted",
         paidAt: item.status === "paid" ? resolveLedgerEntryDateIso(item.scheduledDate, now) : null,
         invoiceId: creationInvoiceId(snapshot, group, draft, item.scheduledDate, index), notes: draft.notes || null, createdAt: now,
     }));

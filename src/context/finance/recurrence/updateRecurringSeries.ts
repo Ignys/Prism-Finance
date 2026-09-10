@@ -93,23 +93,27 @@ export function updateRecurringSeries(params: UpdateTransactionSeriesSnapshotPar
             return [transaction];
         }
         affectedTransactionIds.add(transaction.id);
-        if (seriesScope && params.wasProjected && transaction.id === selected.id && resolved.status === "pending") return [];
-        const rowDraft = seriesScope ? resolveDraft(snapshot, transaction, oldGroup, changes) : resolved;
+        if (seriesScope && params.wasProjected && transaction.id === selected.id && resolved.status === "pending" && resolved.commitment === selected.commitment) return [];
+        const rowDraft = seriesScope
+            ? resolveDraft(snapshot, transaction, oldGroup, transaction.id === selected.id && draft.commitment !== undefined ? { ...changes, commitment: resolved.commitment } : changes)
+            : resolved;
         const status = seriesScope && transaction.status !== "pending" ? transaction.status : rowDraft.status;
         const scheduledDate = seriesScope
             ? dateChanged ? occurrenceDate(targetGroup.recurrenceRule!, number) : transaction.scheduledDate
             : resolved.scheduledDate;
         const sourceWalletId = rowDraft.sourceWalletId;
         const creditCardId = rowDraft.creditCardId;
+        const invoiceRoutingChanged = dateChanged || creditCardId !== resolveTransactionCreditCardId(transaction, oldGroup);
+        const invoiceId = transaction.id === selected.id ? resolved.invoiceId : invoiceRoutingChanged ? null : transaction.invoiceId;
         const changed: StoredTransaction = {
             ...transaction, groupId: targetGroup.id, occurrenceNumber: number,
             amount: seriesScope && !amountChanged ? transaction.amount : resolved.amount,
-            scheduledDate, status, commitment: status === "paid" ? "posted" : draft.commitment ?? transaction.commitment, paidAt: status === "paid" ? transaction.paidAt ?? now : null,
-            invoiceId: dateChanged || creditCardId !== resolveTransactionCreditCardId(transaction, oldGroup) ? null : transaction.id === selected.id ? resolved.invoiceId : transaction.invoiceId,
+            scheduledDate, status, commitment: status === "paid" ? "posted" : rowDraft.commitment, paidAt: status === "paid" ? transaction.paidAt ?? now : null,
+            invoiceId,
             title: rowDraft.title, notes: rowDraft.notes, categoryId: rowDraft.categoryId, beneficiaryId: rowDraft.beneficiaryId,
             sourceWalletId, destinationWalletId: rowDraft.destinationWalletId, creditCardId,
         };
-        if (draft.commitment === "posted" && resolved.creditCardId && scheduledDate > today) throw new Error("Confirme a cobrança a partir da data prevista.");
+        if (rowDraft.commitment === "posted" && transaction.commitment === "forecast" && resolved.creditCardId && scheduledDate > today) throw new Error("Confirme a cobrança a partir da data prevista.");
         const financialChange = transaction.commitment !== changed.commitment || transaction.amount !== changed.amount || transaction.scheduledDate !== changed.scheduledDate || transaction.status !== changed.status || transaction.invoiceId !== changed.invoiceId
             || resolveTransactionSourceWalletId(transaction, oldGroup) !== sourceWalletId || resolveTransactionCreditCardId(transaction, oldGroup) !== creditCardId
             || resolveTransactionDestinationWalletId(transaction, oldGroup) !== changed.destinationWalletId;

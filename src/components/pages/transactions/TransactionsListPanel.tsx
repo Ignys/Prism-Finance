@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type MouseEvent } from "react";
-import { ArrowDown, ArrowUp, Circle, CircleSlash, Repeat2 } from "lucide-react";
+import { ArrowDown, ArrowUp, Circle, CircleSlash, Link2, Repeat2 } from "lucide-react";
 import { type Beneficiary, type Transaction, type Wallet, useFinanceActions, useFinanceBeneficiaries, useFinanceSession, useFinanceTransactionGroups } from "../../../context/FinanceContext";
 import { useModal } from "../../../context/ModalContext";
 import { getCategoryIconComponent } from "../../../lib/categoryIcons";
@@ -315,13 +315,14 @@ function TransactionsTable({ tabs, activeTab, wallets, beneficiariesById, transa
         openModal(
             <ConfirmActionModal
                 title="Pagar todas hoje?"
-                description={`Registra hoje o pagamento ou recebimento de ${selectedTransactionsLabel}, preservando as datas previstas e atualizando os saldos.`}
+                description={`Registra hoje o pagamento ou recebimento de ${selectedTransactionsLabel}, atualizando as datas das ocorrências e os saldos.`}
                 confirmLabel="Pagar todas hoje"
                 tone="success"
                 onConfirm={async () => {
                     await updateTransactionsBulk({
                         transactionIds: selectedTransactions.filter((transaction) => transaction.status === "pending").map((transaction) => transaction.id),
                         status: "paid",
+                        settleToday: true,
                     });
                     handleClearBulkSelection();
                 }}
@@ -421,6 +422,13 @@ function TransactionsTable({ tabs, activeTab, wallets, beneficiariesById, transa
                                 const hiddenTagsCount = Math.max(transaction.tags.length - visibleTags.length, 0);
                                 const canBulkEdit = isTransactionEligibleForBulkEdit(transaction);
                                 const isSelected = bulkSelection.selectedIdSet.has(transaction.id);
+                                const isPendingCardSpending = transaction.status === "pending" && transaction.paymentMethod === "credit_card";
+                                const statusBadgeClass = isPendingCardSpending
+                                    ? transaction.commitment === "forecast" ? STATUS_BADGE_CLASS.pending : STATUS_BADGE_CLASS.paid
+                                    : STATUS_BADGE_CLASS[transaction.status];
+                                const statusLabel = isPendingCardSpending
+                                    ? transaction.commitment === "forecast" ? "Previsto" : "Lançado"
+                                    : transaction.status === "pending" && transaction.isProjected ? "Prevista" : STATUS_LABELS[transaction.status];
 
                                 return (
                                     <tr
@@ -452,9 +460,9 @@ function TransactionsTable({ tabs, activeTab, wallets, beneficiariesById, transa
                                                         <WalletAvatar wallet={wallet} className="h-8 w-8 rounded-md border border-white/[0.1]" iconSize={16} iconStrokeWidth={1.8} />
                                                     </div>
                                                     <span
-                                                        className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[11px]/4 uppercase tracking-[0.08em] ${STATUS_BADGE_CLASS[transaction.status]}`}
+                                                        className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[11px]/4 uppercase tracking-[0.08em] ${statusBadgeClass}`}
                                                     >
-                                                        {transaction.status === "pending" && transaction.isProjected ? "Prevista" : STATUS_LABELS[transaction.status]}
+                                                        {statusLabel}
                                                     </span>
                                                     {seriesIndicator?.kind === "installment" && <span className="text-xs text-white/55">{seriesIndicator.label}</span>}
                                                     {seriesIndicator?.kind === "recurring" && (
@@ -474,6 +482,11 @@ function TransactionsTable({ tabs, activeTab, wallets, beneficiariesById, transa
                                             <td className="truncate border-b border-white/[0.04] px-3 py-2.5 text-[14px] font-medium text-white">
                                                 <div className="flex min-w-0 max-w-full items-center gap-1.5">
                                                     <span className="truncate">{transaction.description || "Sem descrição."}</span>
+                                                    {transaction.systemKind === "invoice_payment" && (
+                                                        <span className="inline-flex shrink-0 text-violet-300" role="img" title="Pagamento vinculado à fatura" aria-label="Pagamento vinculado à fatura">
+                                                            <Link2 size={13} />
+                                                        </span>
+                                                    )}
                                                 </div>
                                             </td>
                                         )}

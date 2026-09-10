@@ -34,6 +34,14 @@ export interface StatementSummary {
     focusedInvoice: StatementFocusedInvoiceSummary | null;
 }
 
+export function selectInvoicePayments(transactions: Transaction[], invoiceIds: ReadonlySet<string>): Transaction[] {
+    return transactions.filter((transaction) => {
+        if (transaction.systemKind !== "invoice_payment") return false;
+        const invoiceId = transaction.paymentForInvoiceId ?? transaction.invoicePaymentMeta?.invoiceId ?? "";
+        return invoiceIds.has(invoiceId);
+    });
+}
+
 interface BuildStatementSummaryParams {
     selectedMonth: string;
     selectedCardName: string;
@@ -254,6 +262,32 @@ function resolveDefaultStatementMonth(creditCard: CreditCard, invoices: CreditCa
     const sortedInvoices = [...invoices].sort(compareInvoicesByDueDate);
     const mostRecentInvoice = sortedInvoices[sortedInvoices.length - 1];
     return mostRecentInvoice ? getMonthKeyFromDateValue(mostRecentInvoice.dueDate) : fallbackMonth;
+}
+
+// Prioridade do atalho "ir para a fatura atual": fechada nao paga > vencida nao paga > aberta.
+const CURRENT_INVOICE_PRIORITY: Record<StatementInvoiceVisualStatus, number> = {
+    closed: 0,
+    overdue: 1,
+    open: 2,
+    future: 3,
+    paid: 4,
+};
+
+export function resolveCurrentInvoiceMonth(
+    creditCard: Pick<CreditCard, "closingDay" | "dueDay"> | null,
+    invoices: CreditCardInvoice[],
+    fallbackMonth = getCurrentMonthKey(),
+    referenceDate = new Date(),
+): string {
+    const candidate = invoices
+        .map((invoice) => ({ invoice, status: resolveInvoiceVisualStatus(invoice, creditCard, referenceDate) }))
+        .filter((entry) => entry.status !== "paid" && entry.status !== "future")
+        .sort((a, b) => {
+            const priorityDifference = CURRENT_INVOICE_PRIORITY[a.status] - CURRENT_INVOICE_PRIORITY[b.status];
+            return priorityDifference !== 0 ? priorityDifference : compareInvoicesByDueDate(a.invoice, b.invoice);
+        })[0];
+
+    return candidate ? getMonthKeyFromDateValue(candidate.invoice.dueDate) : fallbackMonth;
 }
 
 function resolveDefaultStatementCard(creditCards: CreditCard[], favoriteCreditCardId: string | null): CreditCard | null {

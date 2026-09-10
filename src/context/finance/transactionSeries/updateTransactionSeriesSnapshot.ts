@@ -71,7 +71,9 @@ export function updateTransactionSeriesSnapshot(params: UpdateTransactionSeriesS
         const invoice = snapshot.creditCardInvoices.find((item) => item.id === transaction.invoiceId);
         if (scope !== "single" && (invoice?.paidAmount ?? 0) > 0) return transaction;
         affectedTransactionIds.add(transaction.id);
-        const rowDraft = scope === "single" ? resolved : resolveDraft(snapshot, transaction, group, changes);
+        const rowDraft = scope === "single"
+            ? resolved
+            : resolveDraft(snapshot, transaction, group, selectedOnly && draft.commitment !== undefined ? { ...changes, commitment: resolved.commitment } : changes);
         const dateChanged = resolved.scheduledDate !== selected.scheduledDate;
         const cardChanged = resolved.creditCardId !== resolveTransactionCreditCardId(selected, group);
         const offset = scope === "single" ? 0 : (transaction.installmentNumber ?? 1) - (selected.installmentNumber ?? 1);
@@ -89,7 +91,8 @@ export function updateTransactionSeriesSnapshot(params: UpdateTransactionSeriesS
             ...transaction,
             routingOverride: true,
             amount: resolved.amount === selected.amount ? transaction.amount : resolved.amount,
-            scheduledDate: date, status: rowDraft.status, paidAt: rowDraft.status === "paid" ? transaction.paidAt ?? now : null,
+            scheduledDate: date, status: rowDraft.status, commitment: rowDraft.status === "paid" ? "posted" : rowDraft.commitment,
+            paidAt: rowDraft.status === "paid" ? transaction.paidAt ?? now : null,
             invoiceId, title: rowDraft.title, notes: rowDraft.notes, categoryId: rowDraft.categoryId, beneficiaryId: rowDraft.beneficiaryId,
             sourceWalletId: rowDraft.sourceWalletId, destinationWalletId: rowDraft.destinationWalletId, creditCardId: rowDraft.creditCardId,
         };

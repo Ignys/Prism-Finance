@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { buildInvoiceSettlement } from "./invoiceSettlement";
 import { calculateFinanceSummary, createLedgerEntriesForPaidTransaction, toTransactionList, type Category, type CreditCardInvoice } from "../financeTypes";
-import { fixtureGroup } from "./financeTestFixtures";
+import { fixtureGroup, fixtureTransaction } from "./financeTestFixtures";
 import { requireRecurrenceRule } from "./recurrence/rule";
 
 const invoice: CreditCardInvoice = {
@@ -110,5 +110,18 @@ describe("buildInvoiceSettlement", () => {
         expect(reopened.transactionGroups).toEqual([projectedSeries]);
         expect(reopened.ledgerEntries).toHaveLength(0);
         expect(reopened.invoices[0]).toMatchObject({ paidAmount: 0, status: "open", paidAt: null });
+    });
+
+    it("settles the invoice without changing the individual purchase status", () => {
+        const purchase = fixtureTransaction({ invoiceId: invoice.id, commitment: "posted", status: "pending" });
+        const result = buildInvoiceSettlement({
+            invoiceIds: [invoice.id], markAsPaid: true, userId: "user-1", invoices: [invoice],
+            transactionGroups: [fixtureGroup()], transactions: [purchase], ledgerEntries: [], beneficiaries: [], categories: [category],
+            nowIso: "2026-09-02T12:00:00.000Z",
+        });
+
+        expect(result.transactions.find((transaction) => transaction.id === purchase.id)).toMatchObject({ status: "pending", commitment: "posted" });
+        expect(result.transactions.filter((transaction) => transaction.paymentForInvoiceId === invoice.id)).toHaveLength(1);
+        expect(result.invoices[0]).toMatchObject({ paidAmount: 100, status: "paid" });
     });
 });

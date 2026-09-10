@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
-import { CheckCheck, CircleCheckBig, Clock, Copy, Eye, ListChecks, SquareArrowOutUpRight, SquareSlash, Trash2, TriangleAlert } from "lucide-react";
+import { CheckCheck, CircleCheckBig, Clock, Copy, Eye, LayoutList, Link2, ListChecks, SquareArrowOutUpRight, SquareSlash, Trash2, TriangleAlert } from "lucide-react";
 import type { TransactionContextAction, TransactionContextActionId } from "./transactionContextActions";
 
 export interface TransactionContextMenuState {
@@ -24,6 +24,9 @@ const MENU_DIVIDER_HEIGHT = 13;
 
 const ACTION_ICONS: Record<TransactionContextActionId, typeof Eye> = {
     open: SquareArrowOutUpRight,
+    view_series: LayoutList,
+    view_invoice: Link2,
+    view_expenses: Link2,
     select: ListChecks,
     toggle_status: CircleCheckBig,
     pay_today: CheckCheck,
@@ -44,9 +47,9 @@ function resolveActionIcon(action: TransactionContextAction): typeof Eye {
 }
 
 function buildActionSections(actions: TransactionContextAction[]): TransactionContextAction[][] {
-    const primary = actions.filter((action) => action.id === "open");
+    const primary = actions.filter((action) => action.id === "open" || action.id === "view_series" || action.id === "view_invoice" || action.id === "view_expenses");
     const destructive = actions.filter((action) => action.tone === "danger");
-    const secondary = actions.filter((action) => action.id !== "open" && action.tone !== "danger");
+    const secondary = actions.filter((action) => !primary.includes(action) && action.tone !== "danger");
 
     return [primary, secondary, destructive].filter((section) => section.length > 0);
 }

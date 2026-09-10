@@ -1,18 +1,34 @@
 import { useMemo } from "react";
 import { motion } from "framer-motion";
-import { Calendar, Lock } from "lucide-react";
+import { Calendar, CircleSlash, Lock, RotateCcw, Wallet } from "lucide-react";
 import type { CreditCard, CreditCardInvoice } from "../../../context/FinanceContext";
 import { MonthPickerControl } from "../../common/MonthPickerControl";
 import { WalletAvatar } from "../../common/WalletAvatar";
 import { MultiSelectCombobox } from "../../transactions/MultiSelectCombobox";
 import { type ComboboxOptionBase } from "../../transactions/SingleSelectCombobox";
-import { formatCurrency, formatMonthLabel, resolveInvoiceActionState, shiftMonth, STATEMENT_STATUS_LABELS, STATEMENT_STATUS_TEXT_CLASS, type StatementSummary } from "./statementPageShared";
+import {
+    formatCurrency,
+    formatMonthLabel,
+    resolveInvoiceActionState,
+    shiftMonth,
+    STATEMENT_STATUS_BADGE_CLASS,
+    STATEMENT_STATUS_LABELS,
+    STATEMENT_STATUS_TEXT_CLASS,
+    type StatementSummary,
+} from "./statementPageShared";
+
+// dueDate vem como YYYY-MM-DD; evita Date/timezone so para mostrar dia/mes.
+function formatDayMonth(isoDate: string): string {
+    const [, month, day] = isoDate.split("-");
+    return month && day ? `${day}/${month}` : isoDate;
+}
 
 interface StatementOverviewPanelProps {
     creditCards: CreditCard[];
     selectedCardIds: string[];
     onCardIdsChange: (cardIds: string[]) => void;
     selectedMonth: string;
+    currentInvoiceMonth: string;
     onMonthChange: (monthKey: string) => void;
     summary: StatementSummary;
     invoices: CreditCardInvoice[];
@@ -32,6 +48,7 @@ export function StatementOverviewPanel({
     selectedCardIds,
     onCardIdsChange,
     selectedMonth,
+    currentInvoiceMonth,
     onMonthChange,
     summary,
     invoices,
@@ -98,55 +115,79 @@ export function StatementOverviewPanel({
 
             {/* Navegacao de mes */}
             <div className="relative mt-3.5 border-y border-white/[0.06] py-2">
-                <MonthPickerControl selectedMonth={selectedMonth} onMonthChange={onMonthChange} formatMonthLabel={formatMonthLabel} shiftMonth={shiftMonth} />
+                <MonthPickerControl
+                    selectedMonth={selectedMonth}
+                    onMonthChange={onMonthChange}
+                    formatMonthLabel={formatMonthLabel}
+                    shiftMonth={shiftMonth}
+                    shortcutMonth={currentInvoiceMonth}
+                    shortcutLabel="Ir para a fatura atual"
+                />
             </div>
 
-            {/* INFORMAÇÕES DA FATURA */}
+            {/* CONTROLE DA FATURA: status, valor e acoes agrupados em um bloco unico */}
             <div className="relative mt-3.5">
-                <div className="flex items-center justify-between gap-2">
-                    <p className="text-[11px] uppercase tracking-[0.09em] font-medium text-white/55">
-                        {focusedInvoice ? (
-                            <span className={STATEMENT_STATUS_TEXT_CLASS[focusedInvoice.status]}>
-                               FATURA {STATEMENT_STATUS_LABELS[focusedInvoice.status]}
-                            </span>
-                        ) : "Sem gastos"}
-                    </p>
+                <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                        <p className="text-[11px] uppercase tracking-[0.09em] font-medium text-white/45">Fatura do mês</p>
+                        <p className={`mt-0.5 text-xl font-semibold tracking-wide ${focusedInvoice ? STATEMENT_STATUS_TEXT_CLASS[focusedInvoice.status] : "text-white"}`}>
+                            {formatCurrency(summary.spentInMonth)}
+                        </p>
+                    </div>
+                    <span
+                        className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] ${
+                            focusedInvoice ? STATEMENT_STATUS_BADGE_CLASS[focusedInvoice.status] : "border-white/[0.12] bg-white/[0.03] text-white/45"
+                        }`}
+                    >
+                        {focusedInvoice ? STATEMENT_STATUS_LABELS[focusedInvoice.status] : "Sem gastos"}
+                    </span>
                 </div>
-                <p className={`text-xl font-semibold tracking-wide ${focusedInvoice ? STATEMENT_STATUS_TEXT_CLASS[focusedInvoice.status] : "text-white"}`}>{formatCurrency(summary.spentInMonth)}</p>
-            </div>
 
-            {(manualActionMode || payableInvoice) && (
-                <div className="relative mt-3 flex flex-wrap items-center gap-2">
-                    {manualActionMode && (
-                        <button
-                            type="button"
-                            onClick={() => onInvoiceStateAdjustment(manualActionInvoices, manualActionMode)}
-                            className="inline-flex items-center gap-2 rounded-full border border-sky-300/30 bg-sky-500/15 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.05em] text-sky-100 transition-colors hover:border-sky-300/45 hover:bg-sky-500/20"
-                        >
-                            {manualActionLabel}
-                        </button>
-                    )}
+                {focusedInvoice && (
+                    <div className="mt-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-[11px] text-white/45">
+                        <span>Vence em {formatDayMonth(focusedInvoice.dueDate)}</span>
+                        {focusedInvoice.openAmount > 0 && <span className="text-white/60">Em aberto {formatCurrency(focusedInvoice.openAmount)}</span>}
+                    </div>
+                )}
 
-                    {payableInvoice && payableCreditCard && (
-                        <>
-                            <button
-                                type="button"
-                                onClick={() => onPayInvoice(payableInvoice, payableCreditCard, true)}
-                                className="inline-flex items-center gap-2 rounded-full border border-white/[0.12] bg-white/[0.03] px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.05em] text-white/70 transition-colors hover:border-white/[0.2] hover:text-white"
-                            >
-                                Quitar sem carteira
-                            </button>
+                {(payableInvoice || manualActionMode) && (
+                    <div className="mt-3 space-y-1.5 border-t border-white/[0.06] pt-3">
+                        {payableInvoice && payableCreditCard && (
                             <button
                                 type="button"
                                 onClick={() => onPayInvoice(payableInvoice, payableCreditCard)}
-                                className="inline-flex items-center gap-2 rounded-full border border-emerald-300/30 bg-emerald-500/15 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.05em] text-emerald-100 transition-colors hover:border-emerald-300/45 hover:bg-emerald-500/20"
+                                className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-emerald-300/30 bg-emerald-500/15 px-3 py-2 text-xs font-semibold uppercase tracking-[0.05em] text-emerald-100 transition-colors hover:border-emerald-300/45 hover:bg-emerald-500/25"
                             >
+                                <Wallet size={13} />
                                 {payButtonLabel}
                             </button>
-                        </>
-                    )}
-                </div>
-            )}
+                        )}
+
+                        <div className="flex flex-wrap gap-1.5">
+                            {payableInvoice && payableCreditCard && (
+                                <button
+                                    type="button"
+                                    onClick={() => onPayInvoice(payableInvoice, payableCreditCard, true)}
+                                    className="inline-flex min-w-0 flex-1 items-center justify-center gap-1.5 rounded-lg border border-white/[0.1] bg-white/[0.03] px-2.5 py-1.5 text-[11px] font-medium text-white/60 transition-colors hover:border-white/[0.2] hover:text-white"
+                                >
+                                    <CircleSlash size={12} />
+                                    Quitar sem carteira
+                                </button>
+                            )}
+                            {manualActionMode && (
+                                <button
+                                    type="button"
+                                    onClick={() => onInvoiceStateAdjustment(manualActionInvoices, manualActionMode)}
+                                    className="inline-flex min-w-0 flex-1 items-center justify-center gap-1.5 rounded-lg border border-white/[0.1] bg-white/[0.03] px-2.5 py-1.5 text-[11px] font-medium text-sky-200/80 transition-colors hover:border-sky-300/35 hover:bg-sky-500/10 hover:text-sky-100"
+                                >
+                                    {manualActionMode === "close" ? <Lock size={12} /> : <RotateCcw size={12} />}
+                                    {manualActionLabel}
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                )}
+            </div>
 
             {/* Limite utilizado */}
             <div className="relative mt-3.5 border-t border-white/[0.06] pt-3">

@@ -50,6 +50,7 @@ import {
     type TagOption,
 } from "./CardSpendingOptions";
 import { InstallmentPreviewModal, type InstallmentPreviewData, type InstallmentPreviewRow } from "./InstallmentPreviewModal";
+import { CardCommitmentField } from "./CardCommitmentField";
 
 interface CardSpendingFormProps {
     transaction?: Transaction | null;
@@ -146,6 +147,7 @@ export function CardSpendingForm({ transaction = null, prefill, activeTab, onIns
     const [date, setDate] = useState(transaction?.date ?? (initialPrefillDate || getLocalTodayDate()));
     const [creditCardId, setCreditCardId] = useState(transaction?.creditCardId ?? (initialPrefillCreditCardId || favoriteCreditCardId || ""));
     const [invoiceId, setInvoiceId] = useState(transaction?.invoiceId ?? initialPrefillInvoiceId);
+    const [commitment, setCommitment] = useState<"forecast" | "posted">(transaction?.commitment ?? "posted");
     const [categoryId, setCategoryId] = useState(transaction?.category.id ?? prefill?.initialValues?.category.id ?? "");
     const [beneficiaryId, setBeneficiaryId] = useState(transaction?.beneficiaryId ?? prefill?.initialValues?.beneficiaryId ?? "");
     const [selectedTagIds, setSelectedTagIds] = useState<string[]>(transaction?.tagIds ?? prefill?.initialValues?.tagIds ?? []);
@@ -156,6 +158,7 @@ export function CardSpendingForm({ transaction = null, prefill, activeTab, onIns
     );
     const [ignoredInstallmentsCountInput, setIgnoredInstallmentsCountInput] = useState(() => (sourceGroup?.transactionMode === "installment" ? String(leadingSkippedInstallmentsCount) : "0"));
     const [editScope, setEditScope] = useState<TransactionSeriesScope>("single");
+    const isFutureRecurringOccurrence = spendingMode === "recurring" && date > getLocalTodayDate();
     const details = useTransactionDetails({ transactionId: transaction?.id ?? (spendingMode === "recurring" ? occurrenceId(`group-${draftTransactionId}`, 1) : draftTransactionId), userId: user?.uid, loadExisting: isEditing });
     const activeCreditCards = useMemo(() => creditCards.filter((card) => card.isActive), [creditCards]);
     const selectableCreditCards = useMemo(() => creditCards.filter((card) => card.isActive || (isEditing && card.id === creditCardId)), [creditCardId, creditCards, isEditing]);
@@ -172,6 +175,7 @@ export function CardSpendingForm({ transaction = null, prefill, activeTab, onIns
         setDate(transaction.date ?? getLocalTodayDate());
         setCreditCardId(transaction.creditCardId ?? favoriteCreditCardId ?? "");
         setInvoiceId(transaction.invoiceId ?? "");
+        setCommitment(transaction.commitment ?? "posted");
         previousDateRef.current = transaction.date ?? getLocalTodayDate();
         setCategoryId(transaction.category.id ?? "");
         setBeneficiaryId(transaction.beneficiaryId ?? "");
@@ -189,6 +193,10 @@ export function CardSpendingForm({ transaction = null, prefill, activeTab, onIns
     useEffect(() => {
         return () => onInstallmentPreviewOpenChange?.(false);
     }, [onInstallmentPreviewOpenChange]);
+
+    useEffect(() => {
+        if (isFutureRecurringOccurrence && (!transaction || transaction.date !== date)) setCommitment("forecast");
+    }, [date, isFutureRecurringOccurrence, transaction]);
 
     useEffect(() => {
         const fallbackCardId =
@@ -519,6 +527,7 @@ export function CardSpendingForm({ transaction = null, prefill, activeTab, onIns
             // Keep the invoice chosen in the form. Recurrence controls future
             // occurrences, but must not reroute this charge by date.
             invoiceId: selectedInvoiceOption?.invoice.id ?? transaction?.invoiceId ?? null,
+            commitment,
             categoryId: categoryId || null,
             beneficiaryId: beneficiaryId || null,
             tagIds: selectedTagIds,
@@ -675,7 +684,13 @@ export function CardSpendingForm({ transaction = null, prefill, activeTab, onIns
                                 onChange={(event) => setAmountInput(event.target.value)}
                                 disabled={financialFieldsDisabled}
                             />
-                            <div className="grid grid-cols-1 items-end gap-2 md:grid-cols-2">
+                            <div className="grid grid-cols-1 items-end gap-2 md:grid-cols-3">
+                                <CardCommitmentField
+                                    value={commitment}
+                                    onChange={setCommitment}
+                                    disabled={financialFieldsDisabled}
+                                    postedDisabled={isFutureRecurringOccurrence}
+                                />
                                 <DateField hideLabel value={date} onChange={setDate} shortcuts={DATE_SHORTCUTS} disabled={financialFieldsDisabled} />
                                 <SingleSelectCombobox
                                     hideLabel

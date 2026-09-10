@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type MouseEvent, type ReactNode } from "react";
-import { ArrowDown, ArrowUp, Circle, CreditCard as CreditCardIcon, Repeat2, Search } from "lucide-react";
+import { ArrowDown, ArrowUp, Circle, CreditCard as CreditCardIcon, Link2, Repeat2, Search } from "lucide-react";
 import { type Beneficiary, type CreditCard, type CreditCardInvoice, type Transaction, useFinanceBeneficiaries, useFinanceSession, useFinanceTransactionGroups } from "../../../context/FinanceContext";
 import { useModal } from "../../../context/ModalContext";
 import { normalizeComparisonText } from "../../../context/finance/helpers";
@@ -24,7 +24,6 @@ import {
     type StatementInvoiceVisualStatus,
     STATEMENT_STATUS_BADGE_CLASS,
     STATEMENT_STATUS_LABELS,
-    STATEMENT_STATUS_SORT_ORDER,
 } from "./statementPageShared";
 
 interface StatementContentPanelProps {
@@ -41,7 +40,7 @@ type StatementSortField = "status" | "date" | "description" | "category" | "bene
 type StatementSortDirection = "asc" | "desc";
 type StatementSortMode = `${StatementSortField}-${StatementSortDirection}`;
 type ConsolidatedHeaderStatus = StatementInvoiceVisualStatus | "mixed" | "none" | "forecast";
-type StatementTransactionVisualStatus = StatementInvoiceVisualStatus | "skipped" | "forecast";
+type StatementTransactionVisualStatus = "skipped" | "forecast" | "posted" | "payment";
 
 interface StatementTableViewPreferences {
     sortMode: StatementSortMode;
@@ -140,20 +139,23 @@ function resolveTransactionSeriesIndicator(transaction: Transaction, group: Fina
 }
 
 const TRANSACTION_STATUS_SORT_ORDER: Record<StatementTransactionVisualStatus, number> = {
-    ...STATEMENT_STATUS_SORT_ORDER,
-    forecast: 5,
-    skipped: 4,
+    posted: 0,
+    forecast: 1,
+    payment: 2,
+    skipped: 3,
 };
 
 const TRANSACTION_STATUS_BADGE_CLASS: Record<StatementTransactionVisualStatus, string> = {
-    ...STATEMENT_STATUS_BADGE_CLASS,
+    posted: "border-emerald-400/25 bg-emerald-500/10 text-emerald-200",
     forecast: "border-sky-400/25 bg-sky-500/10 text-sky-200",
+    payment: "border-violet-400/25 bg-violet-500/10 text-violet-200",
     skipped: "border-slate-400/25 bg-slate-500/10 text-slate-200",
 };
 
 const TRANSACTION_STATUS_LABELS: Record<StatementTransactionVisualStatus, string> = {
-    ...STATEMENT_STATUS_LABELS,
-    forecast: "PREVISTA",
+    posted: "LANÇADO",
+    forecast: "PREVISTO",
+    payment: "PAGAMENTO",
     skipped: "IGNORADA",
 };
 
@@ -317,21 +319,20 @@ export function StatementContentPanel({
     const transactionSnapshots = useMemo<StatementTransactionSnapshot[]>(
         () =>
             transactions.map((transaction) => {
-                const invoice = transaction.invoiceId ? invoiceById.get(transaction.invoiceId) : null;
                 return {
                     transaction,
                     transactionStatus:
-                        transaction.status === "skipped"
+                        transaction.systemKind === "invoice_payment"
+                            ? "payment"
+                            : transaction.status === "skipped"
                             ? "skipped"
                             : transaction.commitment === "forecast"
                               ? "forecast"
-                              : invoice
-                                ? resolveInvoiceVisualStatus(invoice, cardById.get(invoice.creditCardId) ?? null)
-                                : null,
+                              : "posted",
                     categoryLabel: getTransactionCategoryDisplayLabel(transaction.category),
                 };
             }),
-        [cardById, invoiceById, transactions],
+        [transactions],
     );
 
     const filteredTransactionSnapshots = useMemo(() => {
@@ -417,6 +418,7 @@ export function StatementContentPanel({
                       transaction: contextTransaction,
                       group: transactionGroupsById.get(contextTransaction.groupId),
                       isSelected: bulkSelection.selectedIdSet.has(contextTransaction.id),
+                      context: "invoice",
                   })
                 : [],
         [bulkSelection.selectedIdSet, contextTransaction, transactionGroupsById],
@@ -606,7 +608,10 @@ export function StatementContentPanel({
                                     {sortedTransactionSnapshots.map(({ transaction, transactionStatus, categoryLabel }) => {
                                         const group = transactionGroupsById.get(transaction.groupId);
                                         const seriesIndicator = resolveTransactionSeriesIndicator(transaction, group);
-                                        const creditCard = transaction.creditCardId ? cardById.get(transaction.creditCardId) : null;
+                                        const paymentInvoice = transaction.paymentForInvoiceId ? invoiceById.get(transaction.paymentForInvoiceId) : null;
+                                        const linkedCardId = transaction.creditCardId ?? transaction.invoicePaymentMeta?.creditCardId ?? paymentInvoice?.creditCardId ?? null;
+                                        const creditCard = linkedCardId ? cardById.get(linkedCardId) : null;
+                                        const isInvoicePayment = transaction.systemKind === "invoice_payment";
                                         const CategoryIcon = getCategoryIconComponent(transaction.category.icon, transaction.category.type);
                                         const categoryColor = transaction.category.color ?? "#9CA3AF";
                                         const categoryBackground = `${categoryColor}22`;
@@ -660,6 +665,12 @@ export function StatementContentPanel({
                                                             ) : (
                                                                 "--"
                                                             )}
+                                                            {seriesIndicator?.kind === "installment" && <span className="shrink-0 text-xs text-white/55">{seriesIndicator.label}</span>}
+                                                            {seriesIndicator?.kind === "recurring" && (
+                                                                <span className="inline-flex shrink-0 text-white/85" role="img" title="Transacao recorrente" aria-label="Transacao recorrente">
+                                                                    <Repeat2 strokeWidth={2} size={15} />
+                                                                </span>
+                                                            )}
                                                         </div>
                                                     </td>
                                                 )}
@@ -672,10 +683,9 @@ export function StatementContentPanel({
                                                     <td className="truncate border-b border-white/[0.04] px-3 py-2.5 text-[14px] font-medium text-white">
                                                         <div className="flex min-w-0 max-w-full items-center gap-1.5">
                                                             <span className="truncate">{transaction.description || "Sem descricao"}</span>
-                                                            {seriesIndicator?.kind === "installment" && <span className="shrink-0 text-xs text-white/55">{seriesIndicator.label}</span>}
-                                                            {seriesIndicator?.kind === "recurring" && (
-                                                                <span className="inline-flex shrink-0 text-white/55" role="img" title="Transacao recorrente" aria-label="Transacao recorrente">
-                                                                    <Repeat2 size={13} />
+                                                            {isInvoicePayment && (
+                                                                <span className="inline-flex shrink-0 text-violet-300" role="img" title="Pagamento vinculado à fatura" aria-label="Pagamento vinculado à fatura">
+                                                                    <Link2 size={13} />
                                                                 </span>
                                                             )}
                                                         </div>
@@ -733,8 +743,8 @@ export function StatementContentPanel({
                                                     </td>
                                                 )}
                                                 {showValue && (
-                                                    <td className="overflow-hidden whitespace-nowrap border-b border-white/[0.04] px-3 py-2.5 text-right font-semibold text-red-400">
-                                                        {formatCurrency(transaction.value)}
+                                                    <td className={`overflow-hidden whitespace-nowrap border-b border-white/[0.04] px-3 py-2.5 text-right font-semibold ${isInvoicePayment ? "text-emerald-300" : "text-red-400"}`}>
+                                                        {formatCurrency(isInvoicePayment ? -transaction.value : transaction.value)}
                                                     </td>
                                                 )}
                                             </tr>

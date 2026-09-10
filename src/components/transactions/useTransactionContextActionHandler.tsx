@@ -1,11 +1,14 @@
 import type { Transaction } from "../../context/FinanceContext";
-import { useFinanceActions } from "../../context/FinanceContext";
+import { useFinanceActions, useFinanceCreditCardInvoices } from "../../context/FinanceContext";
+import { getMonthKeyFromDateValue } from "../../context/financeTypes";
 import { useModal } from "../../context/ModalContext";
+import { usePage } from "../../context/PageContext";
 import { ConfirmActionModal } from "../modal/ConfirmActionModal";
 import { EditTransaction } from "../modal/EditTransaction";
 import { AddCardSpending } from "../modal/AddCardSpending";
 import { AddTransactionModal } from "../modal/AddTransaction";
 import { AddTransferModal } from "../modal/AddTransferModal";
+import { TransactionSeriesModal } from "../modal/TransactionSeriesModal";
 import { buildDeleteTransactionImpactPreview, useDeleteTransactionImpactData } from "./deleteTransactionImpact";
 import type { TransactionContextAction } from "./transactionContextActions";
 import { buildDuplicateTransactionPrefill, buildDuplicateTransferPrefill } from "./duplicateTransactionPrefill";
@@ -48,7 +51,7 @@ function getStatusDescription(transaction: Transaction, action: TransactionConte
     const label = getTransactionDisplayLabel(transaction);
 
     if (action.id === "pay_today") {
-        return `Registra hoje o ${transaction.type === "income" ? "recebimento" : "pagamento"} de "${label}", preservando a data prevista.`;
+        return `Registra hoje o ${transaction.type === "income" ? "recebimento" : "pagamento"} de "${label}" e atualiza a data da ocorrência.`;
     }
 
     if (action.nextStatus === "skipped") {
@@ -64,12 +67,42 @@ function getStatusDescription(transaction: Transaction, action: TransactionConte
 
 export function useTransactionContextActionHandler() {
     const { deleteTransactionWithScope, setTransactionStatus, markTransactionAsPaid, updateTransaction } = useFinanceActions();
+    const creditCardInvoices = useFinanceCreditCardInvoices();
     const { openModal } = useModal();
+    const { goToPage } = usePage();
     const deleteImpactData = useDeleteTransactionImpactData();
 
     return (transaction: Transaction, action: TransactionContextAction) => {
         if (action.id === "open") {
             openModal(<EditTransaction transaction={transaction} />);
+            return;
+        }
+
+        if (action.id === "view_series") {
+            openModal(<TransactionSeriesModal transaction={transaction} />);
+            return;
+        }
+
+        if (action.id === "view_invoice") {
+            const invoiceId = transaction.paymentForInvoiceId ?? transaction.invoicePaymentMeta?.invoiceId;
+            const invoice = creditCardInvoices.find((item) => item.id === invoiceId);
+            if (invoice) {
+                goToPage("statement", {
+                    page: "statement",
+                    selectedCardId: invoice.creditCardId,
+                    selectedMonth: getMonthKeyFromDateValue(invoice.dueDate),
+                });
+            }
+            return;
+        }
+
+        if (action.id === "view_expenses") {
+            goToPage("transactions", {
+                page: "transactions",
+                tab: "spending",
+                selectedMonth: getMonthKeyFromDateValue(transaction.date),
+                targetTransactionId: transaction.id,
+            });
             return;
         }
 

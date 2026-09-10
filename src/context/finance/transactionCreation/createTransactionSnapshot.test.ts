@@ -65,4 +65,14 @@ describe("transaction creation through the domain entry point", () => {
         expect(() => createTransactionSnapshot(empty(), { ...draft, date: "2026-02-30", scheduledDate: "2026-02-30" }, options)).toThrow();
         expect(() => createTransactionSnapshot(empty(), { ...cardDraft, status: "paid" }, options)).toThrow(/fatura/);
     });
+
+    it("keeps an individual card expense forecast out of the invoice until it is posted", () => {
+        const cardDraft = { ...draft, paymentMethod: "credit_card" as const, creditCardId: fixtureCard.id };
+        const forecast = createTransactionSnapshot(empty(), { ...cardDraft, commitment: "forecast" }, options);
+        const posted = createTransactionSnapshot(empty(), { ...cardDraft, commitment: "posted" }, options);
+        expect(forecast.transactions[0].commitment).toBe("forecast");
+        expect(forecast.creditCardInvoices[0].totalAmount).toBe(0);
+        expect(posted.transactions[0].commitment).toBe("posted");
+        expect(posted.creditCardInvoices[0].totalAmount).toBe(100);
+    });
 });

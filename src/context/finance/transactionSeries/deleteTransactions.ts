@@ -6,6 +6,7 @@ import { recalculateGroupTotals } from "./helpers";
 import { parseInvoicePaymentNote } from "../financeCore";
 import { syncCreditCardInvoices } from "../syncCreditCardInvoices";
 import { assertInvoiceMutation } from "../invoiceMutations";
+import { occurrenceDate } from "../recurrence/projectOccurrences";
 
 export function deleteTransactionsSnapshot(before: FinanceSnapshot, transactionId: string, scope: TransactionSeriesScope, today = getLocalTodayDate()): FinanceSnapshot {
     const snapshot = materializeOccurrence(before, transactionId);
@@ -24,13 +25,17 @@ export function deleteTransactionsSnapshot(before: FinanceSnapshot, transactionI
         if (!targeted) return [transaction];
         if (scope !== "single" && isConsolidatedOccurrence(transaction, parent, today)) return [transaction];
         removed.add(transaction.id);
-        if (recurring && scope === "single") return [{ ...transaction, occurrenceNumber: selectedNumber, status: "skipped" as const, paidAt: null }];
         return [];
     });
     const groupsWithTransactions = new Set(transactions.map((item) => item.groupId));
     const groups = snapshot.transactionGroups.flatMap((item) => {
         if (item.transactionMode !== "recurring") return groupsWithTransactions.has(item.id) ? [item] : [];
-        if ((item.recurrenceRule?.seriesId ?? item.id) !== seriesId || scope === "single") return [item];
+        if ((item.recurrenceRule?.seriesId ?? item.id) !== seriesId) return [item];
+        if (scope === "single") {
+            const rule = item.recurrenceRule!;
+            const excludedDate = occurrenceDate(rule, selectedNumber);
+            return [{ ...item, recurrenceRule: { ...rule, excludedDates: [...new Set([...rule.excludedDates, excludedDate])] } }];
+        }
         return [{ ...item, recurrenceRule: { ...item.recurrenceRule!, seriesId, stopNumber: Math.min(item.recurrenceRule?.stopNumber ?? Infinity, scope === "all" ? 0 : selectedNumber - 1) } }];
     });
     const invoices = snapshot.creditCardInvoices.map((invoice) => {

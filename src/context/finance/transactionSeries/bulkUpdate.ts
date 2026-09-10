@@ -3,6 +3,7 @@ import type { BulkUpdateTransactionsDraft } from "../contextTypes";
 import { materializeOccurrence } from "../recurrence/materializeOccurrence";
 import { applyTransactionStatus } from "../transactionStatus";
 import { updateTransactionSeriesSnapshot } from "./updateTransactionSeriesSnapshot";
+import { getLocalTodayDate } from "../../../lib/localDate";
 
 export function updateTransactionsBulkSnapshot(snapshot: FinanceSnapshot, draft: BulkUpdateTransactionsDraft, now = new Date().toISOString()): FinanceSnapshot {
     let next = snapshot;
@@ -11,7 +12,7 @@ export function updateTransactionsBulkSnapshot(snapshot: FinanceSnapshot, draft:
         const transaction = next.transactions.find((item) => item.id === id)!;
         if (transaction.paymentForInvoiceId) continue;
         const tagIds = [...new Set(next.transactionTags.filter((link) => link.transactionId === id).map((link) => link.tagId).concat(draft.tagIdsToAdd ?? []))];
-        if (draft.status) next = applyTransactionStatus(next, id, draft.status, now);
+        if (draft.status) next = applyTransactionStatus(next, id, draft.status, now, draft.settleToday ? getLocalTodayDate(new Date(now)) : undefined);
         next = updateTransactionSeriesSnapshot({ snapshot: next, transactionId: id, scope: "single", now, draft: {
             categoryId: draft.categoryId, beneficiaryId: draft.beneficiaryId, tagIds,
         } }).snapshot;

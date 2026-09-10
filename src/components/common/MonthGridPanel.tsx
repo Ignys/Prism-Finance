@@ -4,6 +4,9 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 interface MonthGridPanelProps {
     selectedMonth: string;
     onMonthChange: (monthKey: string) => void;
+    // Atalho do rodape: por padrao vai para o mes atual; a pagina de faturas passa a fatura atual.
+    shortcutMonth?: string;
+    shortcutLabel?: string;
 }
 
 const MONTHS = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
@@ -34,7 +37,7 @@ function parseYear(monthKey: string): number | null {
  * Conteudo do seletor de mes: navegacao de ano, grade com os 12 meses e atalho
  * para o mes atual. Usado dentro dos popovers de mes (filtros e overview).
  */
-export function MonthGridPanel({ selectedMonth, onMonthChange }: MonthGridPanelProps) {
+export function MonthGridPanel({ selectedMonth, onMonthChange, shortcutMonth, shortcutLabel = "Ir para o mês atual" }: MonthGridPanelProps) {
     const [pickerYear, setPickerYear] = useState(() => parseYear(selectedMonth) ?? new Date().getFullYear());
 
     useEffect(() => {
@@ -93,10 +96,10 @@ export function MonthGridPanel({ selectedMonth, onMonthChange }: MonthGridPanelP
 
             <button
                 type="button"
-                onClick={() => onMonthChange(getCurrentMonthKey())}
+                onClick={() => onMonthChange(shortcutMonth ?? getCurrentMonthKey())}
                 className="mt-3 w-full rounded-xl border border-white/[0.12] bg-white/[0.03] px-3 py-2 text-xs font-semibold uppercase tracking-[0.08em] text-white/75 transition-colors hover:border-white/[0.24] hover:bg-white/[0.08] hover:text-white"
             >
-                Ir para o mês atual
+                {shortcutLabel}
             </button>
         </div>
     );

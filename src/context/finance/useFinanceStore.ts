@@ -1924,9 +1924,9 @@ export function useFinanceStore(): FinanceStoreValue {
     }, [buildSnapshot, persistFullSnapshot, setSnapshotState]);
 
     const setTransactionStatus = useCallback(
-        async (transaction: Transaction, status: TransactionStatus) => {
+        async (transaction: Transaction, status: TransactionStatus, effectiveDate?: string) => {
             const before = materializeOccurrence(buildSnapshot(), transaction.id);
-            const updated = applyTransactionStatus(before, transaction.id, normalizeTransactionStatus(status));
+            const updated = applyTransactionStatus(before, transaction.id, normalizeTransactionStatus(status), new Date().toISOString(), effectiveDate);
             if (updated === before) return;
             const syncedInvoices = syncCreditCardInvoices({
                 creditCards: updated.creditCards,
@@ -1948,7 +1948,7 @@ export function useFinanceStore(): FinanceStoreValue {
     const markTransactionAsPaid = useCallback(
         async (transaction: Transaction) => {
             const current = storedTransactionsRef.current.find((item) => item.id === transaction.id);
-            if (!current || current.status === "pending") await setTransactionStatus(transaction, "paid");
+            if (!current || current.status === "pending") await setTransactionStatus(transaction, "paid", getTodayDate());
         },
         [setTransactionStatus],
     );

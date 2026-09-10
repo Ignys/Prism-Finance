@@ -85,12 +85,24 @@ export async function validateRecurrenceRuntime(database, expectDatabaseError) {
     await expectDatabaseError(() => apply({ transactions: [{ ...occurrence, commitment: "posted", scheduled_date: "2026-03-25", invoice_id: invoiceId }] }), "PAID_INVOICE_CHARGE_IMMUTABLE");
     await expectDatabaseError(() => apply({ transactions: [{ ...occurrence, id: "extra-charge", occurrence_number: 2, commitment: "posted", invoice_id: invoiceId }] }), "PAID_INVOICE_REQUIRES_PAYMENT_REVERSAL");
     await expectDatabaseError(() => apply({ transactions: [{ ...occurrence, commitment: "posted", status: "paid" }] }), "PAID_INVOICE_CHARGE_IMMUTABLE");
+    const explicitlySelectedInvoiceId = "invoice-recur-card-2026-04";
+    const openInvoiceCharge = { ...occurrence, id: "open-invoice-charge", occurrence_number: 2, commitment: "posted", scheduled_date: "2026-03-25", invoice_id: explicitlySelectedInvoiceId };
+    await apply({
+        credit_card_invoices: [{ id: explicitlySelectedInvoiceId, credit_card_id: group.credit_card_id, cycle_key: "2026-04", closing_date: "2026-03-10", due_date: "2026-04-17", total_amount: 0, paid_amount: 0, status: "open", created_at: group.created_at }],
+        transactions: [openInvoiceCharge],
+    });
+    await apply({ transactions: [{ ...openInvoiceCharge, scheduled_date: "2026-01-31", invoice_id: explicitlySelectedInvoiceId }] });
+    assert.deepEqual(
+        (await database.query("select scheduled_date::text, invoice_id from public.transactions where id=$1", [openInvoiceCharge.id])).rows[0],
+        { scheduled_date: "2026-01-31", invoice_id: explicitlySelectedInvoiceId },
+        "an explicit open invoice must take precedence over the date-based paid cycle",
+    );
     // Explicitly reverse payment before amending its purchase history.
     await apply({}, [{ entity_type: "transaction", entity_id: remainingPayment.id }]);
     assert.equal(Number((await database.query("select paid_amount from public.credit_card_invoices where id=$1", [invoiceId])).rows[0].paid_amount), 40);
     assert.equal((await database.query("select count(*)::int as count from public.ledger_entries where transaction_id=$1", [remainingPayment.id])).rows[0].count, 0);
     await apply({}, [{ entity_type: "transaction", entity_id: payment.id }, { entity_type: "transaction_group", entity_id: paymentGroup.id }]);
-    await apply({ transactions: [{ ...occurrence, commitment: "posted", scheduled_date: "2026-03-25", invoice_id: invoiceId }] });
+    await apply({ transactions: [{ ...occurrence, commitment: "posted", scheduled_date: "2026-03-25", invoice_id: null }] });
     assert.equal((await database.query("select invoice_id, scheduled_date from public.transactions where id=$1", [occurrence.id])).rows[0].invoice_id, "invoice-recur-card-2026-04");
     assert.equal((await database.query("select count(*)::int as count from public.project_recurring_occurrences('2026-01-01','2026-01-31')")).rows[0].count, 0);
 

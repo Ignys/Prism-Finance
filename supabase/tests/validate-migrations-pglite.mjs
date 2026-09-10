@@ -81,6 +81,7 @@ const migrationNames = [
     "025_explicit_transaction_routing.sql",
     "026_paid_card_routing_guard.sql",
     "027_attachment_retry_upsert.sql",
+    "028_explicit_invoice_precedence.sql",
 ];
 
 let legacyRecurrences;

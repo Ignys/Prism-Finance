@@ -1,7 +1,7 @@
 import { getLocalTodayDate } from "../../lib/localDate";
 import type { Transaction, TransactionGroup, TransactionSeriesScope, TransactionStatus } from "../../context/FinanceContext";
 
-export type TransactionContextActionId = "open" | "select" | "toggle_status" | "pay_today" | "post_card" | "ignore" | "duplicate" | "delete_single" | "delete_this_and_next" | "delete_all";
+export type TransactionContextActionId = "open" | "view_series" | "view_invoice" | "view_expenses" | "select" | "toggle_status" | "pay_today" | "post_card" | "ignore" | "duplicate" | "delete_single" | "delete_this_and_next" | "delete_all";
 
 export interface TransactionContextAction {
     id: TransactionContextActionId;
@@ -15,6 +15,7 @@ interface BuildTransactionContextActionsParams {
     transaction: Transaction;
     group: TransactionGroup | undefined;
     isSelected?: boolean;
+    context?: "transactions" | "invoice";
 }
 
 function isCreditCardSpending(transaction: Transaction): boolean {
@@ -105,13 +106,27 @@ function getSingleDeleteLabel(transaction: Transaction, group: TransactionGroup 
     return "Excluir";
 }
 
-export function buildTransactionContextActions({ transaction, group, isSelected = false }: BuildTransactionContextActionsParams): TransactionContextAction[] {
+export function buildTransactionContextActions({ transaction, group, isSelected = false, context = "transactions" }: BuildTransactionContextActionsParams): TransactionContextAction[] {
     const actions: TransactionContextAction[] = [
         {
             id: "open",
             label: getOpenLabel(transaction),
         },
     ];
+
+    if (!isInvoicePayment(transaction)) {
+        actions.push({
+            id: "view_series",
+            label: group?.transactionMode === "installment" ? "Visualizar parcelamento" : "Visualizar série",
+        });
+    }
+
+    if (isInvoicePayment(transaction)) {
+        actions.push({
+            id: context === "invoice" ? "view_expenses" : "view_invoice",
+            label: context === "invoice" ? "Ver nas despesas" : "Ver na fatura",
+        });
+    }
 
     if (!isInvoicePayment(transaction)) {
         actions.push({

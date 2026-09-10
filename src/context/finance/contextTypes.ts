@@ -52,6 +52,7 @@ export interface BulkUpdateTransactionsDraft {
     categoryId?: string | null;
     beneficiaryId?: string | null;
     status?: TransactionStatus | null;
+    settleToday?: boolean;
     tagIdsToAdd?: string[];
 }
 

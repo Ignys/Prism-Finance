@@ -1,12 +1,13 @@
 import { createLedgerEntriesForPaidTransaction, normalizeStoredTransaction, resolveTransactionCreditCardId } from "./financeCore";
 import type { FinanceSnapshot, TransactionStatus } from "./domainTypes";
 
-/** A wallet settlement changes its effective date, never its scheduled date. */
+/** A wallet settlement may move the selected occurrence to its effective date. */
 export function applyTransactionStatus(
     snapshot: FinanceSnapshot,
     transactionId: string,
     status: TransactionStatus,
     paidAt = new Date().toISOString(),
+    effectiveDate?: string,
 ): FinanceSnapshot {
     const transaction = snapshot.transactions.find((item) => item.id === transactionId);
     if (!transaction || transaction.status === status) return snapshot;
@@ -20,7 +21,13 @@ export function applyTransactionStatus(
     if (transaction.invoiceId && snapshot.creditCardInvoices.some((invoice) => invoice.id === transaction.invoiceId && invoice.paidAmount > 0)) {
         throw new Error("Reverta o pagamento da fatura antes de alterar seus gastos.");
     }
-    const nextTransaction = normalizeStoredTransaction({ ...transaction, status, commitment: status === "paid" ? "posted" : transaction.commitment, paidAt: status === "paid" ? paidAt : null });
+    const nextTransaction = normalizeStoredTransaction({
+        ...transaction,
+        scheduledDate: status === "paid" && effectiveDate ? effectiveDate : transaction.scheduledDate,
+        status,
+        commitment: status === "paid" ? "posted" : transaction.commitment,
+        paidAt: status === "paid" ? paidAt : null,
+    });
     return {
         ...snapshot,
         transactions: snapshot.transactions.map((item) => item.id === transactionId ? nextTransaction : item),

@@ -15,6 +15,7 @@ export interface ResolvedDraft {
     destinationWalletId: string | null;
     creditCardId: string | null;
     invoiceId: string | null;
+    commitment: "forecast" | "posted";
     tagIds: string[];
 }
 
@@ -68,15 +69,16 @@ export function resolveDraft(snapshot: FinanceSnapshot, selected: StoredTransact
     const creditCardId = draft.paymentMethod === "wallet" ? null : draft.paymentMethod === "credit_card" ? validCreditCardId ?? currentCreditCardId : currentCreditCardId;
     const status = draft.status === undefined ? selected.status : normalizeTransactionStatus(draft.status);
     const dateOrCardChanged = scheduledDate !== selected.scheduledDate || creditCardId !== currentCreditCardId;
-    // A previous automatic assignment is not an explicit override for a new date.
+    const hasInvoiceDraft = Object.prototype.hasOwnProperty.call(draft, "invoiceId");
     const requestedInvoiceId = draft.invoiceId?.trim() || null;
-    const invoiceId = dateOrCardChanged && (!requestedInvoiceId || requestedInvoiceId === selected.invoiceId)
-        ? null
-        : Object.prototype.hasOwnProperty.call(draft, "invoiceId") ? requestedInvoiceId : selected.invoiceId;
+    // The invoice field is authoritative when the form submits it. Only fall
+    // back to date-based routing when no invoice choice was provided.
+    const invoiceId = hasInvoiceDraft ? requestedInvoiceId : dateOrCardChanged ? null : selected.invoiceId;
+    const commitment = draft.commitment ?? selected.commitment ?? "posted";
     const currentTagIds = snapshot.transactionTags.filter((link) => link.transactionId === selected.id).map((link) => link.tagId);
     const tagIds = Array.from(new Set(draft.tagIds ?? currentTagIds)).filter((tagId) => snapshot.tags.some((tag) => tag.id === tagId));
 
-    return { amount, scheduledDate, status, title, notes, categoryId, beneficiaryId, sourceWalletId, destinationWalletId, creditCardId, invoiceId, tagIds };
+    return { amount, scheduledDate, status, title, notes, categoryId, beneficiaryId, sourceWalletId, destinationWalletId, creditCardId, invoiceId, commitment, tagIds };
 }
 
 export function buildPatchedMetadataGroup(snapshot: FinanceSnapshot, group: TransactionGroup, resolved: ResolvedDraft): TransactionGroup {

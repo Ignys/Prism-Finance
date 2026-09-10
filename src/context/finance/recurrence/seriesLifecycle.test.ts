@@ -68,13 +68,15 @@ describe("recurrence lifecycle and stable identity", () => {
         expect(project(updated).map((item) => item.amount)).toEqual([100, 200, 200, 200, 200, 200]);
     });
 
-    it("persists a skipped tombstone and ends next occurrences while retaining paid history", () => {
-        const skipped = deleteTransactionsSnapshot(empty(), id(2), "single", "2026-03-05");
-        expect(project(skipped).filter((item) => item.status === "pending")).toHaveLength(5);
-        expect(skipped.transactions[0]).toMatchObject({ id: id(2), occurrenceNumber: 2, status: "skipped" });
-        const paid = updateTransactionsBulkSnapshot(skipped, { transactionIds: [id(1)], status: "paid" }, now);
+    it("persists an individual deletion only in the series rule and ends next occurrences while retaining paid history", () => {
+        const deleted = deleteTransactionsSnapshot(empty(), id(2), "single", "2026-03-05");
+        expect(deleted.transactions).toHaveLength(0);
+        expect(deleted.transactionGroups[0].recurrenceRule?.excludedDates).toContain("2026-02-28");
+        expect(project(structuredClone(deleted)).map((item) => item.occurrenceNumber)).toEqual([1, 3, 4, 5, 6]);
+        expect(() => materializeOccurrence(structuredClone(deleted), id(2))).toThrow();
+        const paid = updateTransactionsBulkSnapshot(deleted, { transactionIds: [id(1)], status: "paid" }, now);
         const ended = deleteTransactionsSnapshot(paid, id(3), "this_and_next", "2026-03-05");
-        expect(project(ended).map((item) => item.occurrenceNumber)).toEqual([1, 2]);
+        expect(project(ended).map((item) => item.occurrenceNumber)).toEqual([1]);
         expect(() => materializeOccurrence(ended, id(3))).toThrow();
         expect(ended.ledgerEntries).toEqual(paid.ledgerEntries);
     });
@@ -134,6 +136,39 @@ describe("recurrence lifecycle and stable identity", () => {
         expect(repeated.ledgerEntries).toHaveLength(2);
         expect(repeated.ledgerEntries.reduce((sum, item) => sum + item.amount, 0)).toBe(0);
         expect(repeated.transactionGroups).toHaveLength(2);
+    });
+
+    it("settles only the selected recurring occurrence on today's date", () => {
+        const paid = updateTransactionsBulkSnapshot(empty(), { transactionIds: [id(2)], status: "paid", settleToday: true }, now);
+        expect(paid.transactions).toHaveLength(1);
+        expect(paid.transactions[0]).toMatchObject({ occurrenceNumber: 2, scheduledDate: "2026-03-05", status: "paid", paidAt: now });
+        expect(project(paid).map((item) => [item.occurrenceNumber, item.scheduledDate])).toEqual([
+            [1, "2026-01-31"], [2, "2026-03-05"], [3, "2026-03-31"], [4, "2026-04-30"], [5, "2026-05-31"], [6, "2026-06-30"],
+        ]);
+    });
+
+    it("confirms one card occurrence without confirming future occurrences", () => {
+        const cardGroup = { ...group, sourceWalletId: null, creditCardId: fixtureCard.id };
+        const snapshot = fixtureSnapshot([cardGroup], []);
+        const confirmed = updateTransactionSeriesSnapshot({
+            snapshot: materializeOccurrence(snapshot, id(2)), transactionId: id(2), scope: "single",
+            draft: { commitment: "posted" }, now, wasProjected: true,
+        }).snapshot;
+        expect(confirmed.transactions[0]).toMatchObject({ occurrenceNumber: 2, commitment: "posted" });
+        expect(project(confirmed).filter((item) => item.occurrenceNumber !== 2).every((item) => item.commitment === "forecast")).toBe(true);
+    });
+
+    it("keeps card commitment individual even when other edits use a series scope", () => {
+        const cardGroup = { ...group, sourceWalletId: null, creditCardId: fixtureCard.id };
+        const rows = [1, 2, 3].map((number) => fixtureTransaction({
+            id: id(number), occurrenceNumber: number, scheduledDate: `2026-0${number}-05`, commitment: "forecast",
+            invoiceId: `invoice-${fixtureCard.id}-2026-0${number}`,
+        }));
+        const confirmed = updateTransactionSeriesSnapshot({
+            snapshot: fixtureSnapshot([cardGroup], rows), transactionId: id(1), scope: "all",
+            draft: { commitment: "posted" }, now, createGroupId: () => "commitment-revision",
+        }).snapshot;
+        expect(confirmed.transactions.map((item) => item.commitment)).toEqual(["posted", "forecast", "forecast"]);
     });
 
     it("moves one card occurrence to a wallet without detaching its identity or changing later card forecasts", () => {

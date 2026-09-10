@@ -279,7 +279,7 @@ export function TransactionsOverviewPanel({
             {/* Total do periodo */}
             <div className="relative mt-3.5">
                 <div className="flex items-center justify-between">
-                    <p className="text-[10px] uppercase tracking-[0.14em] text-white/55">Total no período</p>
+                    <p className="text-[10px] uppercase tracking-[0.14em] text-white/55">Total</p>
                     <span className="rounded-full border border-white/10 bg-white/[0.04] px-1.5 py-0.5 text-[10px] text-white/60">{summary.total.count}</span>
                 </div>
                 <p className={`mt-1 text-xl font-semibold tracking-wide ${tone.amount}`}>{currencyFormatter.format(summary.total.amount)}</p>

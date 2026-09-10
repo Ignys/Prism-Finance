@@ -8,13 +8,16 @@ interface MonthPickerControlProps {
     onMonthChange: (monthKey: string) => void;
     formatMonthLabel: (monthKey: string) => string;
     shiftMonth: (monthKey: string, delta: number) => string;
+    // Atalho do rodape do popover: por padrao vai para o mes atual.
+    shortcutMonth?: string;
+    shortcutLabel?: string;
 }
 
 /**
  * Controle de navegacao de mes (setas + botao central que abre o MonthGridPanel).
  * Usado nos overviews de fatura e transacoes para manter a mesma UI/UX.
  */
-export function MonthPickerControl({ selectedMonth, onMonthChange, formatMonthLabel, shiftMonth }: MonthPickerControlProps) {
+export function MonthPickerControl({ selectedMonth, onMonthChange, formatMonthLabel, shiftMonth, shortcutMonth, shortcutLabel }: MonthPickerControlProps) {
     const [isOpen, setIsOpen] = useState(false);
     const triggerRef = useRef<HTMLButtonElement>(null);
     const overlayRef = useRef<HTMLDivElement>(null);
@@ -85,6 +88,8 @@ export function MonthPickerControl({ selectedMonth, onMonthChange, formatMonthLa
             >
                 <MonthGridPanel
                     selectedMonth={selectedMonth}
+                    shortcutMonth={shortcutMonth}
+                    shortcutLabel={shortcutLabel}
                     onMonthChange={(monthKey) => {
                         onMonthChange(monthKey);
                         setIsOpen(false);

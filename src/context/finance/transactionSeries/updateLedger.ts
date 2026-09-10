@@ -6,6 +6,7 @@ function transactionFinancialSignature(transaction: StoredTransaction, group: Tr
         amount: transaction.amount,
         scheduledDate: transaction.scheduledDate,
         status: transaction.status,
+        commitment: transaction.commitment,
         paidAt: transaction.paidAt,
         invoiceId: transaction.invoiceId,
         sourceWalletId: resolveTransactionSourceWalletId(transaction, group),
