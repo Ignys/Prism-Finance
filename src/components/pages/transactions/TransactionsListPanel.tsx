@@ -1,3 +1,4 @@
+import { motion, useReducedMotion } from "framer-motion";
 import { useEffect, useMemo, useState, type MouseEvent } from "react";
 import { ArrowDown, ArrowUp, Circle, CircleSlash, Link2, Repeat2 } from "lucide-react";
 import { type Beneficiary, type Transaction, type Wallet, useFinanceActions, useFinanceBeneficiaries, useFinanceSession, useFinanceTransactionGroups } from "../../../context/FinanceContext";
@@ -6,6 +7,7 @@ import { getCategoryIconComponent } from "../../../lib/categoryIcons";
 import { useLocalPreferenceSection } from "../../../lib/localPreferences";
 import { getTransactionCategoryDisplay, getTransactionCategoryDisplayLabel } from "../../../lib/transactionCategory";
 import { BeneficiaryAvatar } from "../../common/BeneficiaryAvatar";
+import { ENTRANCE_EASE, getItemEntranceDelay, PANEL_ENTRANCE_ANIMATE, PANEL_ENTRANCE_INITIAL, PANEL_ENTRANCE_TRANSITION } from "../entranceMotion";
 import { TableColumnToggleButton } from "../../common/TableColumnToggleButton";
 import { WalletAvatar } from "../../common/WalletAvatar";
 import { BulkTransactionEditModal } from "../../modal/BulkTransactionEditModal";
@@ -196,6 +198,9 @@ function TableControlButton({ label, active, onClick }: { label: string; active:
     return <TableColumnToggleButton label={label} active={active} onClick={onClick} />;
 }
 
+const ROW_ENTRANCE_INITIAL = { opacity: 0, y: 10 };
+const ROW_ENTRANCE_ANIMATE = { opacity: 1, y: 0 };
+
 function TransactionsTable({ tabs, activeTab, wallets, beneficiariesById, transactionGroupsById, sortMode, onSortModeChange, onAction, selectedMonth }: TransactionsTableProps) {
     const activeTabConfig = tabs.find((tab) => tab.key === activeTab) ?? tabs[0];
     const transactions = activeTabConfig?.transactions ?? [];
@@ -204,6 +209,7 @@ function TransactionsTable({ tabs, activeTab, wallets, beneficiariesById, transa
     const { openModal } = useModal();
     const { updateTransactionsBulk } = useFinanceActions();
     const bulkSelection = useTransactionBulkSelection(transactions);
+    const shouldReduceMotion = useReducedMotion();
     const [selectionMode, setSelectionMode] = useState(false);
     const [viewPreferences, setViewPreferences] = useLocalPreferenceSection(
         user?.uid,
@@ -339,18 +345,23 @@ function TransactionsTable({ tabs, activeTab, wallets, beneficiariesById, transa
     };
 
     return (
-        <section className="min-w-0 rounded-2xl border border-white/[0.08] bg-[#111111] ">
+        <motion.section
+            initial={shouldReduceMotion ? false : PANEL_ENTRANCE_INITIAL}
+            animate={PANEL_ENTRANCE_ANIMATE}
+            transition={PANEL_ENTRANCE_TRANSITION}
+            className="min-w-0 flex-1 rounded-2xl border border-white/[0.08] bg-[#111111] shadow-[0_24px_60px_-32px_rgba(0,0,0,0.9)]"
+        >
             <div className="flex flex-wrap items-center justify-between gap-3 p-3">
-                <div className="flex items-center gap-3 flex-wrap">
+                <div className="flex flex-wrap items-center gap-3">
                     <h2 className="text-sm uppercase text-white/60">
                         {activeTabConfig.label} de {format(new Date(selectedMonth || new Date()), "MMMM 'de' yyyy", { locale: ptBR })}
                     </h2>
-                    <span className="rounded-full px-2 py-0.5 text-xs border border-white/[0.05] bg-[#111111] text-white/40">
+                    <span className="rounded-full border border-white/[0.05] bg-[#111111] px-2 py-0.5 text-xs text-white/40">
                         {transactions.length} {transactions.length === 1 ? "item encontrado" : "itens encontrados"}
                     </span>
                 </div>
-                <div className="flex flex-wrap justify-end gap-2">
-                    <div className="hidden sm:flex items-center gap-1 flex-wrap">
+                <div className="flex flex-wrap items-center justify-end gap-2">
+                    <div className="hidden flex-wrap items-center gap-1 sm:flex">
                         <TableControlButton label="STATUS" active={showStatus} onClick={() => toggleViewPreference("showStatus")} />
                         <TableControlButton label="DATA" active={showDate} onClick={() => toggleViewPreference("showDate")} />
                         <TableControlButton label="DESCRIÇÃO" active={showDescription} onClick={() => toggleViewPreference("showDescription")} />
@@ -363,7 +374,7 @@ function TransactionsTable({ tabs, activeTab, wallets, beneficiariesById, transa
             </div>
 
             {transactions.length < 1 ? (
-                <div className="rounded-2xl bg-white/[0.02] px-3 py-6 text-center text-sm text-white/55">{activeTabConfig.emptyMessage}</div>
+                <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] px-3 py-6 text-center text-sm text-white/55">{activeTabConfig.emptyMessage}</div>
             ) : (
                 <div className="elegant-scrollbar min-w-0 overflow-x-auto rounded-2xl pb-4">
                     <table className="w-full max-w-full table-fixed border-separate border-spacing-0 text-sm text-white/85">
@@ -407,7 +418,7 @@ function TransactionsTable({ tabs, activeTab, wallets, beneficiariesById, transa
                             </tr>
                         </thead>
                         <tbody>
-                            {transactions.map((transaction) => {
+                            {transactions.map((transaction, index) => {
                                 const group = transactionGroupsById.get(transaction.groupId);
                                 const seriesIndicator = resolveTransactionSeriesIndicator(transaction, group);
                                 const wallet = resolveTransactionWallet(wallets, transaction.inWallet);
@@ -431,11 +442,18 @@ function TransactionsTable({ tabs, activeTab, wallets, beneficiariesById, transa
                                     : transaction.status === "pending" && transaction.isProjected ? "Prevista" : STATUS_LABELS[transaction.status];
 
                                 return (
-                                    <tr
+                                    <motion.tr
                                         key={transaction.id}
+                                        initial={shouldReduceMotion ? false : ROW_ENTRANCE_INITIAL}
+                                        animate={ROW_ENTRANCE_ANIMATE}
+                                        transition={{
+                                            delay: shouldReduceMotion ? 0 : getItemEntranceDelay(index),
+                                            duration: 0.38,
+                                            ease: ENTRANCE_EASE,
+                                        }}
                                         onClick={() => handleRowClick(transaction)}
                                         onContextMenu={(event) => handleRowContextMenu(event, transaction)}
-                                        className={`${selectionMode && canBulkEdit ? "cursor-pointer" : "cursor-context-menu"} transition-colors   ${
+                                        className={`${selectionMode && canBulkEdit ? "cursor-pointer" : "cursor-context-menu"} transition-colors ${
                                             isSelected
                                                 ? "bg-sky-500/[0.09] odd:bg-sky-500/[0.12] hover:bg-sky-900/[0.6]  shadow-[inset_3px_0_0_rgba(0,_170,226,_0.7)]"
                                                 : contextMenu?.transactionId === transaction.id
@@ -444,7 +462,7 @@ function TransactionsTable({ tabs, activeTab, wallets, beneficiariesById, transa
                                         }`}
                                     >
                                         {selectionMode && (
-                                            <td className="px-3 py-2.5 border-b border-white/[0.04]">
+                                            <td className="border-b border-white/[0.04] px-3 py-2.5">
                                                 <BulkRowCheckbox
                                                     checked={isSelected}
                                                     disabled={!canBulkEdit}
@@ -558,7 +576,7 @@ function TransactionsTable({ tabs, activeTab, wallets, beneficiariesById, transa
                                                 R$ {formatCurrencyBRL(transaction.value)}
                                             </td>
                                         )}
-                                    </tr>
+                                    </motion.tr>
                                 );
                             })}
                         </tbody>
@@ -574,7 +592,7 @@ function TransactionsTable({ tabs, activeTab, wallets, beneficiariesById, transa
                     <TransactionContextMenu state={contextMenu} actions={contextActions} onSelect={handleSelectAction} onClose={() => setContextMenu(null)} />
                 </div>
             )}
-        </section>
+        </motion.section>
     );
 }
 

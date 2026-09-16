@@ -436,7 +436,7 @@ export function TransactionsPage() {
     return (
         <div className="w-full flex">
             <div className="flex flex-col gap-3 2xl:flex-row w-full">
-                <div className="min-w-0 flex-1 space-y-1.5">
+                <div className="min-w-0 flex-1 space-y-3">
                     <TransactionsFiltersPanel
                         showAdvancedFilters={showAdvancedFilters}
                         searchQuery={searchQuery}
@@ -461,7 +461,7 @@ export function TransactionsPage() {
                         onTagToggle={toggleTagFilter}
                     />
 
-                    <div className="flex flex-col gap-3 lg:flex-row lg:items-start w-full shrink-0">
+                    <div className="flex w-full min-w-0 flex-col gap-3 lg:flex-row lg:items-start">
                         <div className="min-w-0 flex-1">
                             <TransactionsListPanel
                                 activeTab={activeTab}

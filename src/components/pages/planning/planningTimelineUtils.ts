@@ -294,7 +294,7 @@ function getMonthReality(params: {
             id: `invoice:${invoice.id}`,
             source: "invoice",
             invoiceId: invoice.id,
-            label: `Fatura ${cardNameById.get(invoice.creditCardId) ?? "cartao"}${forecastAmount > 0 ? " (inclui previsões)" : ""}`,
+            label: `Fatura ${cardNameById.get(invoice.creditCardId) ?? "cartão"}`,
             amount: openAmount,
             iconName: null,
             isDisabled: disabledInheritedExpenseIds.has(`invoice:${invoice.id}`),

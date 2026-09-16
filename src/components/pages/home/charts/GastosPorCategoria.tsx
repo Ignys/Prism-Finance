@@ -182,30 +182,28 @@ export function GastosPorCategoria() {
                             const CategoryIcon = getCategoryIconComponent(cat.icon, cat.type);
 
                             return (
-                                <>
-                                    <div key={cat.key} className="flex items-center justify-between rounded-lg p-1.5">
-                                        <div className="flex min-w-0 items-center gap-2">
-                                            <span
-                                                className="inline-flex h-7 w-7 items-center justify-center rounded-md text-white"
-                                                style={{
-                                                    color: cat.color,
-                                                    backgroundColor: `${cat.color}10`,
-                                                    border: `1px solid ${cat.color}20`,
-                                                }}
-                                            >
-                                                <CategoryIcon size={16} />
-                                            </span>
-                                            <span className="truncate text-sm text-neutral-200">{cat.label}</span>
-                                        </div>
-                                        <div className="flex grow max-w-full justify-end h-1 mx-3">
-                                            <div className="h-0.5 rounded-full bg-white/20" style={{ width: `${cat.value / 30}%`, backgroundColor: cat.color }}></div>
-                                        </div>
-                                        <div className="flex items-center gap-3 text-sm w-29 justify-end">
-                                            <span className="text-neutral-400 text-xs">{formatPercent(cat.value)}%</span>
-                                            <span className="font-semibold text-white">R$ {formatCurrency(cat.value)}</span>
-                                        </div>
+                                <div key={cat.key} className="flex items-center justify-between rounded-lg p-1.5">
+                                    <div className="flex min-w-0 items-center gap-2">
+                                        <span
+                                            className="inline-flex h-7 w-7 items-center justify-center rounded-md text-white"
+                                            style={{
+                                                color: cat.color,
+                                                backgroundColor: `${cat.color}10`,
+                                                border: `1px solid ${cat.color}20`,
+                                            }}
+                                        >
+                                            <CategoryIcon size={16} />
+                                        </span>
+                                        <span className="truncate text-sm text-neutral-200">{cat.label}</span>
                                     </div>
-                                </>
+                                    <div className="flex grow max-w-full justify-end h-1 mx-3">
+                                        <div className="h-0.5 rounded-full bg-white/20" style={{ width: `${cat.value / 30}%`, backgroundColor: cat.color }}></div>
+                                    </div>
+                                    <div className="flex items-center gap-3 text-sm w-29 justify-end">
+                                        <span className="text-neutral-400 text-xs">{formatPercent(cat.value)}%</span>
+                                        <span className="font-semibold text-white">R$ {formatCurrency(cat.value)}</span>
+                                    </div>
+                                </div>
                             );
                         })
                     ) : (

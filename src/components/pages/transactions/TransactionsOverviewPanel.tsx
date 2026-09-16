@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import { ArrowDownRight, ArrowRightLeft, ArrowUpRight, CalendarRange } from "lucide-react";
 import type { Wallet } from "../../../context/FinanceContext";
 import { AnchoredOverlay } from "../../transactions/AnchoredOverlay";
 import { MonthPickerControl } from "../../common/MonthPickerControl";
 import { WalletAvatar } from "../../common/WalletAvatar";
+import { PANEL_ENTRANCE_ANIMATE, PANEL_ENTRANCE_INITIAL, PANEL_ENTRANCE_TRANSITION } from "../entranceMotion";
 import { MultiSelectCombobox } from "../../transactions/MultiSelectCombobox";
 import type { ComboboxOptionBase } from "../../transactions/SingleSelectCombobox";
 import {
@@ -194,13 +195,14 @@ export function TransactionsOverviewPanel({
 }: TransactionsOverviewPanelProps) {
     const walletOptions = useMemo<WalletOption[]>(() => wallets.map((wallet) => ({ id: wallet.id, label: wallet.name, searchText: wallet.name, wallet })), [wallets]);
     const tone = TYPE_TONE[activeTab];
+    const shouldReduceMotion = useReducedMotion();
     const paidPercent = summary.total.amount > 0 ? Math.min(100, Math.max(0, Math.round((summary.paid.amount / summary.total.amount) * 100))) : 0;
 
     return (
         <motion.article
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.2, ease: "easeOut" }}
+            initial={shouldReduceMotion ? false : PANEL_ENTRANCE_INITIAL}
+            animate={PANEL_ENTRANCE_ANIMATE}
+            transition={PANEL_ENTRANCE_TRANSITION}
             className="relative overflow-hidden rounded-2xl border border-white/[0.08] bg-[#111111] p-4"
         >
             <div className={`pointer-events-none absolute -bottom-20 -right-20 h-40 w-40 rounded-full blur-3xl ${activeTab === "income" ? "bg-emerald-400/10" : activeTab === "spending" ? "bg-red-400/10" : "bg-white/[0.06]"}`} />

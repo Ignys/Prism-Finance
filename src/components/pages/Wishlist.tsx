@@ -1,3 +1,4 @@
+import { motion, useReducedMotion } from "framer-motion";
 import { ExternalLink, Flag, Gift, Plus, Search, UserRound } from "lucide-react";
 import { useEffect, useMemo, useState, type MouseEvent } from "react";
 import { useNavigate } from "react-router-dom";
@@ -8,6 +9,7 @@ import { getCategoryIconComponent } from "../../lib/categoryIcons";
 import { getWishItemPriorityMeta } from "../../lib/wishlistPriority";
 import { resolveUserDisplayName } from "../../lib/userProfile";
 import { AddWishItem } from "../modal/AddWishItem";
+import { ENTRANCE_EASE, getItemEntranceDelay, PANEL_ENTRANCE_ANIMATE, PANEL_ENTRANCE_INITIAL, PANEL_ENTRANCE_TRANSITION } from "./entranceMotion";
 import { getCurrentMonthKey } from "./planning/planningTimelineUtils";
 import { WishlistContextMenu, type WishlistContextMenuState } from "./wishlist/WishlistContextMenu";
 import { buildWishlistContextActions, type WishlistContextAction } from "./wishlist/wishlistContextActions";
@@ -74,6 +76,7 @@ export function WishlistPage() {
     const { openModal } = useModal();
     const navigate = useNavigate();
     const handleWishlistContextAction = useWishlistContextActionHandler();
+    const shouldReduceMotion = useReducedMotion();
     const [activeOwnerUid, setActiveOwnerUid] = useState("");
     const [sortOption, setSortOption] = useState<WishlistSortOption>("price");
     const [searchTerm, setSearchTerm] = useState("");
@@ -256,7 +259,12 @@ export function WishlistPage() {
     return (
         <>
             <div className="flex min-h-[calc(100vh-8rem)] w-full flex-col">
-                <header className="flex flex-wrap items-end justify-between gap-2 text-left mb-3">
+                <motion.header
+                    initial={shouldReduceMotion ? false : { opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.42, ease: ENTRANCE_EASE }}
+                    className="flex flex-wrap items-end justify-between gap-2 text-left mb-3"
+                >
                     {hasFamilyTabs ? (
                         <div className="flex flex-wrap gap-2">
                             {wishlistTabs
@@ -307,10 +315,15 @@ export function WishlistPage() {
                             Ordenar por: {sortLabel}
                         </button>
                     </div>
-                </header>
+                </motion.header>
 
                 <section className="">
-                    <div className="relative w-full mb-3">
+                    <motion.div
+                        initial={shouldReduceMotion ? false : PANEL_ENTRANCE_INITIAL}
+                        animate={PANEL_ENTRANCE_ANIMATE}
+                        transition={PANEL_ENTRANCE_TRANSITION}
+                        className="relative w-full mb-3"
+                    >
                         <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-white/40" />
                         <input
                             type="text"
@@ -319,7 +332,7 @@ export function WishlistPage() {
                             placeholder="Buscar"
                             className="w-full rounded-xl border border-white/[0.08] bg-black/25 py-2 pl-9 pr-3 text-sm text-white outline-none transition-colors placeholder:text-white/30 focus:border-white/[0.24] focus:bg-black/40"
                         />
-                    </div>
+                    </motion.div>
                     {activeWishlist.items.length === 0 ? (
                         <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-white/[0.08] bg-white/[0.02] px-6 py-14 text-center">
                             <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-white/[0.05] text-white/70">
@@ -340,7 +353,7 @@ export function WishlistPage() {
                         </div>
                     ) : (
                         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-                            {visibleItems.map((wishItem) => {
+                            {visibleItems.map((wishItem, index) => {
                                 const resolvedLink = resolveWishLink(wishItem.link);
                                 const CategoryIcon = getCategoryIconComponent(wishItem.categoryIcon, "expense");
                                 const priorityMeta = getWishItemPriorityMeta(wishItem.priority);
@@ -348,8 +361,15 @@ export function WishlistPage() {
                                 const projectionMonth = isOwnWishlist ? projectionMonthByWishItemId.get(wishItem.id) : null;
 
                                 return (
-                                    <article
+                                    <motion.article
                                         key={wishItem.id}
+                                        initial={shouldReduceMotion ? false : { opacity: 0, y: 22, scale: 0.985 }}
+                                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                                        transition={{
+                                            delay: shouldReduceMotion ? 0 : getItemEntranceDelay(index),
+                                            duration: 0.46,
+                                            ease: ENTRANCE_EASE,
+                                        }}
                                         role={isOwnWishlist ? "button" : undefined}
                                         tabIndex={isOwnWishlist ? 0 : -1}
                                         onClick={isOwnWishlist ? () => openModal(<AddWishItem mode="edit" wishItemId={wishItem.id} />) : undefined}
@@ -432,7 +452,7 @@ export function WishlistPage() {
                                                 ) : null}
                                             </div>
                                         </div>
-                                    </article>
+                                    </motion.article>
                                 );
                             })}
                         </div>

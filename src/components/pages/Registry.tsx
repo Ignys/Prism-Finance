@@ -85,7 +85,7 @@ export function RegistryPage() {
                 </motion.div>
 
                 <div className="relative min-h-0 flex-1 overflow-visible lg:overflow-hidden">
-                    <AnimatePresence initial={false} mode="wait">
+                    <AnimatePresence mode="wait">
                         <motion.div
                             key={activeTab}
                             initial={shouldReduceMotion ? false : { opacity: 0, y: 10 }}

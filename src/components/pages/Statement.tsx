@@ -300,7 +300,6 @@ export function StatementPage() {
                 <div className="min-w-0 flex-1 space-y-3">
                     <StatementContentPanel
                         selectedMonth={selectedDueMonth}
-                        invoices={monthInvoices}
                         transactions={monthInvoiceItems}
                         cardById={cardById}
                         invoiceById={invoiceById}

@@ -61,7 +61,16 @@ function assertUnrelatedLedgerPreserved(before: FinanceSnapshot, after: FinanceS
         }
 
         const nextEntry = afterById.get(entry.id);
-        if (!nextEntry || JSON.stringify(nextEntry) !== JSON.stringify(entry)) {
+        if (!nextEntry) {
+            throw new TransactionSeriesInvariantError(`O lancamento nao afetado ${entry.id} foi removido ou alterado.`);
+        }
+
+        // balanceAfter is a running, derived value. A legitimate financial edit can
+        // update the balance of every later entry in the same wallet even though
+        // those ledger entries themselves were not changed.
+        const { balanceAfter: _beforeBalance, ...beforeEntry } = entry;
+        const { balanceAfter: _afterBalance, ...afterEntry } = nextEntry;
+        if (JSON.stringify(afterEntry) !== JSON.stringify(beforeEntry)) {
             throw new TransactionSeriesInvariantError(`O lancamento nao afetado ${entry.id} foi removido ou alterado.`);
         }
     });

@@ -1,6 +1,7 @@
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { FunnelPlus, Search, X } from "lucide-react";
 import type { TransactionStatus } from "../../../context/FinanceContext";
+import { ENTRANCE_EASE } from "../entranceMotion";
 import { INPUT_CLASS, SELECT_CLASS, STATUS_LABELS, STATUS_ORDER, type SelectOption, type TagOption } from "./transactionsPageShared";
 
 interface TransactionsFiltersPanelProps {
@@ -50,9 +51,15 @@ export function TransactionsFiltersPanel({
     onMaxAmountChange,
     onTagToggle,
 }: TransactionsFiltersPanelProps) {
+    const shouldReduceMotion = useReducedMotion();
+
     return (
-        <section className="">
-            <div className="relative flex flex-col gap-1">
+        <motion.section
+            initial={shouldReduceMotion ? false : { opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.42, ease: ENTRANCE_EASE }}
+        >
+            <div className="relative flex flex-col gap-3">
                 <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
                     <div className="w-full min-w-0">
                         <div className="relative w-full">
@@ -66,7 +73,7 @@ export function TransactionsFiltersPanel({
                             />
                         </div>
                     </div>
-                    <div className="flex w-full flex-wrap gap-2 py-1.5 lg:w-auto lg:flex-nowrap">
+                    <div className="flex w-full flex-wrap gap-2 lg:w-auto lg:flex-nowrap">
                         <button
                             type="button"
                             onClick={onToggleAdvancedFilters}
@@ -171,6 +178,6 @@ export function TransactionsFiltersPanel({
                     )}
                 </AnimatePresence>
             </div>
-        </section>
+        </motion.section>
     );
 }

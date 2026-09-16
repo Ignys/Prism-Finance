@@ -1,3 +1,4 @@
+import { motion, useReducedMotion } from "framer-motion";
 import { useEffect, useMemo, useState, type MouseEvent, type ReactNode } from "react";
 import { ArrowDown, ArrowUp, Circle, CreditCard as CreditCardIcon, Link2, Repeat2, Search } from "lucide-react";
 import { type Beneficiary, type CreditCard, type CreditCardInvoice, type Transaction, useFinanceBeneficiaries, useFinanceSession, useFinanceTransactionGroups } from "../../../context/FinanceContext";
@@ -7,6 +8,7 @@ import { getCategoryIconComponent } from "../../../lib/categoryIcons";
 import { useLocalPreferenceSection } from "../../../lib/localPreferences";
 import { getTransactionCategoryDisplayLabel } from "../../../lib/transactionCategory";
 import { BeneficiaryAvatar } from "../../common/BeneficiaryAvatar";
+import { ENTRANCE_EASE, getItemEntranceDelay, PANEL_ENTRANCE_ANIMATE, PANEL_ENTRANCE_INITIAL, PANEL_ENTRANCE_TRANSITION } from "../entranceMotion";
 import { TableColumnToggleButton } from "../../common/TableColumnToggleButton";
 import { WalletAvatar } from "../../common/WalletAvatar";
 import { BulkTransactionEditModal } from "../../modal/BulkTransactionEditModal";
@@ -16,19 +18,12 @@ import { buildTransactionContextActions, type TransactionContextAction } from ".
 import { formatCurrencyBRL, formatTransactionDate } from "../../transactions/transactionView";
 import { isTransactionEligibleForBulkEdit, useTransactionBulkSelection } from "../../transactions/useTransactionBulkSelection";
 import {
-    compareInvoicesByDueDate,
     formatCurrency,
     formatMonthLabel,
-    getInvoiceOpenAmount,
-    resolveInvoiceVisualStatus,
-    type StatementInvoiceVisualStatus,
-    STATEMENT_STATUS_BADGE_CLASS,
-    STATEMENT_STATUS_LABELS,
 } from "./statementPageShared";
 
 interface StatementContentPanelProps {
     selectedMonth: string;
-    invoices: CreditCardInvoice[];
     transactions: Transaction[];
     cardById: Map<string, CreditCard>;
     invoiceById: Map<string, CreditCardInvoice>;
@@ -39,7 +34,6 @@ interface StatementContentPanelProps {
 type StatementSortField = "status" | "date" | "description" | "category" | "beneficiary" | "value";
 type StatementSortDirection = "asc" | "desc";
 type StatementSortMode = `${StatementSortField}-${StatementSortDirection}`;
-type ConsolidatedHeaderStatus = StatementInvoiceVisualStatus | "mixed" | "none" | "forecast";
 type StatementTransactionVisualStatus = "skipped" | "forecast" | "posted" | "payment";
 
 interface StatementTableViewPreferences {
@@ -66,6 +60,9 @@ const DEFAULT_STATEMENT_TABLE_VIEW_PREFERENCES: StatementTableViewPreferences = 
     showBeneficiary: true,
     showValue: true,
 };
+
+const ROW_ENTRANCE_INITIAL = { opacity: 0, y: 10 };
+const ROW_ENTRANCE_ANIMATE = { opacity: 1, y: 0 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -109,13 +106,6 @@ interface StatementTransactionSnapshot {
     categoryLabel: string;
 }
 
-interface InvoiceSnapshot {
-    invoice: CreditCardInvoice;
-    creditCard: CreditCard | null;
-    openAmount: number;
-    visualStatus: StatementInvoiceVisualStatus;
-}
-
 type FinanceTransactionGroup = ReturnType<typeof useFinanceTransactionGroups>[number];
 
 type TransactionSeriesIndicator = { kind: "installment"; label: string } | { kind: "recurring" } | null;
@@ -157,20 +147,6 @@ const TRANSACTION_STATUS_LABELS: Record<StatementTransactionVisualStatus, string
     forecast: "PREVISTO",
     payment: "PAGAMENTO",
     skipped: "IGNORADA",
-};
-
-const HEADER_STATUS_BADGE_CLASS: Record<ConsolidatedHeaderStatus, string> = {
-    ...STATEMENT_STATUS_BADGE_CLASS,
-    forecast: TRANSACTION_STATUS_BADGE_CLASS.forecast,
-    mixed: "border-violet-300/30 bg-violet-500/10 text-violet-200",
-    none: "border-white/[0.2] bg-white/[0.05] text-white/70",
-};
-
-const HEADER_STATUS_LABELS: Record<ConsolidatedHeaderStatus, string> = {
-    ...STATEMENT_STATUS_LABELS,
-    forecast: "Previsão",
-    mixed: "Mistas",
-    none: "Sem fatura",
 };
 
 const SORT_DEFAULT_DIRECTION: Record<StatementSortField, StatementSortDirection> = {
@@ -257,7 +233,6 @@ function compareByText(aValue: string, bValue: string): number {
 
 export function StatementContentPanel({
     selectedMonth,
-    invoices,
     transactions,
     cardById,
     invoiceById,
@@ -268,7 +243,6 @@ export function StatementContentPanel({
     const transactionGroups = useFinanceTransactionGroups();
     const { user } = useFinanceSession();
     const { openModal } = useModal();
-    const sortedInvoices = [...invoices].sort(compareInvoicesByDueDate);
     const [viewPreferences, setViewPreferences] = useLocalPreferenceSection(
         user?.uid,
         STATEMENT_TABLE_VIEW_PREFERENCES_SECTION,
@@ -406,6 +380,7 @@ export function StatementContentPanel({
     }, [filteredTransactionSnapshots, sortMode]);
     const displayedTransactions = useMemo(() => sortedTransactionSnapshots.map((snapshot) => snapshot.transaction), [sortedTransactionSnapshots]);
     const bulkSelection = useTransactionBulkSelection(displayedTransactions);
+    const shouldReduceMotion = useReducedMotion();
 
     const contextTransaction = useMemo(
         () => sortedTransactionSnapshots.find((snapshot) => snapshot.transaction.id === contextMenu?.transactionId)?.transaction ?? null,
@@ -484,51 +459,19 @@ export function StatementContentPanel({
         bulkSelection.toggleTransaction(transaction.id);
     };
 
-    const invoiceSnapshots = useMemo<InvoiceSnapshot[]>(
-        () =>
-            sortedInvoices.map((invoice) => ({
-                invoice,
-                creditCard: cardById.get(invoice.creditCardId) ?? null,
-                openAmount: getInvoiceOpenAmount(invoice),
-                visualStatus: resolveInvoiceVisualStatus(invoice, cardById.get(invoice.creditCardId) ?? null),
-            })),
-        [cardById, sortedInvoices],
-    );
-
     const invoiceMonthLabel = useMemo(() => {
         return formatMonthLabel(selectedMonth);
     }, [selectedMonth]);
 
-    const headerTitle = `Fatura de ${invoiceMonthLabel}`;
-    const forecastTotal = invoices.reduce((sum, invoice) => sum + (invoice.forecastAmount ?? 0), 0);
-
-    const headerStatus = useMemo<ConsolidatedHeaderStatus>(() => {
-        if (invoiceSnapshots.length < 1) {
-            return "none";
-        }
-        if (invoiceSnapshots.every(({ invoice }) => invoice.totalAmount === 0) && invoiceSnapshots.some(({ invoice }) => (invoice.forecastAmount ?? 0) > 0)) return "forecast";
-
-        return invoiceSnapshots[0].visualStatus;
-    }, [invoiceSnapshots]);
-
     const canCreateCardSpending = cardById.size > 0;
     return (
         <div className="flex flex-col gap-3">
-            <section className="rounded-2xl border border-white/[0.08] bg-[#111111] p-4 shadow-[0_24px_60px_-32px_rgba(0,0,0,0.9)]">
-                {forecastTotal > 0 && (
-                    <p className="mb-3 text-xs text-sky-200">{formatCurrency(forecastTotal)} em cobranças previstas. Elas passam a consumir limite quando você confirma o lançamento.</p>
-                )}
-                <header className="flex flex-wrap items-center justify-between gap-3">
-                    <div className="flex min-w-0 items-center gap-2">
-                        <h1 className="text-sm font-semibold uppercase tracking-[0.08em] text-white">{headerTitle}</h1>
-                        <span className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] uppercase tracking-[0.08em] ${HEADER_STATUS_BADGE_CLASS[headerStatus]}`}>
-                            {HEADER_STATUS_LABELS[headerStatus]}
-                        </span>
-                    </div>
-                </header>
-            </section>
-
-            <div className="relative w-full min-w-0">
+            <motion.div
+                initial={shouldReduceMotion ? false : { opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.42, ease: ENTRANCE_EASE }}
+                className="relative w-full min-w-0"
+            >
                 <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-white/40" />
                 <input
                     type="text"
@@ -537,10 +480,15 @@ export function StatementContentPanel({
                     placeholder="Buscar"
                     className="w-full rounded-xl border border-white/[0.08] bg-black/25 py-2 pl-9 pr-3 text-sm text-white outline-none transition-colors placeholder:text-white/30 focus:border-white/[0.24] focus:bg-black/40"
                 />
-            </div>
+            </motion.div>
 
-            <div className="flex w-full min-w-0 flex-col gap-2 xl:flex-row">
-                <section className="min-w-0 flex-1 rounded-2xl border border-white/[0.08] bg-[#111111] shadow-[0_24px_60px_-32px_rgba(0,0,0,0.9)]">
+            <div className="flex w-full min-w-0 flex-col gap-3 lg:flex-row lg:items-start">
+                <motion.section
+                    initial={shouldReduceMotion ? false : PANEL_ENTRANCE_INITIAL}
+                    animate={PANEL_ENTRANCE_ANIMATE}
+                    transition={PANEL_ENTRANCE_TRANSITION}
+                    className="min-w-0 flex-1 rounded-2xl border border-white/[0.08] bg-[#111111] shadow-[0_24px_60px_-32px_rgba(0,0,0,0.9)]"
+                >
                     <div className="flex flex-wrap items-center justify-between gap-3 p-3">
                         <div className="flex flex-wrap items-center gap-3 ">
                             <p className="text-sm uppercase text-white/60">FATURA DE {invoiceMonthLabel}</p>
@@ -605,7 +553,7 @@ export function StatementContentPanel({
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {sortedTransactionSnapshots.map(({ transaction, transactionStatus, categoryLabel }) => {
+                                    {sortedTransactionSnapshots.map(({ transaction, transactionStatus, categoryLabel }, index) => {
                                         const group = transactionGroupsById.get(transaction.groupId);
                                         const seriesIndicator = resolveTransactionSeriesIndicator(transaction, group);
                                         const paymentInvoice = transaction.paymentForInvoiceId ? invoiceById.get(transaction.paymentForInvoiceId) : null;
@@ -622,16 +570,23 @@ export function StatementContentPanel({
                                         const isSelected = bulkSelection.selectedIdSet.has(transaction.id);
 
                                         return (
-                                            <tr
+                                            <motion.tr
                                                 key={transaction.id}
+                                                initial={shouldReduceMotion ? false : ROW_ENTRANCE_INITIAL}
+                                                animate={ROW_ENTRANCE_ANIMATE}
+                                                transition={{
+                                                    delay: shouldReduceMotion ? 0 : getItemEntranceDelay(index),
+                                                    duration: 0.38,
+                                                    ease: ENTRANCE_EASE,
+                                                }}
                                                 onClick={() => handleRowClick(transaction)}
                                                 onContextMenu={(event) => handleRowContextMenu(event, transaction)}
-                                                className={`${selectionMode && canBulkEdit ? "cursor-pointer" : "cursor-context-menu"} transition-colors odd:bg-white/[0.01] hover:bg-white/[0.04] ${
+                                                className={`${selectionMode && canBulkEdit ? "cursor-pointer" : "cursor-context-menu"} transition-colors ${
                                                     isSelected
-                                                        ? "bg-emerald-500/[0.07] shadow-[inset_3px_0_0_rgba(110,231,183,0.65)]"
+                                                        ? "bg-emerald-500/[0.07] odd:bg-emerald-500/[0.1] hover:bg-emerald-900/[0.6] shadow-[inset_3px_0_0_rgba(110,231,183,0.65)]"
                                                         : contextMenu?.transactionId === transaction.id
-                                                          ? "bg-white/[0.06]"
-                                                          : ""
+                                                          ? " "
+                                                          : "odd:bg-white/[0.01] hover:bg-white/[0.01] odd:hover:bg-white/[0.02]"
                                                 }`}
                                             >
                                                 {selectionMode && (
@@ -649,7 +604,7 @@ export function StatementContentPanel({
                                                         <div className="flex min-w-0 items-center gap-2 overflow-hidden whitespace-nowrap">
                                                             <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center">
                                                                 {creditCard ? (
-                                                                    <WalletAvatar wallet={creditCard} className="h-8 w-8 rounded-md border border-white/[0.12]" iconSize={16} iconStrokeWidth={1.7} />
+                                                                    <WalletAvatar wallet={creditCard} className="h-8 w-8 rounded-md border border-white/[0.1]" iconSize={16} iconStrokeWidth={1.8} />
                                                                 ) : (
                                                                     <span className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-white/[0.12] bg-white/[0.03] text-white/45">
                                                                         <CreditCardIcon size={14} />
@@ -658,7 +613,7 @@ export function StatementContentPanel({
                                                             </span>
                                                             {transactionStatus ? (
                                                                 <span
-                                                                    className={`inline-flex shrink-0 rounded-full border px-2 py-0.5 text-[11px] uppercase tracking-[0.08em] ${TRANSACTION_STATUS_BADGE_CLASS[transactionStatus]}`}
+                                                                    className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[11px]/4 uppercase tracking-[0.08em] ${TRANSACTION_STATUS_BADGE_CLASS[transactionStatus]}`}
                                                                 >
                                                                     {TRANSACTION_STATUS_LABELS[transactionStatus]}
                                                                 </span>
@@ -747,7 +702,7 @@ export function StatementContentPanel({
                                                         {formatCurrency(isInvoicePayment ? -transaction.value : transaction.value)}
                                                     </td>
                                                 )}
-                                            </tr>
+                                            </motion.tr>
                                         );
                                     })}
                                 </tbody>
@@ -761,7 +716,7 @@ export function StatementContentPanel({
                             <TransactionContextMenu state={contextMenu} actions={contextActions} onSelect={handleSelectAction} onClose={() => setContextMenu(null)} />
                         </div>
                     )}
-                </section>
+                </motion.section>
 
                 {summaryAside ? <div className="w-full lg:w-64 lg:shrink-0">{summaryAside}</div> : null}
             </div>

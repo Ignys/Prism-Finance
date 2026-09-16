@@ -1,9 +1,10 @@
 import { useMemo } from "react";
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import { Calendar, CircleSlash, Lock, RotateCcw, Wallet } from "lucide-react";
 import type { CreditCard, CreditCardInvoice } from "../../../context/FinanceContext";
 import { MonthPickerControl } from "../../common/MonthPickerControl";
 import { WalletAvatar } from "../../common/WalletAvatar";
+import { PANEL_ENTRANCE_ANIMATE, PANEL_ENTRANCE_INITIAL, PANEL_ENTRANCE_TRANSITION } from "../entranceMotion";
 import { MultiSelectCombobox } from "../../transactions/MultiSelectCombobox";
 import { type ComboboxOptionBase } from "../../transactions/SingleSelectCombobox";
 import {
@@ -61,6 +62,7 @@ export function StatementOverviewPanel({
     const focusedInvoice = summary.focusedInvoice;
     const cardOptions = useMemo<CreditCardOption[]>(() => creditCards.map((card) => ({ id: card.id, label: card.name, searchText: card.name, card })), [creditCards]);
 
+    const shouldReduceMotion = useReducedMotion();
     const usagePercent = summary.limitTotalScope > 0 ? Math.min(100, Math.max(0, Math.round(((summary.limitTotalScope - summary.availableLimitEstimate) / summary.limitTotalScope) * 100))) : 0;
 
     const { payableInvoice, payableCreditCard, payButtonLabel, manualActionMode, manualActionInvoices, manualActionLabel } = useMemo(
@@ -70,9 +72,9 @@ export function StatementOverviewPanel({
 
     return (
         <motion.article
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.2, ease: "easeOut" }}
+            initial={shouldReduceMotion ? false : PANEL_ENTRANCE_INITIAL}
+            animate={PANEL_ENTRANCE_ANIMATE}
+            transition={PANEL_ENTRANCE_TRANSITION}
             className="relative overflow-hidden rounded-2xl border border-white/[0.08] bg-[#111111] p-4"
         >
             <div className="pointer-events-none absolute -bottom-20 -right-20 h-40 w-40 rounded-full bg-red-400/10 blur-3xl" />
@@ -114,7 +116,7 @@ export function StatementOverviewPanel({
             )}
 
             {/* Navegacao de mes */}
-            <div className="relative mt-3.5 border-y border-white/[0.06] py-2">
+            <div className="relative mt-3.5 border-y border-white/[0.06] py-2.5">
                 <MonthPickerControl
                     selectedMonth={selectedMonth}
                     onMonthChange={onMonthChange}
@@ -191,7 +193,7 @@ export function StatementOverviewPanel({
 
             {/* Limite utilizado */}
             <div className="relative mt-3.5 border-t border-white/[0.06] pt-3">
-                <div className="flex items-center justify-between text-[12px] text-white/50">
+                <div className="flex items-center justify-between text-[11px] text-white/50">
                     <span>Limite</span>
                     <span>{usagePercent}%</span>
                 </div>
@@ -203,11 +205,11 @@ export function StatementOverviewPanel({
             {/* Disponivel / total */}
             <div className="relative mt-3 flex items-center justify-between gap-2">
                 <div>
-                    <p className="text-[11px] text-white/45">Disponível</p>
+                    <p className="text-[10px] uppercase tracking-[0.14em] text-white/45">Disponível</p>
                     <p className="mt-0.5 text-sm font-medium text-emerald-200">{formatCurrency(summary.availableLimitEstimate)}</p>
                 </div>
                 <div className="text-right">
-                    <p className="text-[11px] text-white/45">Total</p>
+                    <p className="text-[10px] uppercase tracking-[0.14em] text-white/45">Total</p>
                     <p className="mt-0.5 text-sm font-medium text-white">{formatCurrency(summary.limitTotalScope)}</p>
                 </div>
             </div>

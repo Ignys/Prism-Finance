@@ -15,6 +15,7 @@ import {
 } from "../../financeTypes";
 import { projectOccurrences } from "../recurrence/projectOccurrences";
 import { persistTransactionSeriesSnapshotAtomically } from "./atomicPersistence";
+import { validateTransactionSeriesUpdateInvariants } from "./invariants";
 import { updateTransactionSeriesSnapshot } from "./updateTransactionSeriesSnapshot";
 
 const wallet: Wallet = {
@@ -314,6 +315,49 @@ describe("updateTransactionSeriesSnapshot", () => {
             expect(resolveTransactionSourceWalletId(transaction, group)).toBe(secondWallet.id);
         });
         expect(result.snapshot.ledgerEntries).toEqual(before.ledgerEntries);
+    });
+
+    it("permite recalcular o saldo acumulado de lancamentos posteriores ao editar uma ocorrencia paga", () => {
+        const before = standardSeries();
+        const result = updateTransactionSeriesSnapshot({
+            snapshot: before,
+            transactionId: "tx-june",
+            draft: {
+                ...metadataDraft(before, "tx-june", "ChatGPT Plus"),
+                value: 120,
+            },
+            scope: "single",
+            now: "2026-08-06T12:00:00.000Z",
+        });
+        const normalized = createFinanceSnapshot(
+            result.snapshot.wallets,
+            result.snapshot.creditCards,
+            result.snapshot.creditCardInvoices,
+            result.snapshot.favoriteCreditCardId,
+            result.snapshot.transactionGroups,
+            result.snapshot.transactions,
+            result.snapshot.ledgerEntries,
+            result.snapshot.beneficiaries,
+            result.snapshot.categories,
+            result.snapshot.tags,
+            result.snapshot.wishItems,
+            result.snapshot.transactionTags,
+            result.snapshot.planning,
+        );
+        const beforeJulyEntry = before.ledgerEntries.find((entry) => entry.transactionId === "tx-july")!;
+        const afterJulyEntry = normalized.ledgerEntries.find((entry) => entry.transactionId === "tx-july")!;
+        const { balanceAfter: _beforeBalance, ...beforeJulyData } = beforeJulyEntry;
+        const { balanceAfter: _afterBalance, ...afterJulyData } = afterJulyEntry;
+
+        expect(afterJulyData).toEqual(beforeJulyData);
+        expect(afterJulyEntry.balanceAfter).not.toBe(beforeJulyEntry.balanceAfter);
+        expect(() => validateTransactionSeriesUpdateInvariants({
+            before,
+            after: normalized,
+            affectedTransactionIds: result.affectedTransactionIds,
+            metadataOnly: result.metadataOnly,
+            preservePaidTransactions: false,
+        })).not.toThrow();
     });
 
     it("preserva cartao e fatura historicos ao mover apenas as pendentes para carteira", () => {
