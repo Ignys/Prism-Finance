@@ -1,5 +1,5 @@
 import { motion, useReducedMotion } from "framer-motion";
-import { ArrowDownRight, ArrowRightLeft, ArrowUpRight, Columns3Cog, CreditCard as CreditCardIcon, Gift, Plus } from "lucide-react";
+import { ArrowDownRight, ArrowRightLeft, ArrowUpRight, CalendarClock, Columns3Cog, CreditCard as CreditCardIcon, Gift, Plus } from "lucide-react";
 import { useEffect, useMemo, useState, type MouseEvent } from "react";
 import type { PlanningWishlistSelection, WishItem } from "../../../context/FinanceContext";
 import { PLANNING_ENTRANCE_EASE } from "./planningEntranceMotion";
@@ -24,6 +24,9 @@ interface PlanningDetailsAsideProps {
     onEditIncome: (income: SimulatedIncomeItem) => void;
     onEditWishlistItem: (wishItemId: string) => void;
     onOpenTransaction: (transactionId: string) => void;
+    onOpenInvoice: (invoiceId: string) => void;
+    onMoveInvoice: (item: InheritedExpenseItem) => void;
+    onRestoreInvoiceMonth: (invoiceId: string) => void;
     onToggleExpense: (expenseId: string) => void;
     onToggleIncome: (incomeId: string) => void;
     onToggleSimulatedIncome: (income: SimulatedIncomeItem) => void;
@@ -87,6 +90,9 @@ export function PlanningDetailsAside({
     onEditIncome,
     onEditWishlistItem,
     onOpenTransaction,
+    onOpenInvoice,
+    onMoveInvoice,
+    onRestoreInvoiceMonth,
     onToggleExpense,
     onToggleIncome,
     onToggleSimulatedIncome,
@@ -106,15 +112,28 @@ export function PlanningDetailsAside({
         const isNormalItem = target.itemType !== "wishlist" && target.variant === "normal";
         const isNormalExpenseInvoice = isNormalItem && target.itemType === "expense" && target.item.source === "invoice";
         const isNormalTransfer = isNormalItem && target.item.source === "transfer";
+        const invoiceItem = target.itemType === "expense" && target.variant === "normal" && target.item.source === "invoice" ? target.item : null;
+        const isGhostInvoice = Boolean(invoiceItem?.movedToMonthKey);
+        const isMovedInvoice = isGhostInvoice || (invoiceItem?.dueMonthKey !== undefined && invoiceItem.dueMonthKey !== selectedMonth?.monthKey);
 
         return buildPlanningProjectionContextActions({
             itemType: target.itemType,
             isActive,
-            canEdit: !isNormalExpenseInvoice,
+            canToggle: !isGhostInvoice,
             canRemove: !isNormalItem && target.itemType !== "wishlist",
-            editLabel: isNormalItem ? (isNormalTransfer ? "Abrir transferência" : target.itemType === "income" ? "Abrir receita" : "Abrir despesa") : undefined,
+            canMove: isNormalExpenseInvoice,
+            canRestore: isMovedInvoice,
+            editLabel: isNormalItem
+                ? isNormalExpenseInvoice
+                    ? "Abrir fatura"
+                    : isNormalTransfer
+                      ? "Abrir transferência"
+                      : target.itemType === "income"
+                        ? "Abrir receita"
+                        : "Abrir despesa"
+                : undefined,
         });
-    }, [contextMenuState]);
+    }, [contextMenuState, selectedMonth?.monthKey]);
 
     useEffect(() => {
         setContextMenuState(null);
@@ -175,13 +194,23 @@ export function PlanningDetailsAside({
             }
             if (action.id === "edit") {
                 if (target.variant === "normal") {
-                    if (target.item.transactionId) {
+                    if (target.item.source === "invoice" && target.item.invoiceId) {
+                        onOpenInvoice(target.item.invoiceId);
+                    } else if (target.item.transactionId) {
                         onOpenTransaction(target.item.transactionId);
                     }
                     return;
                 }
 
                 onEditExpense(target.item);
+                return;
+            }
+            if (action.id === "move" && target.variant === "normal") {
+                onMoveInvoice(target.item);
+                return;
+            }
+            if (action.id === "restore" && target.variant === "normal" && target.item.invoiceId) {
+                onRestoreInvoiceMonth(target.item.invoiceId);
                 return;
             }
             if (target.variant === "projected" && action.id === "remove") {
@@ -236,7 +265,7 @@ export function PlanningDetailsAside({
         if (selectedPanel === "inherited_expenses") {
             return (
                 <>
-                    {selectedMonth.inheritedItems.length === 0 ? <p className="rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-sm text-white/52">Você não tem despesas nesse mês.</p> : null}
+                    {selectedMonth.inheritedItems.length === 0 && selectedMonth.movedInvoiceItems.length === 0 ? <p className="rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-sm text-white/52">Você não tem despesas nesse mês.</p> : null}
                     {selectedMonth.inheritedItems.map((item) => (
                         <PlanningToggleRow
                             key={item.id}
@@ -248,6 +277,25 @@ export function PlanningDetailsAside({
                             active={!item.isDisabled}
                             onToggle={onToggleInheritedExpense}
                             customIcon={item.source === "invoice" ? CreditCardIcon : item.source === "transfer" ? ArrowRightLeft : undefined}
+                            onContextMenu={(event) =>
+                                handleProjectionContextMenu(event, {
+                                    itemType: "expense",
+                                    variant: "normal",
+                                    item,
+                                })
+                            }
+                        />
+                    ))}
+                    {selectedMonth.movedInvoiceItems.map((item) => (
+                        <PlanningListRow
+                            key={item.id}
+                            active={false}
+                            label={item.label}
+                            amount={item.amount}
+                            iconName={null}
+                            iconTone="expense"
+                            customIcon={CalendarClock}
+                            valueClassName=""
                             onContextMenu={(event) =>
                                 handleProjectionContextMenu(event, {
                                     itemType: "expense",
@@ -304,7 +352,7 @@ export function PlanningDetailsAside({
                             <PlanningListRow
                                 key={expense.id}
                                 active={!expense.isDisabled}
-                                label={expense.description}
+                                label={expense.installmentNumber ? `${expense.description} (${expense.installmentNumber}/${expense.installmentCount})` : expense.description}
                                 amount={expense.amount}
                                 iconName={null}
                                 iconTone="expense"

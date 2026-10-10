@@ -5,6 +5,7 @@ import { deleteTransactionsSnapshot } from "./transactionSeries/deleteTransactio
 import { updateTransactionsBulkSnapshot } from "./transactionSeries/bulkUpdate";
 import { assertInvoiceMutation } from "./invoiceMutations";
 import { materializeOccurrence } from "./recurrence/materializeOccurrence";
+import { materializeSeriesHorizon, recurringSeriesIdsOf } from "./recurrence/materializeSeriesHorizon";
 import { syncCreditCardInvoices } from "./syncCreditCardInvoices";
 import { applyTransactionStatus } from "./transactionStatus";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -1906,9 +1907,18 @@ export function useFinanceStore(): FinanceStoreValue {
     }, [buildSnapshot, persistFinanceFields, setSnapshotState]);
 
     const addTransaction = useCallback(async (draft: TransactionDraft) => {
-        const snapshot = createTransactionSnapshot(buildSnapshot(), draft, {
+        const before = buildSnapshot();
+        const created = createTransactionSnapshot(before, draft, {
             userId: user?.uid, displayName: user ? buildUserProfileData(user).displayName : DEFAULT_BENEFICIARY_NAME,
         });
+        const knownGroupIds = new Set(before.transactionGroups.map((group) => group.id));
+        const newSeriesIds = new Set(created.transactionGroups.filter((group) => !knownGroupIds.has(group.id)).map((group) => group.id));
+        const materialized = materializeSeriesHorizon(created, getTodayDate(), newSeriesIds);
+        let snapshot = created;
+        if (materialized !== created) {
+            const invoices = syncCreditCardInvoices({ creditCards: materialized.creditCards, transactionGroups: materialized.transactionGroups, transactions: materialized.transactions, existingInvoices: materialized.creditCardInvoices });
+            snapshot = buildSnapshot({ ...materialized, transactions: invoices.transactions, creditCardInvoices: invoices.creditCardInvoices });
+        }
         persistFullSnapshot(snapshot);
         setSnapshotState(snapshot);
     }, [buildSnapshot, persistFullSnapshot, setSnapshotState, user]);
@@ -1926,8 +1936,10 @@ export function useFinanceStore(): FinanceStoreValue {
     const setTransactionStatus = useCallback(
         async (transaction: Transaction, status: TransactionStatus, effectiveDate?: string) => {
             const before = materializeOccurrence(buildSnapshot(), transaction.id);
-            const updated = applyTransactionStatus(before, transaction.id, normalizeTransactionStatus(status), new Date().toISOString(), effectiveDate);
-            if (updated === before) return;
+            const changed = applyTransactionStatus(before, transaction.id, normalizeTransactionStatus(status), new Date().toISOString(), effectiveDate);
+            if (changed === before) return;
+            // Each status change rolls the series horizon forward into newly planned months.
+            const updated = materializeSeriesHorizon(changed, getTodayDate(), recurringSeriesIdsOf(changed, [transaction.id]));
             const syncedInvoices = syncCreditCardInvoices({
                 creditCards: updated.creditCards,
                 transactionGroups: updated.transactionGroups,
@@ -1968,7 +1980,8 @@ export function useFinanceStore(): FinanceStoreValue {
 
     const updateTransactionsBulk = useCallback(async (draft: BulkUpdateTransactionsDraft) => {
         const before = buildSnapshot();
-        const updated = updateTransactionsBulkSnapshot(before, draft);
+        const bulkUpdated = updateTransactionsBulkSnapshot(before, draft);
+        const updated = draft.status ? materializeSeriesHorizon(bulkUpdated, getTodayDate(), recurringSeriesIdsOf(bulkUpdated, draft.transactionIds)) : bulkUpdated;
         const invoices = syncCreditCardInvoices({ creditCards: updated.creditCards, transactionGroups: updated.transactionGroups, transactions: updated.transactions, existingInvoices: updated.creditCardInvoices });
         const snapshot = buildSnapshot({ ...updated, transactions: invoices.transactions, creditCardInvoices: invoices.creditCardInvoices });
         assertInvoiceMutation(before, snapshot);

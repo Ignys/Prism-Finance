@@ -1,5 +1,6 @@
 import {
     DEFAULT_PLANNING_STATE,
+    normalizeInvoiceMonthOverrides,
     type PlanningState,
     type ReportPeriod,
 } from "../context/finance/financeCore";
@@ -12,7 +13,9 @@ export type PlanningLocalPreferences = Pick<
     | "disabledIncomeIds"
     | "disabledSimulatedExpenseIds"
     | "disabledSimulatedIncomeIds"
+    | "invoiceMonthOverrides"
     | "timelineSelectedWalletIds"
+    | "timelineSelectedCreditCardIds"
     | "timelineCompareMode"
     | "timelineHorizontalMode"
     | "timelineMonthCount"
@@ -72,7 +75,9 @@ export function normalizePlanningLocalPreferences(value: unknown): PlanningLocal
         disabledIncomeIds: asStringArray(value.disabledIncomeIds, fallback.disabledIncomeIds),
         disabledSimulatedExpenseIds: asStringArray(value.disabledSimulatedExpenseIds, fallback.disabledSimulatedExpenseIds),
         disabledSimulatedIncomeIds: asStringArray(value.disabledSimulatedIncomeIds, fallback.disabledSimulatedIncomeIds),
+        invoiceMonthOverrides: normalizeInvoiceMonthOverrides(value.invoiceMonthOverrides),
         timelineSelectedWalletIds: asStringArray(value.timelineSelectedWalletIds, fallback.timelineSelectedWalletIds),
+        timelineSelectedCreditCardIds: asStringArray(value.timelineSelectedCreditCardIds, fallback.timelineSelectedCreditCardIds),
         timelineCompareMode: asBoolean(value.timelineCompareMode, fallback.timelineCompareMode),
         timelineHorizontalMode: asBoolean(value.timelineHorizontalMode, fallback.timelineHorizontalMode),
         timelineMonthCount: asTimelineMonthCount(value.timelineMonthCount, fallback.timelineMonthCount),
@@ -88,7 +93,9 @@ export function extractPlanningLocalPreferences(planning: PlanningState): Planni
         disabledIncomeIds: planning.disabledIncomeIds ?? [],
         disabledSimulatedExpenseIds: planning.disabledSimulatedExpenseIds ?? [],
         disabledSimulatedIncomeIds: planning.disabledSimulatedIncomeIds ?? [],
+        invoiceMonthOverrides: planning.invoiceMonthOverrides ?? {},
         timelineSelectedWalletIds: planning.timelineSelectedWalletIds ?? [],
+        timelineSelectedCreditCardIds: planning.timelineSelectedCreditCardIds ?? [],
         timelineCompareMode: planning.timelineCompareMode ?? DEFAULT_PLANNING_STATE.timelineCompareMode,
         timelineHorizontalMode: planning.timelineHorizontalMode ?? DEFAULT_PLANNING_STATE.timelineHorizontalMode,
         timelineMonthCount: planning.timelineMonthCount ?? DEFAULT_PLANNING_STATE.timelineMonthCount,

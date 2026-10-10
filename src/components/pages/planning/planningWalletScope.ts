@@ -29,15 +29,6 @@ export function getScopedWallets(wallets: Wallet[], selectedWalletIds: string[])
     return wallets.filter((wallet) => selectedWalletIdSet.has(wallet.id));
 }
 
-export function getScopedCreditCards(creditCards: CreditCard[], selectedWalletIds: string[], allWalletsSelected: boolean): CreditCard[] {
-    if (allWalletsSelected) {
-        return creditCards;
-    }
-
-    const selectedWalletIdSet = new Set(selectedWalletIds);
-    return creditCards.filter((creditCard) => creditCard.bankWalletId !== null && selectedWalletIdSet.has(creditCard.bankWalletId));
-}
-
 export function getScopedCreditCardInvoices(creditCardInvoices: CreditCardInvoice[], scopedCreditCards: CreditCard[]): CreditCardInvoice[] {
     const scopedCreditCardIds = new Set(scopedCreditCards.map((creditCard) => creditCard.id));
     return creditCardInvoices.filter((invoice) => scopedCreditCardIds.has(invoice.creditCardId));

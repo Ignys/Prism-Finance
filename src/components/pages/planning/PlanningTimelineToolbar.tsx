@@ -1,19 +1,23 @@
 import { Columns2, Rows2 } from "lucide-react";
 import type { ReactNode } from "react";
-import type { Wallet } from "../../../context/FinanceContext";
+import type { CreditCard, Wallet } from "../../../context/FinanceContext";
 import { WalletAvatar } from "../../common/WalletAvatar";
 import { MultiSelectCombobox } from "../../transactions/MultiSelectCombobox";
 import { SingleSelectCombobox, type ComboboxOptionBase } from "../../transactions/SingleSelectCombobox";
 import { Switch } from "../../ui/Switch";
 import { PLANNING_CONTROL_CENTER_TRIGGER_CLASS, PLANNING_CONTROL_TRIGGER_CLASS, PlanningControlGroup } from "./PlanningControlGroup";
+import { CreditCardOptionContent, type CreditCardOption } from "./PlanningReportsToolbar";
 
 export interface PlanningTimelineToolbarProps {
     compareMode: boolean;
     horizontalMode: boolean;
     timelineMonthCount: number;
     wallets: Wallet[];
+    creditCards: CreditCard[];
     selectedWalletIds: string[];
+    selectedCreditCardIds: string[];
     onCompareModeChange: (compareMode: boolean) => void;
+    onSelectedCreditCardIdsChange: (creditCardIds: string[]) => void;
     onHorizontalModeChange: (horizontalMode: boolean) => void;
     onSelectedWalletIdsChange: (walletIds: string[]) => void;
     onTimelineMonthCountChange: (monthCount: number) => void;
@@ -39,8 +43,11 @@ export function PlanningTimelineToolbar({
     horizontalMode,
     timelineMonthCount,
     wallets,
+    creditCards,
     selectedWalletIds,
+    selectedCreditCardIds,
     onCompareModeChange,
+    onSelectedCreditCardIdsChange,
     onHorizontalModeChange,
     onSelectedWalletIdsChange,
     onTimelineMonthCountChange,
@@ -50,6 +57,12 @@ export function PlanningTimelineToolbar({
         label: wallet.name,
         searchText: `${wallet.name} ${wallet.type} ${wallet.isActive ? "ativa" : "arquivada"}`,
         wallet,
+    }));
+    const creditCardOptions: CreditCardOption[] = creditCards.map((creditCard) => ({
+        id: creditCard.id,
+        label: creditCard.name,
+        searchText: `${creditCard.name} cartao cartão ${creditCard.isActive ? "ativo" : "arquivado"}`,
+        creditCard,
     }));
 
     return (
@@ -85,6 +98,24 @@ export function PlanningTimelineToolbar({
                     renderOptionContent={(option) => <WalletOptionContent option={option} />}
                 />
             </PlanningControlGroup>
+
+            {creditCardOptions.length > 0 ? (
+                <PlanningControlGroup>
+                    <MultiSelectCombobox
+                        label="Cartões"
+                        labelClassName="sr-only"
+                        triggerClassName={`${PLANNING_CONTROL_TRIGGER_CLASS} w-[200px]`}
+                        allowEmptySelection={false}
+                        values={selectedCreditCardIds}
+                        placeholder="Selecione os cartões"
+                        emptyMessage="Nenhum cartão encontrado."
+                        options={creditCardOptions}
+                        onChange={onSelectedCreditCardIdsChange}
+                        renderSelectedSummary={(selectedOptions) => renderSelectionCount(selectedOptions.length, "cartão", "cartões")}
+                        renderOptionContent={(option) => <CreditCardOptionContent option={option} />}
+                    />
+                </PlanningControlGroup>
+            ) : null}
 
             <PlanningControlGroup>
                 <label className={PLANNING_CONTROL_TRIGGER_CLASS}>

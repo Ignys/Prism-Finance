@@ -5,6 +5,7 @@ import { REPORTS_ENTRANCE_CONTAINER_VARIANTS, REPORTS_ENTRANCE_GRID_VARIANTS, RE
 import { PlanningReportsCategoriesSection } from "./PlanningReportsCategoriesSection";
 import { PlanningReportsEmptyState } from "./PlanningReportsEmptyState";
 import { PlanningReportsFlowSection } from "./PlanningReportsFlowSection";
+import { PlanningReportsMethodSection } from "./PlanningReportsMethodSection";
 import { PlanningReportsMetricsSection } from "./PlanningReportsMetricsSection";
 import { PlanningReportsRankingSection } from "./PlanningReportsRankingSection";
 import { buildReportsDataset } from "./planningReportsUtils";
@@ -58,6 +59,9 @@ export function PlanningReportsTab({ period, transactions, allTransactions, cred
                         </motion.div>
                         <motion.div variants={REPORTS_ENTRANCE_ITEM_VARIANTS} className="min-w-0">
                             <PlanningReportsRankingSection beneficiaryReports={beneficiaryReports} />
+                        </motion.div>
+                        <motion.div variants={REPORTS_ENTRANCE_ITEM_VARIANTS} className="col-span-2 min-w-0">
+                            <PlanningReportsMethodSection monthReports={monthReports} methodReports={summary.methodReports} />
                         </motion.div>
                     </motion.div>
                 </>

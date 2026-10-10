@@ -31,6 +31,10 @@ export interface InheritedExpenseItem {
     source: "transaction" | "transfer" | "invoice";
     transactionId?: string;
     invoiceId?: string;
+    /** Mês de vencimento real da fatura (só para `source === "invoice"`). */
+    dueMonthKey?: string;
+    /** Preenchido só no item fantasma: a fatura vence neste mês, mas o planejamento a cobra em outro. */
+    movedToMonthKey?: string;
     label: string;
     amount: number;
     iconName: string | null;
@@ -49,6 +53,8 @@ export interface MonthReality {
     activeInheritedExpenses: number;
     disabledInheritedExpenses: number;
     inheritedItems: InheritedExpenseItem[];
+    /** Faturas que vencem neste mês mas foram movidas para outro; só exibição, fora dos totais. */
+    movedInvoiceItems: InheritedExpenseItem[];
 }
 
 export interface WishlistProjectionItem {
@@ -62,6 +68,8 @@ export interface WishlistProjectionItem {
 
 export interface SimulatedExpenseItem extends PlanningSimulatedExpense {
     isDisabled: boolean;
+    /** Parcela exibida neste mês (1-based) quando a projeção é parcelada; `amount` já é o valor da parcela. */
+    installmentNumber?: number;
 }
 
 export interface MonthProjection extends MonthReality {

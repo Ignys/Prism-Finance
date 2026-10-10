@@ -19,18 +19,19 @@ import { getMonthKeyFromDateValue } from "../../context/financeTypes";
 import { useModal } from "../../context/ModalContext";
 import { usePage } from "../../context/PageContext";
 import { AddWishItem } from "../modal/AddWishItem";
+import { PlanningInvoiceMonthModal } from "../modal/PlanningInvoiceMonthModal";
 import { PlanningSimulationModal, type PlanningSimulationModalDraft } from "../modal/PlanningSimulationModal";
 import { PlanningDetailsAside } from "./planning/PlanningDetailsAside";
 import { DEFAULT_PLANNING_TAB, PlanningPageHeader } from "./planning/PlanningPageHeader";
 import { PlanningReportsTab } from "./planning/PlanningReportsTab";
 import { PlanningTimelinePanel } from "./planning/PlanningTimelinePanel";
-import { DEFAULT_TIMELINE_MONTHS, type MonthProjection, type PlanningPanel, type PlanningTab, type SimulatedExpenseItem, type SimulatedIncomeItem } from "./planning/planningTimelineTypes";
+import { DEFAULT_TIMELINE_MONTHS, type InheritedExpenseItem, type MonthProjection, type PlanningPanel, type PlanningTab, type SimulatedExpenseItem, type SimulatedIncomeItem } from "./planning/planningTimelineTypes";
 import { buildTimelineProjection, getCurrentMonthKey, mergePlanningUpdate, parseCurrencyInput } from "./planning/planningTimelineUtils";
 import {
     getAllCreditCardIds,
     getAllWalletIds,
     getScopedCreditCardInvoices,
-    getScopedCreditCards,
+    getScopedCreditCardsByIds,
     getScopedLedgerEntries,
     getReportScopedTransactions,
     getScopedTransactions,
@@ -40,6 +41,10 @@ import {
 
 function isValidPlanningMonthKey(monthKey: string): boolean {
     return /^\d{4}-(0[1-9]|1[0-2])$/.test(monthKey);
+}
+
+function toInstallmentField(installmentCount: number | null): Pick<PlanningSimulatedExpense, "installmentCount"> {
+    return installmentCount ? { installmentCount } : {};
 }
 
 function isPlanningPanel(value: string | null): value is PlanningPanel {
@@ -71,6 +76,10 @@ export function PlanningPage() {
     const walletIds = useMemo(() => getAllWalletIds(wallets), [wallets]);
     const creditCardIds = useMemo(() => getAllCreditCardIds(creditCards), [creditCards]);
     const timelineSelectedWalletIds = useMemo(() => resolveSelectedIds(walletIds, planning.timelineSelectedWalletIds ?? []), [planning.timelineSelectedWalletIds, walletIds]);
+    const timelineSelectedCreditCardIds = useMemo(
+        () => resolveSelectedIds(creditCardIds, planning.timelineSelectedCreditCardIds ?? []),
+        [creditCardIds, planning.timelineSelectedCreditCardIds],
+    );
     const reportsSelectedWalletIds = useMemo(() => resolveSelectedIds(walletIds, planning.reportsSelectedWalletIds ?? []), [planning.reportsSelectedWalletIds, walletIds]);
     const reportsSelectedCreditCardIds = useMemo(
         () => resolveSelectedIds(creditCardIds, planning.reportsSelectedCreditCardIds ?? []),
@@ -89,7 +98,7 @@ export function PlanningPage() {
     const transactions = useFinanceTransactions(projectionPeriod);
     const creditCardInvoices = useFinanceCreditCardInvoices(projectionPeriod);
     const scopedWallets = useMemo(() => getScopedWallets(wallets, timelineSelectedWalletIds), [timelineSelectedWalletIds, wallets]);
-    const scopedCreditCards = useMemo(() => getScopedCreditCards(creditCards, timelineSelectedWalletIds, timelineSelectedWalletIds.length === walletIds.length), [creditCards, timelineSelectedWalletIds, walletIds.length]);
+    const scopedCreditCards = useMemo(() => getScopedCreditCardsByIds(creditCards, timelineSelectedCreditCardIds), [creditCards, timelineSelectedCreditCardIds]);
     const scopedCreditCardInvoices = useMemo(() => getScopedCreditCardInvoices(creditCardInvoices, scopedCreditCards), [creditCardInvoices, scopedCreditCards]);
     const scopedLedgerEntries = useMemo(() => getScopedLedgerEntries(ledgerEntries, timelineSelectedWalletIds), [ledgerEntries, timelineSelectedWalletIds]);
     const scopedTransactions = useMemo(
@@ -142,7 +151,7 @@ export function PlanningPage() {
     const currentMonth = projection.months[0] ?? null;
     const selectedMonth = projection.months.find((month) => month.monthKey === selectedMonthKey) ?? currentMonth;
 
-    const commitExpenseDraft = async (monthKey: string, draft: { description: string; amountInput: string }) => {
+    const commitExpenseDraft = async (monthKey: string, draft: Pick<PlanningSimulationModalDraft, "description" | "amountInput" | "installmentCount">) => {
         const amount = parseCurrencyInput(draft.amountInput);
         if (amount <= 0) {
             throw new Error("Informe um valor maior que zero para salvar o gasto.");
@@ -153,6 +162,7 @@ export function PlanningPage() {
             monthKey,
             description: draft.description.trim() || "Gasto simulado",
             amount,
+            ...toInstallmentField(draft.installmentCount),
             createdAt: new Date().toISOString(),
         };
 
@@ -275,6 +285,33 @@ export function PlanningPage() {
         );
     };
 
+    /** `monthKey` nulo (ou igual ao vencimento) devolve a fatura ao mês original. */
+    const setInvoiceMonthOverride = (invoiceId: string, monthKey: string | null) => {
+        const { [invoiceId]: _previous, ...overrides } = planning.invoiceMonthOverrides ?? {};
+        void updatePlanningState(
+            mergePlanningUpdate(planning, {
+                invoiceMonthOverrides: monthKey ? { ...overrides, [invoiceId]: monthKey } : overrides,
+            }),
+        );
+    };
+
+    const openInvoiceMonthModal = (item: InheritedExpenseItem) => {
+        const { invoiceId, dueMonthKey } = item;
+        if (!invoiceId || !dueMonthKey || !selectedMonth) {
+            return;
+        }
+
+        openModal(
+            <PlanningInvoiceMonthModal
+                label={item.label}
+                amount={item.amount}
+                dueMonthKey={dueMonthKey}
+                chargeMonthKey={item.movedToMonthKey ?? selectedMonth.monthKey}
+                onSubmit={(monthKey) => setInvoiceMonthOverride(invoiceId, monthKey === dueMonthKey ? null : monthKey)}
+            />,
+        );
+    };
+
     const handleToggleWishlistSelection = (wishItemId: string) => {
         if (!selectedMonth) {
             return;
@@ -342,6 +379,7 @@ export function PlanningPage() {
                     ...planning.simulatedExpenses,
                     {
                         ...baseProjection,
+                        ...toInstallmentField(draft.installmentCount),
                         id: `planning-expense-${Date.now()}-${Math.floor(Math.random() * 1_000_000)}`,
                     },
                 ],
@@ -366,7 +404,9 @@ export function PlanningPage() {
         if (draft.tone === "expense") {
             await updatePlanningState(
                 mergePlanningUpdate(planning, {
-                    simulatedExpenses: planning.simulatedExpenses.map((item) => (item.id === expense.id ? { ...baseProjection, id: expense.id } : item)),
+                    simulatedExpenses: planning.simulatedExpenses.map((item) =>
+                        item.id === expense.id ? { ...baseProjection, ...toInstallmentField(draft.installmentCount), id: expense.id } : item,
+                    ),
                 }),
             );
             return;
@@ -427,16 +467,19 @@ export function PlanningPage() {
     };
 
     const openExpenseEditModal = (expense: SimulatedExpenseItem) => {
+        // Parcelas exibidas na timeline trazem mês/valor da parcela; a edição usa o total e o mês inicial salvos.
+        const storedExpense = planning.simulatedExpenses.find((item) => item.id === expense.id) ?? expense;
         openModal(
             <PlanningSimulationModal
                 title="Editar projeção"
                 tone="expense"
-                monthKey={expense.monthKey}
+                monthKey={storedExpense.monthKey}
                 initialValues={{
-                    description: expense.description,
-                    amount: expense.amount,
-                    monthKey: expense.monthKey,
+                    description: storedExpense.description,
+                    amount: storedExpense.amount,
+                    monthKey: storedExpense.monthKey,
                     tone: "expense",
+                    installmentCount: storedExpense.installmentCount,
                 }}
                 onSubmit={(draft) => commitEditedExpense(expense, draft)}
             />,
@@ -464,6 +507,19 @@ export function PlanningPage() {
         });
     };
 
+    const openInvoiceOnStatementPage = (invoiceId: string) => {
+        const invoice = creditCardInvoices.find((item) => item.id === invoiceId);
+        if (!invoice) {
+            return;
+        }
+
+        goToPage("statement", {
+            page: "statement",
+            selectedCardId: invoice.creditCardId,
+            selectedMonth: getMonthKeyFromDateValue(invoice.dueDate),
+        });
+    };
+
     const handleSelectPanel = (monthKey: string, panel: PlanningPanel) => {
         setSelectedMonthKey(monthKey);
         setSelectedPanel(panel);
@@ -473,6 +529,14 @@ export function PlanningPage() {
         void updatePlanningState(
             mergePlanningUpdate(planning, {
                 timelineSelectedWalletIds: walletIds,
+            }),
+        );
+    };
+
+    const handleTimelineCreditCardIdsChange = (creditCardIds: string[]) => {
+        void updatePlanningState(
+            mergePlanningUpdate(planning, {
+                timelineSelectedCreditCardIds: creditCardIds,
             }),
         );
     };
@@ -542,8 +606,11 @@ export function PlanningPage() {
                         horizontalMode,
                         timelineMonthCount,
                         wallets,
+                        creditCards,
                         selectedWalletIds: timelineSelectedWalletIds,
+                        selectedCreditCardIds: timelineSelectedCreditCardIds,
                         onCompareModeChange: handleTimelineCompareModeChange,
+                        onSelectedCreditCardIdsChange: handleTimelineCreditCardIdsChange,
                         onHorizontalModeChange: handleTimelineHorizontalModeChange,
                         onSelectedWalletIdsChange: handleTimelineWalletIdsChange,
                         onTimelineMonthCountChange: handleTimelineMonthCountChange,
@@ -586,6 +653,9 @@ export function PlanningPage() {
                             onEditIncome={openIncomeEditModal}
                             onEditWishlistItem={openWishlistItemOnWishlistPage}
                             onOpenTransaction={openTransactionOnTransactionsPage}
+                            onOpenInvoice={openInvoiceOnStatementPage}
+                            onMoveInvoice={openInvoiceMonthModal}
+                            onRestoreInvoiceMonth={(invoiceId) => setInvoiceMonthOverride(invoiceId, null)}
                             onToggleExpense={handleToggleSimulatedExpense}
                             onToggleIncome={handleToggleIncome}
                             onToggleSimulatedIncome={handleToggleSimulatedIncome}

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type Dispatch, type SetStateAction } from "react";
+import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
 
 const LOCAL_PREFERENCES_VERSION = 1;
 
@@ -104,8 +104,16 @@ export function useLocalPreferenceSection<T>(
     normalize: LocalPreferenceNormalizer<T> = (value) => value as T,
 ): [T, Dispatch<SetStateAction<T>>] {
     const [value, setValue] = useState<T>(() => readLocalPreferenceSection(userId, section, fallback, normalize).value);
+    const loadedKeyRef = useRef(`${userId ?? ""}:${section}`);
 
     useEffect(() => {
+        // Só relê quando usuário/seção mudam: reler no remount do StrictMode sobrescrevia updates feitos no mount (ex.: intent de navegação do Extrato).
+        const loadedKey = `${userId ?? ""}:${section}`;
+        if (loadedKeyRef.current === loadedKey) {
+            return;
+        }
+
+        loadedKeyRef.current = loadedKey;
         setValue(readLocalPreferenceSection(userId, section, fallback, normalize).value);
     }, [fallback, normalize, section, userId]);
 

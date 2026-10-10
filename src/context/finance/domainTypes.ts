@@ -224,7 +224,9 @@ export interface PlanningSimulatedExpense {
     id: string;
     monthKey: string;
     description: string;
+    /** Valor total; quando parcelada, é dividido em `installmentCount` meses a partir de `monthKey`. */
     amount: number;
+    installmentCount?: number;
     createdAt: string;
 }
 
@@ -263,7 +265,10 @@ export interface PlanningState {
     disabledIncomeIds: string[];
     disabledSimulatedExpenseIds: string[];
     disabledSimulatedIncomeIds: string[];
+    /** Mês (yyyy-MM) em que o planejamento cobra a fatura, por id da fatura; ausente = mês do vencimento. */
+    invoiceMonthOverrides: Record<string, string>;
     timelineSelectedWalletIds: string[];
+    timelineSelectedCreditCardIds: string[];
     timelineCompareMode: boolean;
     timelineHorizontalMode: boolean;
     timelineMonthCount: 3 | 6 | 9 | 12;

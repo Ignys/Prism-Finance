@@ -20,7 +20,7 @@ interface WalletOption extends ComboboxOptionBase {
     wallet: Wallet;
 }
 
-interface CreditCardOption extends ComboboxOptionBase {
+export interface CreditCardOption extends ComboboxOptionBase {
     creditCard: CreditCard;
 }
 
@@ -100,7 +100,7 @@ function WalletOptionContent({ option }: { option: WalletOption }) {
     );
 }
 
-function CreditCardOptionContent({ option }: { option: CreditCardOption }) {
+export function CreditCardOptionContent({ option }: { option: CreditCardOption }) {
     return (
         <div className="flex min-w-0 items-center gap-2">
             <WalletAvatar wallet={option.creditCard} className="h-7 w-7 rounded-md border border-white/10" iconSize={15} iconStrokeWidth={1.7} />

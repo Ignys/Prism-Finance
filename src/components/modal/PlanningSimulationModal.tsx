@@ -1,7 +1,9 @@
-import { ArrowDownRight, ArrowUpRight, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, X } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Layers, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useModal } from "../../context/ModalContext";
+import { splitAmountAcrossInstallments } from "../../context/finance/helpers";
 import { extractCurrencyDigits, formatCurrencyFromDigits } from "../../lib/currencyMask";
+import { AnchoredOverlay } from "../transactions/AnchoredOverlay";
 import { SingleSelectCombobox, type ComboboxOptionBase } from "../transactions/SingleSelectCombobox";
 import { FIELD_INPUT_CLASS, FIELD_LABEL_CLASS } from "../transactions/transactionForm.constants";
 import { ModalStructure } from "./ModalStructure";
@@ -16,6 +18,8 @@ export interface PlanningSimulationModalDraft {
     amountInput: string;
     monthKey: string;
     tone: "income" | "expense";
+    /** Preenchido (>= 2) só para despesa parcelada; `amountInput` é o valor total. */
+    installmentCount: number | null;
 }
 
 interface PlanningSimulationModalInitialValues {
@@ -23,7 +27,10 @@ interface PlanningSimulationModalInitialValues {
     amount: number;
     monthKey: string;
     tone: "income" | "expense";
+    installmentCount?: number;
 }
+
+type PlanningSimulationKind = "income" | "expense" | "installment_expense";
 
 interface PlanningSimulationModalProps {
     tone: "income" | "expense";
@@ -34,6 +41,7 @@ interface PlanningSimulationModalProps {
 }
 
 interface PlanningToneOption extends ComboboxOptionBase {
+    id: PlanningSimulationKind;
     tone: "income" | "expense";
     icon: typeof ArrowUpRight;
 }
@@ -53,7 +61,28 @@ const PLANNING_TONE_OPTIONS: PlanningToneOption[] = [
         tone: "expense",
         icon: ArrowDownRight,
     },
+    {
+        id: "installment_expense",
+        label: "Despesa parcelada",
+        searchText: "despesa parcelada parcelas parcelamento installment",
+        tone: "expense",
+        icon: Layers,
+    },
 ];
+
+const DEFAULT_INSTALLMENT_COUNT_INPUT = "2";
+
+function isPlanningSimulationKind(value: string): value is PlanningSimulationKind {
+    return PLANNING_TONE_OPTIONS.some((option) => option.id === value);
+}
+
+function resolveInitialKind(tone: "income" | "expense", initialValues?: PlanningSimulationModalInitialValues): PlanningSimulationKind {
+    if (!initialValues) {
+        return tone;
+    }
+
+    return initialValues.tone === "expense" && initialValues.installmentCount ? "installment_expense" : initialValues.tone;
+}
 
 function capitalizeLabel(value: string): string {
     return value.charAt(0).toUpperCase() + value.slice(1);
@@ -80,7 +109,7 @@ function formatMonthKey(date: Date): string {
     return `${year}-${month}`;
 }
 
-function formatMonthDisplay(monthKey: string): string {
+export function formatMonthDisplay(monthKey: string): string {
     const parsed = parseMonthKey(monthKey);
     if (!parsed) {
         return "Selecione um mes";
@@ -94,11 +123,13 @@ function formatAmountInputFromNumber(amount: number): string {
     return formatCurrencyFromDigits(String(cents));
 }
 
-function PlanningMonthField({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+export function PlanningMonthField({ value, onChange }: { value: string; onChange: (value: string) => void }) {
     const selectedMonth = useMemo(() => parseMonthKey(value), [value]);
     const [isOpen, setIsOpen] = useState(false);
     const [visibleYear, setVisibleYear] = useState(() => (selectedMonth ?? new Date()).getFullYear());
     const containerRef = useRef<HTMLDivElement | null>(null);
+    const triggerRef = useRef<HTMLButtonElement | null>(null);
+    const overlayRef = useRef<HTMLDivElement | null>(null);
 
     useEffect(() => {
         if (!selectedMonth) {
@@ -114,7 +145,7 @@ function PlanningMonthField({ value, onChange }: { value: string; onChange: (val
         }
 
         const handleOutsideClick = (event: MouseEvent) => {
-            if (!containerRef.current || containerRef.current.contains(event.target as Node)) {
+            if (!containerRef.current || containerRef.current.contains(event.target as Node) || overlayRef.current?.contains(event.target as Node)) {
                 return;
             }
 
@@ -153,6 +184,7 @@ function PlanningMonthField({ value, onChange }: { value: string; onChange: (val
         <div ref={containerRef} className="relative flex flex-col gap-1.5">
             <span className={FIELD_LABEL_CLASS}>Mês</span>
             <button
+                ref={triggerRef}
                 type="button"
                 onClick={() => setIsOpen((current) => !current)}
                 className="flex h-[50px] w-full items-center justify-between rounded-xl border border-white/[0.1] bg-black/35 px-3 text-left text-sm text-white transition-colors hover:border-white/[0.2] focus-visible:border-white/[0.26] focus-visible:outline-none"
@@ -166,8 +198,12 @@ function PlanningMonthField({ value, onChange }: { value: string; onChange: (val
                 <ChevronDown size={15} className={`shrink-0 text-white/65 transition-transform ${isOpen ? "rotate-180" : ""}`} />
             </button>
 
-            {isOpen ? (
-                <div className="absolute left-0 right-0 top-full z-30 mt-2 rounded-xl border border-white/[0.12] bg-[#141414] p-2 shadow-[0_20px_50px_-26px_rgba(0,0,0,0.95)]">
+            <AnchoredOverlay
+                anchorRef={triggerRef}
+                overlayRef={overlayRef}
+                isOpen={isOpen}
+                className="rounded-xl border border-white/[0.12] bg-[#141414] p-2 shadow-[0_20px_50px_-26px_rgba(0,0,0,0.95)]"
+            >
                     <div className="flex items-center justify-between">
                         <button
                             type="button"
@@ -212,8 +248,7 @@ function PlanningMonthField({ value, onChange }: { value: string; onChange: (val
                             );
                         })}
                     </div>
-                </div>
-            ) : null}
+            </AnchoredOverlay>
         </div>
     );
 }
@@ -237,18 +272,28 @@ function PlanningToneOptionContent({ option }: { option: PlanningToneOption }) {
 
 export function PlanningSimulationModal({ tone, monthKey, initialValues, title = "Nova projeção", onSubmit }: PlanningSimulationModalProps) {
     const { closeModal } = useModal();
-    const [selectedTone, setSelectedTone] = useState<"income" | "expense">(initialValues?.tone ?? tone);
+    const [selectedKind, setSelectedKind] = useState<PlanningSimulationKind>(() => resolveInitialKind(tone, initialValues));
+    const [installmentCountInput, setInstallmentCountInput] = useState(String(initialValues?.installmentCount ?? DEFAULT_INSTALLMENT_COUNT_INPUT));
     const [selectedMonthKey, setSelectedMonthKey] = useState(initialValues?.monthKey ?? monthKey);
     const [description, setDescription] = useState(initialValues?.description ?? "");
     const [amountInput, setAmountInput] = useState(initialValues ? formatAmountInputFromNumber(initialValues.amount) : "R$ 0,00");
     const [error, setError] = useState<string | null>(null);
     const [submitting, setSubmitting] = useState(false);
 
+    const selectedTone = selectedKind === "income" ? "income" : "expense";
+    const isInstallment = selectedKind === "installment_expense";
+    const installmentCount = Number(installmentCountInput);
+    const amountCents = Number(extractCurrencyDigits(amountInput) || "0");
+    const installmentAmounts =
+        isInstallment && Number.isInteger(installmentCount) && installmentCount >= 2 && amountCents >= installmentCount
+            ? splitAmountAcrossInstallments(amountCents / 100, installmentCount)
+            : null;
     const descriptionPlaceholder = selectedTone === "income" ? "Descrição da receita" : "Descrição do gasto";
     const submitClassName = "border-emerald-400/35 bg-emerald-500/15 text-emerald-100 hover:border-emerald-400/55 hover:bg-emerald-500/20";
 
     useEffect(() => {
-        setSelectedTone(initialValues?.tone ?? tone);
+        setSelectedKind(resolveInitialKind(tone, initialValues));
+        setInstallmentCountInput(String(initialValues?.installmentCount ?? DEFAULT_INSTALLMENT_COUNT_INPUT));
         setSelectedMonthKey(initialValues?.monthKey ?? monthKey);
         setDescription(initialValues?.description ?? "");
         setAmountInput(initialValues ? formatAmountInputFromNumber(initialValues.amount) : "R$ 0,00");
@@ -275,6 +320,11 @@ export function PlanningSimulationModal({ tone, monthKey, initialValues, title =
             return;
         }
 
+        if (isInstallment && !installmentAmounts) {
+            setError("Informe pelo menos 2 parcelas, cada uma com valor de pelo menos R$ 0,01.");
+            return;
+        }
+
         setSubmitting(true);
         setError(null);
 
@@ -284,6 +334,7 @@ export function PlanningSimulationModal({ tone, monthKey, initialValues, title =
                 amountInput,
                 monthKey: selectedMonthKey,
                 tone: selectedTone,
+                installmentCount: isInstallment ? installmentCount : null,
             });
             closeModal();
         } catch (submitError) {
@@ -334,22 +385,36 @@ export function PlanningSimulationModal({ tone, monthKey, initialValues, title =
                         <SingleSelectCombobox
                             disableSearch
                             label="Tipo"
-                            value={selectedTone}
+                            value={selectedKind}
                             placeholder="Selecione um tipo"
                             emptyMessage="Nenhum tipo encontrado."
                             options={PLANNING_TONE_OPTIONS}
-                            onChange={(value) => {
-                                if (value === "income" || value === "expense") {
-                                    setSelectedTone(value);
-                                    return;
-                                }
-
-                                setSelectedTone("expense");
-                            }}
+                            onChange={(value) => setSelectedKind(isPlanningSimulationKind(value) ? value : "expense")}
                             renderOptionContent={(option) => <PlanningToneOptionContent option={option} />}
                             labelClassName={FIELD_LABEL_CLASS}
                         />
                     </div>
+
+                    {isInstallment ? (
+                        <div className="flex flex-col gap-1.5">
+                            <label className="flex items-center justify-between gap-3">
+                                <span className={FIELD_LABEL_CLASS}>Quantidade de parcelas</span>
+                                <input
+                                    className="w-24 rounded-xl border border-white/[0.1] bg-black/35 p-2.5 text-white outline-none transition-colors focus:border-white/[0.24]"
+                                    type="number"
+                                    min={2}
+                                    step={1}
+                                    value={installmentCountInput}
+                                    onChange={(event) => setInstallmentCountInput(event.target.value)}
+                                />
+                            </label>
+                            <p className="text-xs text-white/50">
+                                {installmentAmounts
+                                    ? `Valor total dividido em ${installmentAmounts.length}x de ${formatAmountInputFromNumber(installmentAmounts[0])}, a partir do mês selecionado.`
+                                    : "O valor informado é o total, dividido mês a mês a partir do mês selecionado."}
+                            </p>
+                        </div>
+                    ) : null}
 
                     <label className="flex flex-col gap-1.5">
                         <span className={FIELD_LABEL_CLASS}>Descricao</span>

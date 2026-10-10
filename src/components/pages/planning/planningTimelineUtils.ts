@@ -4,13 +4,13 @@ import type {
     CreditCard,
     CreditCardInvoice,
     LedgerEntry,
-    PlanningSimulatedExpense,
     PlanningSimulatedIncome,
     PlanningState,
     Transaction,
     Wallet,
     WishItem,
 } from "../../../context/FinanceContext";
+import { splitAmountAcrossInstallments } from "../../../context/finance/helpers";
 import { getMonthKeyFromDateValue } from "../../../context/financeTypes";
 import { parseAppDate } from "../../../lib/localDate";
 import { transactionSettlementDate } from "../../../lib/transactionSettlementDate";
@@ -201,8 +201,9 @@ function getMonthReality(params: {
     transactions: Transaction[];
     disabledInheritedExpenseIds: Set<string>;
     disabledIncomeIds: Set<string>;
+    invoiceMonthOverrides: Record<string, string>;
 }): MonthReality {
-    const { monthKey, wallets, creditCards, creditCardInvoices, transactions, disabledInheritedExpenseIds, disabledIncomeIds } = params;
+    const { monthKey, wallets, creditCards, creditCardInvoices, transactions, disabledInheritedExpenseIds, disabledIncomeIds, invoiceMonthOverrides } = params;
     const activeWalletIds = new Set(wallets.filter((wallet) => wallet.isActive).map((wallet) => wallet.id));
     const activeCardIds = new Set(creditCards.filter((card) => card.isActive).map((card) => card.id));
     const cardNameById = new Map(creditCards.map((card) => [card.id, card.name]));
@@ -278,8 +279,11 @@ function getMonthReality(params: {
     }
 
     let invoiceSpendings = 0;
+    const movedInvoiceItems: InheritedExpenseItem[] = [];
     for (const invoice of creditCardInvoices) {
-        if (!activeCardIds.has(invoice.creditCardId) || getMonthKeyFromDateValue(invoice.dueDate) !== monthKey) {
+        const dueMonthKey = getMonthKeyFromDateValue(invoice.dueDate);
+        const chargeMonthKey = invoiceMonthOverrides[invoice.id] ?? dueMonthKey;
+        if (!activeCardIds.has(invoice.creditCardId) || (chargeMonthKey !== monthKey && dueMonthKey !== monthKey)) {
             continue;
         }
 
@@ -289,12 +293,29 @@ function getMonthReality(params: {
             continue;
         }
 
+        const cardLabel = `Fatura ${cardNameById.get(invoice.creditCardId) ?? "cartão"}`;
+        if (chargeMonthKey !== monthKey) {
+            movedInvoiceItems.push({
+                id: `invoice-moved:${invoice.id}`,
+                source: "invoice",
+                invoiceId: invoice.id,
+                dueMonthKey,
+                movedToMonthKey: chargeMonthKey,
+                label: `${cardLabel} (movida para ${formatMonthLabel(chargeMonthKey, "MMM/yy")})`,
+                amount: openAmount,
+                iconName: null,
+                isDisabled: true,
+            });
+            continue;
+        }
+
         invoiceSpendings += openAmount;
         inheritedItems.push({
             id: `invoice:${invoice.id}`,
             source: "invoice",
             invoiceId: invoice.id,
-            label: `Fatura ${cardNameById.get(invoice.creditCardId) ?? "cartão"}`,
+            dueMonthKey,
+            label: `${cardLabel}${chargeMonthKey !== dueMonthKey ? ` (de ${formatMonthLabel(dueMonthKey, "MMM/yy")})` : ""}`,
             amount: openAmount,
             iconName: null,
             isDisabled: disabledInheritedExpenseIds.has(`invoice:${invoice.id}`),
@@ -325,6 +346,7 @@ function getMonthReality(params: {
         activeInheritedExpenses: roundToCents(inheritedExpenses - disabledInheritedExpenses),
         disabledInheritedExpenses,
         inheritedItems,
+        movedInvoiceItems,
     };
 }
 
@@ -362,13 +384,20 @@ export function buildTimelineProjection(params: {
     const disabledSimulatedExpenseIds = new Set(params.planning.disabledSimulatedExpenseIds ?? []);
     const disabledSimulatedIncomeIds = new Set(params.planning.disabledSimulatedIncomeIds ?? []);
     const revenueOverridesByMonth = new Map(params.planning.revenueOverrides.map((override) => [override.monthKey, override]));
-    const simulatedExpensesByMonth = new Map<string, PlanningSimulatedExpense[]>();
+    const simulatedExpensesByMonth = new Map<string, Omit<SimulatedExpenseItem, "isDisabled">[]>();
     const simulatedIncomesByMonth = new Map<string, PlanningSimulatedIncome[]>();
     const activeWishItemsById = new Map(params.wishItems.filter((item) => item.isActive).map((item) => [item.id, item]));
     const wishlistSelectionsByMonth = new Map<string, WishlistProjectionItem[]>();
 
     params.planning.simulatedExpenses.forEach((expense) => {
-        pushPlanningItemByMonth(simulatedExpensesByMonth, expense);
+        if (!expense.installmentCount) {
+            pushPlanningItemByMonth(simulatedExpensesByMonth, expense);
+            return;
+        }
+
+        splitAmountAcrossInstallments(expense.amount, expense.installmentCount).forEach((amount, index) => {
+            pushPlanningItemByMonth(simulatedExpensesByMonth, { ...expense, monthKey: shiftMonth(expense.monthKey, index), amount, installmentNumber: index + 1 });
+        });
     });
 
     params.planning.simulatedIncomes.forEach((income) => {
@@ -406,6 +435,7 @@ export function buildTimelineProjection(params: {
                 transactions: params.transactions,
                 disabledInheritedExpenseIds,
                 disabledIncomeIds,
+                invoiceMonthOverrides: params.planning.invoiceMonthOverrides ?? {},
             });
             const simulatedExpenseItems: SimulatedExpenseItem[] = (simulatedExpensesByMonth.get(monthKey) ?? []).map((expense) => ({
                 ...expense,
@@ -479,7 +509,9 @@ export function mergePlanningUpdate(planning: PlanningState, update: Partial<Pla
         disabledIncomeIds: update.disabledIncomeIds ?? planning.disabledIncomeIds ?? [],
         disabledSimulatedExpenseIds: update.disabledSimulatedExpenseIds ?? planning.disabledSimulatedExpenseIds ?? [],
         disabledSimulatedIncomeIds: update.disabledSimulatedIncomeIds ?? planning.disabledSimulatedIncomeIds ?? [],
+        invoiceMonthOverrides: update.invoiceMonthOverrides ?? planning.invoiceMonthOverrides ?? {},
         timelineSelectedWalletIds: update.timelineSelectedWalletIds ?? planning.timelineSelectedWalletIds ?? [],
+        timelineSelectedCreditCardIds: update.timelineSelectedCreditCardIds ?? planning.timelineSelectedCreditCardIds ?? [],
         timelineCompareMode: update.timelineCompareMode ?? planning.timelineCompareMode ?? true,
         timelineHorizontalMode: update.timelineHorizontalMode ?? planning.timelineHorizontalMode ?? false,
         timelineMonthCount: update.timelineMonthCount ?? planning.timelineMonthCount ?? DEFAULT_TIMELINE_MONTHS,

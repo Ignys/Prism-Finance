@@ -1,4 +1,4 @@
-import { CircleCheckBig, Pencil, SquareArrowOutUpRight, SquareSlash, Trash2 } from "lucide-react";
+import { CalendarClock, CircleCheckBig, Pencil, SquareArrowOutUpRight, SquareSlash, Trash2, Undo2 } from "lucide-react";
 import { useEffect, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
 import type { PlanningProjectionContextAction, PlanningProjectionContextActionId } from "./planningProjectionContextActions";
@@ -25,6 +25,8 @@ const MENU_DIVIDER_HEIGHT = 13;
 const ACTION_ICONS: Record<PlanningProjectionContextActionId, typeof Pencil> = {
     toggle: CircleCheckBig,
     edit: Pencil,
+    move: CalendarClock,
+    restore: Undo2,
     remove: Trash2,
 };
 

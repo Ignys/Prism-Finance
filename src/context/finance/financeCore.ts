@@ -136,7 +136,9 @@ export const DEFAULT_PLANNING_STATE: PlanningState = {
     disabledIncomeIds: [],
     disabledSimulatedExpenseIds: [],
     disabledSimulatedIncomeIds: [],
+    invoiceMonthOverrides: {},
     timelineSelectedWalletIds: [],
+    timelineSelectedCreditCardIds: [],
     timelineCompareMode: true,
     timelineHorizontalMode: false,
     timelineMonthCount: 9,
@@ -706,12 +708,16 @@ function normalizePlanningMonthKey(value: unknown, fallback = getMonthKeyFromDat
 
 function normalizePlanningSimulatedExpense(input: PlanningSimulatedExpenseInput, index: number): PlanningSimulatedExpense {
     const now = getNowIso();
+    const amount = roundToCents(Math.max(0, Math.abs(asNumber(input.amount, 0))));
+    const installmentCount = asNumber(input.installmentCount, 0);
+    const isInstallment = Number.isInteger(installmentCount) && installmentCount >= 2 && Math.round(amount * 100) >= installmentCount;
 
     return {
         id: asString(input.id, `planning-expense-${index}-${Date.now()}`),
         monthKey: normalizePlanningMonthKey(input.monthKey),
         description: asString(input.description, "Gasto simulado"),
-        amount: roundToCents(Math.max(0, Math.abs(asNumber(input.amount, 0)))),
+        amount,
+        ...(isInstallment ? { installmentCount } : {}),
         createdAt: asDateTimeString(input.createdAt, now),
     };
 }
@@ -745,6 +751,18 @@ function normalizePlanningWishlistSelection(input: PlanningWishlistSelectionInpu
         monthKey: normalizePlanningMonthKey(input.monthKey),
         createdAt: asDateTimeString(input.createdAt, now),
     };
+}
+
+export function normalizeInvoiceMonthOverrides(value: unknown): Record<string, string> {
+    if (!isRecord(value) || Array.isArray(value)) {
+        return {};
+    }
+
+    return Object.fromEntries(
+        Object.entries(value)
+            .filter((entry): entry is [string, string] => entry[0].trim().length > 0 && typeof entry[1] === "string" && /^\d{4}-(0[1-9]|1[0-2])$/.test(entry[1]))
+            .sort(([a], [b]) => a.localeCompare(b)),
+    );
 }
 
 export function normalizePlanningState(rawPlanning: unknown): PlanningState {
@@ -898,6 +916,7 @@ export function normalizePlanningState(rawPlanning: unknown): PlanningState {
                 ),
             ),
         ).sort((a, b) => a.localeCompare(b)),
+        invoiceMonthOverrides: normalizeInvoiceMonthOverrides(rawPlanning.invoiceMonthOverrides),
         timelineSelectedWalletIds: Array.from(
             new Set(
                 asArray(rawPlanning.timelineSelectedWalletIds).filter(
@@ -918,6 +937,13 @@ export function normalizePlanningState(rawPlanning: unknown): PlanningState {
         reportsSelectedCreditCardIds: Array.from(
             new Set(
                 asArray(rawPlanning.reportsSelectedCreditCardIds).filter(
+                    (value): value is string => typeof value === "string" && value.trim().length > 0,
+                ),
+            ),
+        ).sort((a, b) => a.localeCompare(b)),
+        timelineSelectedCreditCardIds: Array.from(
+            new Set(
+                asArray(rawPlanning.timelineSelectedCreditCardIds).filter(
                     (value): value is string => typeof value === "string" && value.trim().length > 0,
                 ),
             ),
