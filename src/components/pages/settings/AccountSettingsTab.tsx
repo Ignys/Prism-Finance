@@ -7,6 +7,8 @@ import { uploadAvatarToCloudinary } from "../../../lib/cloudinary";
 import { resolveSupabaseAuthErrorMessage } from "../../../supabase/auth/authErrorMessages";
 import { setSupabasePassword, updateSupabasePassword, updateSupabaseProfile } from "../../../supabase/auth/authService";
 import { PASSWORD_RECOVERY_STORAGE_KEY } from "../../../hooks/useAuthListener";
+import { isDemoModeEnabled, setDemoModeEnabled } from "../../../lib/demoMode";
+import { ToggleSwitch } from "../../common/ToggleSwitch";
 
 type AccountSettingsTabProps = {
     emailAlertsEnabled: boolean;
@@ -25,6 +27,7 @@ export function AccountSettingsTab({ onSignOut }: AccountSettingsTabProps) {
     const { user, profile } = useFinanceSession();
     const userName = profile?.displayName ?? resolveUserDisplayName(user);
     const fileInputRef = useRef<HTMLInputElement | null>(null);
+    const [demoModeEnabled, setDemoModeEnabledState] = useState(isDemoModeEnabled);
     const [displayName, setDisplayName] = useState(userName);
     const previewObjectUrlRef = useRef<string | null>(null);
     const [selectedPhotoFile, setSelectedPhotoFile] = useState<File | null>(null);
@@ -337,6 +340,21 @@ export function AccountSettingsTab({ onSignOut }: AccountSettingsTabProps) {
                             <KeyRound size={20} />
                         </span>
                         <h3 className="text-lg font-medium text-white">Segurança</h3>
+                    </div>
+
+                    <div className="mt-5 flex items-start justify-between gap-4 rounded-xl border border-white/[0.08] bg-black/20 px-4 py-3">
+                        <div className="min-w-0">
+                            <p className="text-sm font-medium text-white">Modo demonstração</p>
+                            <p className="mt-1 text-xs text-white/50">Embaralha os valores exibidos na tela. Nada é alterado nos seus dados.</p>
+                        </div>
+                        <ToggleSwitch
+                            checked={demoModeEnabled}
+                            label="Modo demonstração"
+                            onChange={(enabled) => {
+                                setDemoModeEnabled(enabled);
+                                setDemoModeEnabledState(enabled);
+                            }}
+                        />
                     </div>
 
                     <form onSubmit={handlePasswordSubmit} className="mt-5 space-y-4">

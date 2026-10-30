@@ -1,13 +1,17 @@
 import { ChangeEvent, useEffect, useMemo, useState } from "react";
-import { RotateCcw, Trash2, X } from "lucide-react";
+import { CircleDollarSign, ImageUp, Link2, RotateCcw, Sigma, Trash2, Wallet as WalletIcon } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
 import { DEFAULT_WALLET_ID, type Wallet, useFinanceActions, useFinanceWallets } from "../../context/FinanceContext";
 import { useModal } from "../../context/ModalContext";
 import { extractCurrencyDigits, formatCurrencyFromDigits, parseCurrencyDigitsToNumber } from "../../lib/currencyMask";
 import { DEFAULT_WALLET_COLOR, DEFAULT_WALLET_ICON, isDefaultWalletIcon, normalizeWalletColor, normalizeWalletIcon } from "../../lib/walletVisual";
+import { ToggleSwitch } from "../common/ToggleSwitch";
 import { WalletAvatar } from "../common/WalletAvatar";
 import { ConfirmActionModal } from "./ConfirmActionModal";
-import { FIELD_LABEL_CLASS } from "../transactions/transactionForm.constants";
+import { IconTextField } from "../transactions/IconTextField";
+import { TransactionFieldIcon } from "../transactions/TransactionFieldIcon";
+import { FIELD_EMBEDDED_INPUT_CLASS, FIELD_ICON_CONTROL_CLASS } from "../transactions/transactionForm.constants";
+import { ModalBody, ModalCancelButton, ModalError, ModalFooter, ModalFooterAction, ModalHeader, ModalPanel, ModalPrimaryButton } from "./ModalChrome";
 
 const MAX_IMAGE_SIZE_BYTES = 350 * 1024;
 const MAX_IMAGE_DIMENSION = 320;
@@ -95,7 +99,6 @@ function parseAmountInput(value: string): number {
     return parseCurrencyDigitsToNumber(extractCurrencyDigits(value));
 }
 
-const FIELD_INPUT_CLASS = "w-full rounded-xl border border-white/[0.12] bg-black/35 px-3 py-2.5 text-sm text-white outline-none transition-colors placeholder:text-white/35 focus:border-white/[0.24]";
 const SECONDARY_BUTTON_CLASS =
     "rounded-lg border border-white/[0.18] px-3 py-2 text-xs font-medium uppercase tracking-[0.08em] text-white/75 transition-colors hover:border-white/[0.28] hover:bg-white/[0.08]";
 
@@ -323,181 +326,107 @@ export function AddWallet({ mode = "create", walletId, initialWallet }: AddWalle
     };
 
     return (
-        <div className="flex flex-col justify-between rounded-xl border border-white/[0.09] bg-[#131313] p-4 text-white shadow-[0_26px_70px_-38px_rgba(0,0,0,0.95)]">
-                <header className="flex items-center justify-between">
-                    <h1 className="text-sm ml-1 uppercase opacity-50">{isEditMode ? "Editar carteira" : "Nova carteira"}</h1>
-                    <button
-                        type="button"
-                        onClick={closeModal}
-                        disabled={submitting}
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/[0.12] bg-white/[0.03] text-white/70 transition-colors hover:border-white/[0.22] hover:text-white disabled:cursor-not-allowed disabled:opacity-55"
-                        aria-label="Fechar modal"
-                        title="Fechar"
-                    >
-                        <X size={15} />
-                    </button>
-                </header>
+        <ModalPanel>
+            <ModalHeader title={isEditMode ? "Editando carteira" : "Nova carteira"} disabled={submitting} />
             <form
-                className="mt-4 flex flex-col gap-2"
+                className="flex min-h-0 flex-1 flex-col"
                 onSubmit={(event) => {
                     event.preventDefault();
                     void handleSubmit();
                 }}
             >
-                {mode === "edit" && !editingWallet && <p className="rounded-lg border border-amber-400/25 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">Carteira nao encontrada.</p>}
+                <ModalBody className="flex flex-col gap-2">
+                    {mode === "edit" && !editingWallet && <p className="rounded-xl border border-amber-400/25 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">Carteira não encontrada.</p>}
 
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                    <label className="flex flex-col gap-1.5">
-                        <span className={FIELD_LABEL_CLASS}>Nome da carteira</span>
-                        <input
-                            id="wallet-name"
-                            type="text"
-                            value={name}
-                            onChange={(event) => setName(event.target.value)}
-                            className={FIELD_INPUT_CLASS}
-                            placeholder="Ex: Carteira do Banco X"
-                            maxLength={70}
-                        />
-                    </label>
-
-                    <label className="flex flex-col gap-1.5">
-                        <span className={FIELD_LABEL_CLASS}>Saldo inicial</span>
-                        <input
-                            id="wallet-balance"
-                            inputMode="numeric"
-                            value={initialBalanceInput}
-                            onChange={(event) => setInitialBalanceInput(formatCurrencyFromDigits(extractCurrencyDigits(event.target.value)))}
-                            className={FIELD_INPUT_CLASS}
-                            placeholder="R$ 0,00"
-                        />
-                    </label>
-                </div>
-
-                <div className="rounded-xl border border-white/[0.1] bg-black/35 p-3">
-                    <div className="flex items-center justify-between gap-3">
-                        <p className="text-sm font-medium text-white">Contabilizar no saldo atual</p>
-                        <button
-                            type="button"
-                            role="switch"
-                            aria-checked={includeInMainTotals}
-                            onClick={() => setIncludeInMainTotals((current) => !current)}
-                            className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full border transition-colors ${
-                                includeInMainTotals ? "border-emerald-400/45 bg-emerald-500/20" : "border-white/[0.14] bg-white/[0.06]"
-                            }`}
+                    <div className="flex items-stretch gap-2">
+                        <label
+                            className={`group relative flex shrink-0 items-center justify-center rounded-xl border border-white/[0.1] bg-black/35 p-2 transition-colors ${isProcessingUpload ? "cursor-wait opacity-60" : "cursor-pointer hover:border-white/[0.24]"}`}
+                            title="Enviar ícone (opcional)"
                         >
-                            <span className={`inline-block h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${includeInMainTotals ? "translate-x-6" : "translate-x-1"}`} />
-                        </button>
-                    </div>
-                </div>
+                            <WalletAvatar wallet={previewWallet} className="h-[72px] w-[72px] rounded-xl border border-white/[0.12]" iconSize={30} iconStrokeWidth={1.7} />
+                            <span className="absolute bottom-1.5 right-1.5 inline-flex h-6 w-6 items-center justify-center rounded-full border border-white/[0.16] bg-[#131313] text-white/70 group-hover:text-white">
+                                <ImageUp size={12} />
+                            </span>
+                            <input id="wallet-file-upload" type="file" accept="image/*" onChange={handleFileUpload} className="sr-only" disabled={isProcessingUpload} aria-label="Enviar ícone" />
+                        </label>
 
-                <div className="rounded-xl border border-white/[0.1] bg-black/35 p-3">
-                    <div className="mb-3 flex items-center gap-3">
-                        <WalletAvatar wallet={previewWallet} className="h-14 w-14 rounded-xl border border-white/[0.12]" iconSize={26} iconStrokeWidth={1.7} />
-                        <div>
-                            <p className="text-sm font-medium text-white">Icone da carteira (opcional)</p>
-                            <p className="text-xs text-white/50">Upload local processado (max 320px) ou URL externa.</p>
+                        <div className="flex min-w-0 flex-1 flex-col gap-2">
+                            <IconTextField ariaLabel="Nome da carteira" value={name} onChange={setName} placeholder="Nome da carteira. Ex.: Banco X" icon={WalletIcon} maxLength={70} />
+                            <label className={`${FIELD_ICON_CONTROL_CLASS} flex min-h-[50px] items-center gap-2`}>
+                                <TransactionFieldIcon icon={CircleDollarSign} />
+                                <input
+                                    id="wallet-balance"
+                                    aria-label="Saldo inicial"
+                                    inputMode="numeric"
+                                    value={initialBalanceInput}
+                                    onChange={(event) => setInitialBalanceInput(formatCurrencyFromDigits(extractCurrencyDigits(event.target.value)))}
+                                    className={`${FIELD_EMBEDDED_INPUT_CLASS} tabular-nums`}
+                                    placeholder="Saldo inicial"
+                                />
+                            </label>
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                        <label className="flex flex-col gap-1.5">
-                            <span className={FIELD_LABEL_CLASS}>Upload</span>
-                            <input
-                                id="wallet-file-upload"
-                                type="file"
-                                accept="image/*"
-                                onChange={handleFileUpload}
-                                className={`${FIELD_INPUT_CLASS} p-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-white/10 file:px-2.5 file:py-1.5 file:text-xs file:uppercase file:tracking-[0.08em] file:text-white/80`}
-                                disabled={isProcessingUpload}
-                            />
-                        </label>
-
-                        <label className="flex flex-col gap-1.5">
-                            <span className={FIELD_LABEL_CLASS}>URL da imagem</span>
-                            <input
-                                id="wallet-url-input"
-                                type="text"
-                                value={iconUrlInput}
-                                onChange={(event) => setIconUrlInput(event.target.value)}
-                                className={FIELD_INPUT_CLASS}
-                                placeholder="https://..."
-                            />
-                        </label>
-                    </div>
-
-                    <div className="mt-3 flex flex-wrap gap-2">
-                        <button type="button" onClick={applyImageUrl} className={SECONDARY_BUTTON_CLASS}>
-                            Usar URL
+                    <div className={`${FIELD_ICON_CONTROL_CLASS} flex min-h-[50px] items-center gap-2`}>
+                        <TransactionFieldIcon icon={Link2} />
+                        <input
+                            id="wallet-url-input"
+                            aria-label="URL da imagem"
+                            type="text"
+                            value={iconUrlInput}
+                            onChange={(event) => setIconUrlInput(event.target.value)}
+                            className={FIELD_EMBEDDED_INPUT_CLASS}
+                            placeholder="Ou cole a URL de uma imagem"
+                        />
+                        <button type="button" onClick={applyImageUrl} disabled={!iconUrlInput.trim()} className={SECONDARY_BUTTON_CLASS}>
+                            Usar
                         </button>
                         <button type="button" onClick={clearCustomIcon} className={SECONDARY_BUTTON_CLASS}>
-                            Icone padrao
+                            Ícone padrão
                         </button>
                     </div>
-                </div>
 
-                <div className="rounded-xl border border-white/[0.1] bg-black/35 p-3">
-                    <p className={`${FIELD_LABEL_CLASS} mb-2`}>Cor da carteira</p>
-                    <div className="flex items-center gap-3">
-                        <input type="color" value={walletColor} onChange={(event) => setWalletColor(event.target.value)} className="h-10 w-14 rounded-lg border border-white/[0.16] bg-black/40 p-1" />
-                        <input type="text" value={walletColor} onChange={(event) => setWalletColor(event.target.value)} className={FIELD_INPUT_CLASS} placeholder={DEFAULT_WALLET_COLOR} />
+                    <label className={`${FIELD_ICON_CONTROL_CLASS} flex min-h-[50px] items-center gap-2`}>
+                        <input aria-label="Cor da carteira" type="color" value={walletColor} onChange={(event) => setWalletColor(event.target.value)} className="h-7 w-7 shrink-0 cursor-pointer rounded-md border border-white/[0.12] bg-transparent p-0.5" />
+                        <input aria-label="Código da cor" type="text" value={walletColor} onChange={(event) => setWalletColor(event.target.value)} className={FIELD_EMBEDDED_INPUT_CLASS} placeholder={DEFAULT_WALLET_COLOR} />
+                    </label>
+
+                    <div className={`${FIELD_ICON_CONTROL_CLASS} flex min-h-[50px] items-center justify-between gap-3`}>
+                        <span className="flex items-center gap-2 text-sm text-white/80">
+                            <TransactionFieldIcon icon={Sigma} />
+                            Contabilizar no saldo atual
+                        </span>
+                        <ToggleSwitch checked={includeInMainTotals} onChange={setIncludeInMainTotals} label="Contabilizar no saldo atual" />
                     </div>
-                </div>
 
-                {uploadError && <p className="text-sm text-amber-200">{uploadError}</p>}
-                {submitError && <p className="text-sm text-red-200">{submitError}</p>}
+                    {uploadError && <p className="pl-1 text-sm text-amber-200">{uploadError}</p>}
+                </ModalBody>
 
-                <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                        {isEditMode && editingWallet && !isDefaultWallet && (
+                {submitError ? <ModalError>{submitError}</ModalError> : null}
+
+                <ModalFooter
+                    start={
+                        isEditMode && editingWallet && !isDefaultWallet ? (
                             <>
-                                <button
-                                    type="button"
-                                    onClick={() => (editingWallet.isActive ? void handleDelete() : void handleReactivate())}
-                                    disabled={submitting}
-                                    className={`inline-flex min-w-28 items-center justify-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
-                                        editingWallet.isActive
-                                            ? "border-amber-400/25 bg-amber-500/10 text-amber-100 hover:border-amber-400/45 hover:text-amber-50"
-                                            : "border-emerald-400/35 bg-emerald-500/15 text-emerald-100 hover:border-emerald-400/55 hover:bg-emerald-500/20"
-                                    }`}
-                                >
+                                <ModalFooterAction onClick={() => (editingWallet.isActive ? void handleDelete() : void handleReactivate())} disabled={submitting}>
                                     {editingWallet.isActive ? <Trash2 size={15} /> : <RotateCcw size={15} />}
                                     {editingWallet.isActive ? "Arquivar" : "Reativar"}
-                                </button>
-
+                                </ModalFooterAction>
                                 {!editingWallet.isActive ? (
-                                    <button
-                                        type="button"
-                                        onClick={openPermanentDeleteModal}
-                                        disabled={submitting}
-                                        className="inline-flex min-w-40 items-center justify-center gap-2 rounded-xl border border-red-400/25 bg-red-500/10 px-3 py-2 text-sm font-medium text-red-200 transition-colors hover:border-red-400/45 hover:text-red-100 disabled:cursor-not-allowed disabled:opacity-60"
-                                    >
-                                        <Trash2 size={15} />
-                                        Excluir em definitivo
-                                    </button>
+                                    <ModalFooterAction tone="danger" onClick={openPermanentDeleteModal} disabled={submitting}>
+                                        <Trash2 size={15} /> Excluir em definitivo
+                                    </ModalFooterAction>
                                 ) : null}
                             </>
-                        )}
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                        <button
-                            type="button"
-                            onClick={closeModal}
-                            disabled={submitting}
-                            className="inline-flex min-w-24 items-center justify-center rounded-xl border border-white/[0.12] bg-white/[0.03] px-4 py-2 text-sm font-medium text-white/70 transition-colors hover:border-white/[0.2] hover:text-white"
-                        >
-                            Cancelar
-                        </button>
-                        <button
-                            type="submit"
-                            disabled={!canSubmit || isProcessingUpload || submitting}
-                            className="inline-flex min-w-32 items-center justify-center rounded-xl border border-emerald-400/35 bg-emerald-500/15 px-4 py-2 text-sm font-semibold text-emerald-100 transition-colors hover:border-emerald-400/55 hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                            {submitting ? "Processando..." : isEditMode ? "Salvar" : "Criar carteira"}
-                        </button>
-                    </div>
-                </div>
+                        ) : null
+                    }
+                >
+                    <ModalCancelButton disabled={submitting} />
+                    <ModalPrimaryButton type="submit" disabled={!canSubmit || isProcessingUpload || submitting}>
+                        {submitting ? "Salvando..." : isEditMode ? "Salvar" : "Criar carteira"}
+                    </ModalPrimaryButton>
+                </ModalFooter>
             </form>
-        </div>
+        </ModalPanel>
     );
 }

@@ -6,6 +6,7 @@ import { asString, asNumber, asDayOfMonth } from "./valueNormalization";
 import { DEFAULT_WALLET_ID, DEFAULT_BENEFICIARY_ID, DEFAULT_BENEFICIARY_NAME, DEFAULT_EXPENSE_CATEGORY_ID, SYSTEM_EXPENSE_CARD_INVOICE_CATEGORY_ID, DEFAULT_INCOME_CATEGORY_ID, INVOICE_PAYMENT_NOTE_PREFIX } from "./domainConstants";
 export * from "./domainConstants";
 import { syncCreditCardInvoices } from "./syncCreditCardInvoices";
+import { normalizePlanningBudgets } from "./planningBudgets";
 import { parseRecurrenceRule } from "./recurrence/rule";
 import { getDefaultCategoryIconName, normalizeCategoryIconName } from "../../lib/categoryIcons";
 import { formatLocalDateInput, getLocalTodayDate, parseAppDate } from "../../lib/localDate";
@@ -132,6 +133,7 @@ export const DEFAULT_PLANNING_STATE: PlanningState = {
     simulatedIncomes: [],
     wishlistSelections: [],
     revenueOverrides: [],
+    budgets: [],
     disabledInheritedExpenseIds: [],
     disabledIncomeIds: [],
     disabledSimulatedExpenseIds: [],
@@ -888,6 +890,7 @@ export function normalizePlanningState(rawPlanning: unknown): PlanningState {
             return a.monthKey.localeCompare(b.monthKey);
         }),
         revenueOverrides: Array.from(overridesByMonth.values()).sort((a, b) => a.monthKey.localeCompare(b.monthKey)),
+        budgets: normalizePlanningBudgets(rawPlanning.budgets),
         disabledInheritedExpenseIds: Array.from(
             new Set(
                 asArray(rawPlanning.disabledInheritedExpenseIds).filter(

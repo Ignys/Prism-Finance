@@ -65,6 +65,7 @@ function makePlanningState(): PlanningState {
         simulatedIncomes: [],
         wishlistSelections: [],
         revenueOverrides: [],
+        budgets: [],
         disabledInheritedExpenseIds: [],
         disabledIncomeIds: [],
         disabledSimulatedExpenseIds: [],

@@ -1,5 +1,5 @@
 import { type ChangeEvent, useEffect, useMemo, useState } from "react";
-import { Building2, PawPrint, RotateCcw, Shapes, Trash2, type LucideIcon, UserRound, X } from "lucide-react";
+import { Building2, ImageUp, Link2, PawPrint, RotateCcw, Shapes, Trash2, type LucideIcon, UserRound } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
 import { type Beneficiary, useFinanceActions, useFinanceBeneficiaries } from "../../context/FinanceContext";
 import { useModal } from "../../context/ModalContext";
@@ -7,9 +7,12 @@ import { BeneficiaryAvatar } from "../common/BeneficiaryAvatar";
 import { SingleSelectCombobox, type ComboboxOptionBase } from "../transactions/SingleSelectCombobox";
 import { ConfirmActionModal } from "./ConfirmActionModal";
 import { ModalStructure } from "./ModalStructure";
-import { FIELD_LABEL_CLASS } from "../transactions/transactionForm.constants";
+import { ModalBody, ModalCancelButton, ModalFooter, ModalFooterAction, ModalHeader, ModalPanel, ModalPrimaryButton } from "./ModalChrome";
+import { IconTextField } from "../transactions/IconTextField";
+import { TransactionFieldIcon } from "../transactions/TransactionFieldIcon";
+import { FIELD_EMBEDDED_INPUT_CLASS, FIELD_ICON_CONTROL_CLASS } from "../transactions/transactionForm.constants";
 
-const FIELD_INPUT_CLASS = "rounded-xl border border-white/[0.1] bg-black/35 p-2.5 text-white outline-none transition-colors placeholder:text-white/35 focus:border-white/[0.24]";
+const INLINE_BUTTON_CLASS = "shrink-0 rounded-lg border border-white/[0.12] bg-white/[0.03] px-2 py-1 text-[11px] uppercase tracking-[0.04em] text-white/62 transition-colors hover:border-white/[0.28] hover:text-white disabled:cursor-not-allowed disabled:opacity-45";
 
 type BeneficiaryTypeOption = {
     value: Beneficiary["type"];
@@ -306,43 +309,38 @@ export function AddBeneficiary({ mode = "create", beneficiaryId, initialBenefici
         );
     };
 
+    const imageDisabled = isProcessingUpload || submitting || isReadOnlyBeneficiary;
+
     return (
         <ModalStructure height="auto" width="620px">
-            <div className="rounded-2xl border border-white/[0.09] bg-[#131313] p-4 text-white shadow-[0_26px_70px_-38px_rgba(0,0,0,0.95)]">
-                <header className="flex items-center justify-between gap-3">
-                    <h1 className="text-sm ml-1 uppercase opacity-50">{isEditMode ? "Editar beneficiario" : "Novo beneficiario"}</h1>
-                    <button
-                        type="button"
-                        onClick={closeModal}
-                        disabled={submitting}
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/[0.12] bg-white/[0.03] text-white/70 transition-colors hover:border-white/[0.22] hover:text-white disabled:cursor-not-allowed disabled:opacity-55"
-                        aria-label="Fechar modal"
-                        title="Fechar"
-                    >
-                        <X size={15} />
-                    </button>
-                </header>
+            <ModalPanel>
+                <ModalHeader title={isEditMode ? "Editando beneficiário" : "Novo beneficiário"} disabled={submitting} />
 
-                <section className="mt-4 grid grid-cols-1 gap-2">
-                    {mode === "edit" && !editingBeneficiary && <p className="rounded-md border border-amber-400/25 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">Beneficiário não encontrado.</p>}
-                    {isEditMode && isReadOnlyBeneficiary && <p className="rounded-md border border-cyan-400/25 bg-cyan-500/10 px-3 py-2 text-sm text-cyan-100">{readOnlyMessage}</p>}
+                <ModalBody className="flex flex-col gap-2">
+                    {mode === "edit" && !editingBeneficiary && <p className="rounded-xl border border-amber-400/25 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">Beneficiário não encontrado.</p>}
+                    {isEditMode && isReadOnlyBeneficiary && <p className="rounded-xl border border-cyan-400/25 bg-cyan-500/10 px-3 py-2 text-sm text-cyan-100">{readOnlyMessage}</p>}
 
-                    <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:gap-2">
-                        <label className="flex w-full flex-col gap-1.5 sm:w-1/2">
-                            <span className={FIELD_LABEL_CLASS}>Nome</span>
-                            <input
-                                type="text"
-                                value={name}
-                                onChange={(event) => setName(event.target.value)}
-                                className={FIELD_INPUT_CLASS + " h-full"}
-                                placeholder="Nome do beneficiário"
-                                disabled={submitting || isReadOnlyBeneficiary}
+                    <div className="flex items-stretch gap-2">
+                        <label
+                            className={`group relative flex shrink-0 items-center justify-center rounded-xl border border-white/[0.1] bg-black/35 p-2 transition-colors ${imageDisabled ? "cursor-not-allowed opacity-60" : "cursor-pointer hover:border-white/[0.24]"}`}
+                            title="Enviar foto (opcional)"
+                        >
+                            <BeneficiaryAvatar
+                                beneficiary={{ name: normalizedName || editingBeneficiary?.name || "Beneficiário", avatarImage, avatarColor }}
+                                className="h-[72px] w-[72px] rounded-full border border-white/10"
+                                textClassName="text-xl font-semibold text-white"
                             />
+                            <span className="absolute bottom-1.5 right-1.5 inline-flex h-6 w-6 items-center justify-center rounded-full border border-white/[0.16] bg-[#131313] text-white/70 group-hover:text-white">
+                                <ImageUp size={12} />
+                            </span>
+                            <input type="file" accept="image/*" onChange={handleFileUpload} className="sr-only" disabled={imageDisabled} aria-label="Enviar foto" />
                         </label>
 
-                        <div className="w-full sm:w-1/2">
+                        <div className="flex min-w-0 flex-1 flex-col gap-2">
+                            <IconTextField ariaLabel="Nome do beneficiário" value={name} onChange={setName} placeholder="Nome do beneficiário" icon={UserRound} disabled={submitting || isReadOnlyBeneficiary} />
                             <SingleSelectCombobox
                                 label="Tipo"
+                                hideLabel
                                 value={type}
                                 placeholder="Selecione um tipo"
                                 emptyMessage="Nenhum tipo encontrado."
@@ -350,149 +348,63 @@ export function AddBeneficiary({ mode = "create", beneficiaryId, initialBenefici
                                 onChange={(value) => setType(value as Beneficiary["type"])}
                                 renderOptionContent={(option) => <BeneficiaryTypeOptionContent option={option} />}
                                 renderSelectedContent={(option) => <BeneficiaryTypeOptionContent option={option} />}
-                                labelClassName={FIELD_LABEL_CLASS}
                                 disabled={submitting || isReadOnlyBeneficiary}
                                 disableSearch
                             />
                         </div>
                     </div>
 
-                    <div className="rounded-xl border border-white/[0.1] bg-black/35 p-3">
-                        <div className="mb-3 flex items-center gap-3">
-                            <BeneficiaryAvatar
-                                beneficiary={{
-                                    name: normalizedName || editingBeneficiary?.name || "Beneficiario",
-                                    avatarImage,
-                                    avatarColor,
-                                }}
-                                className="h-14 w-14 rounded-full border border-white/10"
-                                textClassName="text-lg font-semibold text-white"
-                            />
-                            <div>
-                                <p className="text-sm font-medium">Foto do beneficiário (opcional)</p>
-                                <p className="text-xs text-white/50">Upload local (max 320px) ou URL externa.</p>
-                            </div>
-                        </div>
-
-                        <div className="grid gap-3">
-                            <label className="flex flex-col gap-1.5">
-                                <span className={FIELD_LABEL_CLASS}>Upload</span>
-                                <input
-                                    type="file"
-                                    accept="image/*"
-                                    onChange={handleFileUpload}
-                                    className={`${FIELD_INPUT_CLASS} p-2 text-sm`}
-                                    disabled={isProcessingUpload || submitting || isReadOnlyBeneficiary}
-                                />
-                            </label>
-
-                            <label className="flex flex-col gap-1.5">
-                                <span className={FIELD_LABEL_CLASS}>URL da imagem</span>
-                                <div className="flex gap-2">
-                                    <input
-                                        type="text"
-                                        value={avatarUrlInput}
-                                        onChange={(event) => setAvatarUrlInput(event.target.value)}
-                                        className={`${FIELD_INPUT_CLASS} flex-1`}
-                                        placeholder="https://..."
-                                        disabled={submitting || isReadOnlyBeneficiary}
-                                    />
-                                    <button
-                                        type="button"
-                                        onClick={applyImageUrl}
-                                        disabled={submitting || isReadOnlyBeneficiary}
-                                        className="rounded-xl border border-white/[0.15] bg-white/[0.03] px-3 text-xs uppercase tracking-[0.08em] text-white/75 transition-colors hover:border-white/[0.28] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
-                                    >
-                                        Usar
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={clearImage}
-                                        disabled={submitting || isReadOnlyBeneficiary}
-                                        className="rounded-xl border border-white/[0.15] bg-white/[0.03] px-3 text-xs uppercase tracking-[0.08em] text-white/75 transition-colors hover:border-white/[0.28] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
-                                    >
-                                        Limpar
-                                    </button>
-                                </div>
-                            </label>
-                            {uploadError && <p className="text-sm text-amber-200">{uploadError}</p>}
-                        </div>
+                    <div className={`${FIELD_ICON_CONTROL_CLASS} flex min-h-[50px] items-center gap-2 ${isReadOnlyBeneficiary ? "opacity-60" : ""}`}>
+                        <TransactionFieldIcon icon={Link2} />
+                        <input
+                            aria-label="URL da imagem"
+                            type="text"
+                            value={avatarUrlInput}
+                            onChange={(event) => setAvatarUrlInput(event.target.value)}
+                            className={FIELD_EMBEDDED_INPUT_CLASS}
+                            placeholder="Ou cole a URL de uma imagem"
+                            disabled={submitting || isReadOnlyBeneficiary}
+                        />
+                        <button type="button" onClick={applyImageUrl} disabled={submitting || isReadOnlyBeneficiary || !avatarUrlInput.trim()} className={INLINE_BUTTON_CLASS}>
+                            Usar
+                        </button>
+                        {avatarImage ? (
+                            <button type="button" onClick={clearImage} disabled={submitting || isReadOnlyBeneficiary} className={INLINE_BUTTON_CLASS}>
+                                Remover foto
+                            </button>
+                        ) : null}
                     </div>
-                    <div className="rounded-xl border border-white/[0.1] bg-black/35 p-3">
-                        <p className={`${FIELD_LABEL_CLASS} mb-2`}>Cor</p>
-                        <div className="flex items-center gap-3">
-                            <input
-                                type="color"
-                                value={avatarColor}
-                                onChange={(event) => setAvatarColor(event.target.value)}
-                                className="h-10 w-14 rounded-lg border border-white/[0.16] bg-black/40 p-1"
-                                disabled={submitting || isColorReadOnly}
-                            />
-                            <input
-                                type="text"
-                                value={avatarColor}
-                                onChange={(event) => setAvatarColor(event.target.value)}
-                                className={FIELD_INPUT_CLASS}
-                                placeholder="#4B5563"
-                                disabled={submitting || isColorReadOnly}
-                            />
-                        </div>
-                    </div>
-                </section>
+                    {uploadError && <p className="pl-1 text-sm text-amber-200">{uploadError}</p>}
 
-                <div className="mt-5 flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2">
-                        {isEditMode && editingBeneficiary && !isReadOnlyBeneficiary && (
+                    <label className={`${FIELD_ICON_CONTROL_CLASS} flex min-h-[50px] items-center gap-2 ${isColorReadOnly ? "opacity-60" : ""}`}>
+                        <input aria-label="Cor do avatar" type="color" value={avatarColor} onChange={(event) => setAvatarColor(event.target.value)} className="h-7 w-7 shrink-0 cursor-pointer rounded-md border border-white/[0.12] bg-transparent p-0.5" disabled={submitting || isColorReadOnly} />
+                        <input aria-label="Código da cor" type="text" value={avatarColor} onChange={(event) => setAvatarColor(event.target.value)} className={FIELD_EMBEDDED_INPUT_CLASS} placeholder="#4B5563" disabled={submitting || isColorReadOnly} />
+                    </label>
+                </ModalBody>
+
+                <ModalFooter
+                    start={
+                        isEditMode && editingBeneficiary && !isReadOnlyBeneficiary ? (
                             <>
-                                <button
-                                    type="button"
-                                    onClick={() => void handleToggleActive()}
-                                    disabled={submitting}
-                                    className={`inline-flex min-w-28 items-center justify-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
-                                        editingBeneficiary.isActive
-                                            ? "border-amber-400/25 bg-amber-500/10 text-amber-100 hover:border-amber-400/45 hover:text-amber-50"
-                                            : "border-emerald-400/35 bg-emerald-500/15 text-emerald-100 hover:border-emerald-400/55 hover:bg-emerald-500/20"
-                                    }`}
-                                >
+                                <ModalFooterAction onClick={() => void handleToggleActive()} disabled={submitting}>
                                     {editingBeneficiary.isActive ? <Trash2 size={15} /> : <RotateCcw size={15} />}
                                     {editingBeneficiary.isActive ? "Arquivar" : "Reativar"}
-                                </button>
-
+                                </ModalFooterAction>
                                 {!editingBeneficiary.isActive ? (
-                                    <button
-                                        type="button"
-                                        onClick={openPermanentDeleteModal}
-                                        disabled={submitting}
-                                        className="inline-flex min-w-40 items-center justify-center gap-2 rounded-xl border border-red-400/25 bg-red-500/10 px-3 py-2 text-sm font-medium text-red-200 transition-colors hover:border-red-400/45 hover:text-red-100 disabled:cursor-not-allowed disabled:opacity-60"
-                                    >
-                                        <Trash2 size={15} />
-                                        Excluir em definitivo
-                                    </button>
+                                    <ModalFooterAction tone="danger" onClick={openPermanentDeleteModal} disabled={submitting}>
+                                        <Trash2 size={15} /> Excluir em definitivo
+                                    </ModalFooterAction>
                                 ) : null}
                             </>
-                        )}
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                        <button
-                            type="button"
-                            onClick={closeModal}
-                            disabled={submitting}
-                            className="inline-flex min-w-24 items-center justify-center rounded-xl border border-white/[0.12] bg-white/[0.03] px-4 py-2 text-sm font-medium text-white/70 transition-colors hover:border-white/[0.2] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                            Cancelar
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => void handleSubmit()}
-                            disabled={(mode === "edit" && !editingBeneficiary) || !normalizedName || submitting || isProcessingUpload || isActionReadOnly}
-                            className="inline-flex min-w-28 items-center justify-center rounded-xl border border-emerald-400/35 bg-emerald-500/15 px-4 py-2 text-sm font-semibold text-emerald-100 transition-colors hover:border-emerald-400/55 hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                            {isFamilySharedBeneficiary ? "Somente leitura" : submitting ? "Processando..." : isSelfProfileBeneficiary ? "Salvar cor" : "Concluir"}
-                        </button>
-                    </div>
-                </div>
-            </div>
+                        ) : null
+                    }
+                >
+                    <ModalCancelButton disabled={submitting} />
+                    <ModalPrimaryButton onClick={() => void handleSubmit()} disabled={(mode === "edit" && !editingBeneficiary) || !normalizedName || submitting || isProcessingUpload || isActionReadOnly}>
+                        {isFamilySharedBeneficiary ? "Somente leitura" : submitting ? "Salvando..." : isSelfProfileBeneficiary ? "Salvar cor" : "Salvar"}
+                    </ModalPrimaryButton>
+                </ModalFooter>
+            </ModalPanel>
         </ModalStructure>
     );
 }

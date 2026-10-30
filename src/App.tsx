@@ -6,10 +6,15 @@ import { FinanceProvider, useFinanceSession } from "./context/FinanceContext";
 import { ModalProvider } from "./context/ModalContext";
 import { PageProvider, usePage } from "./context/PageContext";
 import "./lib/chart";
+import { initDemoMode } from "./lib/demoMode";
+
+initDemoMode();
 
 const LoginPage = lazy(() => import("./components/pages/Login").then((module) => ({ default: module.LoginPage })));
 const HomePage = lazy(() => import("./components/pages/Home").then((module) => ({ default: module.HomePage })));
 const PlanningPage = lazy(() => import("./components/pages/Analysis").then((module) => ({ default: module.PlanningPage })));
+const ReportsPage = lazy(() => import("./components/pages/Reports").then((module) => ({ default: module.ReportsPage })));
+const BudgetsPage = lazy(() => import("./components/pages/Budgets").then((module) => ({ default: module.BudgetsPage })));
 const StatementPage = lazy(() => import("./components/pages/Statement").then((module) => ({ default: module.StatementPage })));
 const RegistryPage = lazy(() => import("./components/pages/Registry").then((module) => ({ default: module.RegistryPage })));
 const SettingsPage = lazy(() => import("./components/pages/Settings").then((module) => ({ default: module.SettingsPage })));
@@ -45,7 +50,7 @@ function MainApp() {
     }
 
     return (
-        <AuthShell mainClassName={currentPage === "home" ? "text-center text-white" : "text-white"}>
+        <AuthShell mainClassName="text-white">
             <Suspense fallback={<PageSkeletonScreen page={currentPage} />}>
                 <Routes>
                     <Route path="/" element={<Navigate to="/home" replace />} />
@@ -61,7 +66,14 @@ function MainApp() {
                     <Route path="/statement" element={<StatementPage />} />
                     <Route path="/fatura" element={<StatementPage />} />
                     <Route path="/planning" element={<PlanningPage />} />
+                    <Route path="/planejamento" element={<PlanningPage />} />
                     <Route path="/analises" element={<PlanningPage />} />
+                    <Route path="/reports" element={<ReportsPage />} />
+                    <Route path="/relatorios" element={<ReportsPage />} />
+                    <Route path="/budgets" element={<BudgetsPage />} />
+                    <Route path="/orcamentos" element={<BudgetsPage />} />
+                    <Route path="/budgets/:budgetId" element={<BudgetsPage />} />
+                    <Route path="/orcamentos/:budgetId" element={<BudgetsPage />} />
                     <Route path="/wishlist" element={<WishlistPage />} />
                     <Route path="/registry" element={<RegistryPage />} />
                     <Route path="/registry/carteiras" element={<RegistryPage />} />

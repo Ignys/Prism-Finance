@@ -1,7 +1,5 @@
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { FunnelPlus, Search, X } from "lucide-react";
 import type { TransactionStatus } from "../../../context/FinanceContext";
-import { ENTRANCE_EASE } from "../entranceMotion";
 import { INPUT_CLASS, SELECT_CLASS, STATUS_LABELS, STATUS_ORDER, type SelectOption, type TagOption } from "./transactionsPageShared";
 
 interface TransactionsFiltersPanelProps {
@@ -51,13 +49,9 @@ export function TransactionsFiltersPanel({
     onMaxAmountChange,
     onTagToggle,
 }: TransactionsFiltersPanelProps) {
-    const shouldReduceMotion = useReducedMotion();
 
     return (
-        <motion.section
-            initial={shouldReduceMotion ? false : { opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.42, ease: ENTRANCE_EASE }}
+        <section
         >
             <div className="relative flex flex-col gap-3">
                 <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
@@ -95,13 +89,9 @@ export function TransactionsFiltersPanel({
                     </div>
                 </div>
 
-                <AnimatePresence initial={false}>
+                <>
                     {showAdvancedFilters && (
-                        <motion.div
-                            initial={{ opacity: 0, height: 0 }}
-                            animate={{ opacity: 1, height: "auto" }}
-                            exit={{ opacity: 0, height: 0 }}
-                            transition={{ duration: 0.2, ease: "easeInOut" }}
+                        <div
                             className="overflow-hidden rounded-xl border border-white/[0.08] bg-white/[0.02] p-3"
                         >
                             <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
@@ -174,10 +164,10 @@ export function TransactionsFiltersPanel({
                                     {tagOptions.length < 1 && <p className="text-sm text-white/45">Nenhuma tag vinculada as transações.</p>}
                                 </div>
                             </div>
-                        </motion.div>
+                        </div>
                     )}
-                </AnimatePresence>
+                </>
             </div>
-        </motion.section>
+        </section>
     );
 }

@@ -1,8 +1,6 @@
-import { motion, useReducedMotion } from "framer-motion";
 import { ArrowDownRight, ArrowRightLeft, ArrowUpRight, CalendarClock, Columns3Cog, CreditCard as CreditCardIcon, Gift, Plus } from "lucide-react";
 import { useEffect, useMemo, useState, type MouseEvent } from "react";
 import type { PlanningWishlistSelection, WishItem } from "../../../context/FinanceContext";
-import { PLANNING_ENTRANCE_EASE } from "./planningEntranceMotion";
 import type { IncomeItem, InheritedExpenseItem, MonthProjection, PlanningPanel, SimulatedExpenseItem, SimulatedIncomeItem } from "./planningTimelineTypes";
 import { getAmountClassName } from "./planningTimelineUtils";
 import { PlanningDetailsSection } from "./PlanningDetailsSection";
@@ -99,7 +97,6 @@ export function PlanningDetailsAside({
     onToggleInheritedExpense,
     onToggleWishlistSelection,
 }: PlanningDetailsAsideProps) {
-    const shouldReduceMotion = useReducedMotion();
     const [contextMenuState, setContextMenuState] = useState<PlanningProjectionContextState | null>(null);
     const selectedPanelTitle = getPanelTitle(selectedPanel);
     const contextMenuActions = useMemo(() => {
@@ -404,10 +401,7 @@ export function PlanningDetailsAside({
 
     return (
         <>
-            <motion.aside
-                initial={shouldReduceMotion ? false : { opacity: 0, x: 20, filter: "blur(6px)" }}
-                animate={{ opacity: 1, x: 0, filter: "blur(0px)" }}
-                transition={{ delay: shouldReduceMotion ? 0 : 0.28, duration: 0.55, ease: PLANNING_ENTRANCE_EASE }}
+            <aside
                 className="flex max-h-[calc(100vh-2rem)] w-full shrink-0 flex-col overflow-hidden rounded-lg border border-white/[0.08] bg-[#111111] p-3 text-left xl:sticky xl:top-4 xl:max-w-[360px]"
             >
             <div className="shrink-0">
@@ -437,7 +431,7 @@ export function PlanningDetailsAside({
             <div className={`elegant-scrollbar mt-4 flex min-h-0 max-h-165 flex-1 flex-col overflow-y-auto overflow-x-hidden pr-1 ${selectedPanel === "projections" ? "gap-3" : "gap-1"}`}>
                 {renderContent()}
             </div>
-            </motion.aside>
+            </aside>
             <PlanningProjectionContextMenu state={contextMenuState} actions={contextMenuActions} onSelect={handleProjectionContextActionSelect} onClose={() => setContextMenuState(null)} />
         </>
     );

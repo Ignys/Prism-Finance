@@ -8,7 +8,9 @@ import {
 } from "../../../context/FinanceContext";
 import { useModal } from "../../../context/ModalContext";
 import { CreditCardModal } from "../../modal/CreditCardModal";
-import { RegistryAssetCard } from "./RegistryAssetCard";
+import { RegistryAssetRow } from "./RegistryAssetRow";
+import { RegistryAssetSummary } from "./RegistryAssetSummary";
+import { RegistryCreditCardCycle } from "./RegistryCreditCardCycle";
 import { RegistryAssetContextMenu } from "./RegistryAssetContextMenu";
 import { RegistryListItemEntrance } from "./RegistryListItemEntrance";
 import { RegistrySectionHeader } from "./RegistrySectionHeader";
@@ -29,7 +31,13 @@ export function RegistryCreditCardsSection() {
     const { menuState, openMenu, closeMenu } = useRegistryAssetMenu();
     const handleAssetAction = useRegistryAssetActionHandler("creditCard");
 
-    const visibleCreditCards = useMemo(() => creditCards.filter((card) => showArchivedCreditCards || card.isActive), [creditCards, showArchivedCreditCards]);
+    const visibleCreditCards = useMemo(
+        () =>
+            creditCards
+                .filter((card) => showArchivedCreditCards || card.isActive)
+                .sort((a, b) => Number(b.id === favoriteCreditCardId) - Number(a.id === favoriteCreditCardId)),
+        [creditCards, favoriteCreditCardId, showArchivedCreditCards],
+    );
     const activityByCreditCardId = useMemo(
         () => new Map(creditCards.map((card) => [card.id, hasCreditCardActivity(card.id, transactionGroups, transactions, invoices)])),
         [creditCards, invoices, transactionGroups, transactions],
@@ -59,32 +67,38 @@ export function RegistryCreditCardsSection() {
                 onCreate={() => openModal(<CreditCardModal mode="create" />)}
             />
 
-            <div className="elegant-scrollbar min-h-0 flex-1 overflow-y-auto overflow-x-hidden pr-2">
+            <div className="flex min-h-0 flex-1 flex-col gap-4 lg:flex-row">
+            <div className="elegant-scrollbar order-2 min-h-0 flex-1 overflow-y-auto overflow-x-hidden pr-2 lg:order-1">
                 {visibleCreditCards.length < 1 ? (
                     <RegistryListItemEntrance index={0}>
-                        <div className="rounded-xl border border-white/[0.07] bg-white/[0.02] p-4 text-sm text-white/45">Nenhum cartão para os filtros atuais.</div>
+                        <div className="py-4 text-sm text-white/45">Nenhum cartão para os filtros atuais.</div>
                     </RegistryListItemEntrance>
                 ) : (
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                    <ul className="divide-y divide-white/[0.06]">
                         {visibleCreditCards.map((creditCard, index) => (
-                            <RegistryAssetCard
+                            <RegistryAssetRow
                                 key={creditCard.id}
                                 asset={creditCard}
-                                assetTypeLabel="Cartão de crédito"
-                                archivedLabel="Arquivado"
                                 index={index}
-                                isActive={creditCard.isActive}
                                 isFavorite={creditCard.id === favoriteCreditCardId}
-                                metrics={[
-                                    { label: "Limite", value: formatRegistryCurrency(creditCard.limit), emphasis: true, wide: true },
-                                    { label: "Fechamento", value: `Dia ${creditCard.closingDay}` },
-                                    { label: "Vencimento", value: `Dia ${creditCard.dueDay}` },
-                                ]}
+                                favoriteLabel="Favorito"
+                                subtitle={<RegistryCreditCardCycle closingDay={creditCard.closingDay} dueDay={creditCard.dueDay} color={creditCard.color} isActive={creditCard.isActive} />}
+                                valueLabel="Limite"
+                                value={formatRegistryCurrency(creditCard.limit)}
+                                ariaLabel={`${creditCard.name}, limite ${formatRegistryCurrency(creditCard.limit)}`}
                                 onOpenContextMenu={(x, y) => openMenu(creditCard.id, x, y)}
                             />
                         ))}
-                    </div>
+                    </ul>
                 )}
+            </div>
+
+            <RegistryAssetSummary
+                label="Limite total dos cartões ativos"
+                countLabel={activeCount === 1 ? "1 cartão" : `${activeCount} cartões`}
+                distributionLabel="Distribuição do limite entre cartões"
+                items={creditCards.filter((card) => card.isActive).map((card) => ({ id: card.id, name: card.name, color: card.color, value: card.limit }))}
+            />
             </div>
 
             <RegistryAssetContextMenu

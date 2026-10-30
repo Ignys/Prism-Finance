@@ -1,4 +1,3 @@
-import { motion, useReducedMotion } from "framer-motion";
 import { useEffect, useMemo, useState, type MouseEvent } from "react";
 import { ArrowDown, ArrowUp, Circle, CircleSlash, Link2, Repeat2 } from "lucide-react";
 import { type Beneficiary, type Transaction, type Wallet, useFinanceActions, useFinanceBeneficiaries, useFinanceSession, useFinanceTransactionGroups } from "../../../context/FinanceContext";
@@ -7,7 +6,6 @@ import { getCategoryIconComponent } from "../../../lib/categoryIcons";
 import { useLocalPreferenceSection } from "../../../lib/localPreferences";
 import { getTransactionCategoryDisplay, getTransactionCategoryDisplayLabel } from "../../../lib/transactionCategory";
 import { BeneficiaryAvatar } from "../../common/BeneficiaryAvatar";
-import { ENTRANCE_EASE, getItemEntranceDelay, PANEL_ENTRANCE_ANIMATE, PANEL_ENTRANCE_INITIAL, PANEL_ENTRANCE_TRANSITION } from "../entranceMotion";
 import { TableColumnToggleButton } from "../../common/TableColumnToggleButton";
 import { WalletAvatar } from "../../common/WalletAvatar";
 import { BulkTransactionEditModal } from "../../modal/BulkTransactionEditModal";
@@ -19,6 +17,8 @@ import { formatCurrencyBRL, formatTransactionDate, getTransactionTypeMeta, resol
 import { isTransactionEligibleForBulkEdit, useTransactionBulkSelection } from "../../transactions/useTransactionBulkSelection";
 import {
     buildSortMode,
+    formatMonthLabel,
+    getCurrentMonthKey,
     getSortDirection,
     getSortField,
     SORT_DEFAULT_DIRECTION,
@@ -28,8 +28,6 @@ import {
     type SortMode,
     type TransactionsTabKey,
 } from "./transactionsPageShared";
-import { format } from "date-fns";
-import { ptBR } from "date-fns/locale";
 
 interface TransactionsListPanelProps {
     activeTab: TransactionsTabKey;
@@ -198,8 +196,6 @@ function TableControlButton({ label, active, onClick }: { label: string; active:
     return <TableColumnToggleButton label={label} active={active} onClick={onClick} />;
 }
 
-const ROW_ENTRANCE_INITIAL = { opacity: 0, y: 10 };
-const ROW_ENTRANCE_ANIMATE = { opacity: 1, y: 0 };
 
 function TransactionsTable({ tabs, activeTab, wallets, beneficiariesById, transactionGroupsById, sortMode, onSortModeChange, onAction, selectedMonth }: TransactionsTableProps) {
     const activeTabConfig = tabs.find((tab) => tab.key === activeTab) ?? tabs[0];
@@ -209,7 +205,6 @@ function TransactionsTable({ tabs, activeTab, wallets, beneficiariesById, transa
     const { openModal } = useModal();
     const { updateTransactionsBulk } = useFinanceActions();
     const bulkSelection = useTransactionBulkSelection(transactions);
-    const shouldReduceMotion = useReducedMotion();
     const [selectionMode, setSelectionMode] = useState(false);
     const [viewPreferences, setViewPreferences] = useLocalPreferenceSection(
         user?.uid,
@@ -345,39 +340,41 @@ function TransactionsTable({ tabs, activeTab, wallets, beneficiariesById, transa
     };
 
     return (
-        <motion.section
-            initial={shouldReduceMotion ? false : PANEL_ENTRANCE_INITIAL}
-            animate={PANEL_ENTRANCE_ANIMATE}
-            transition={PANEL_ENTRANCE_TRANSITION}
-            className="min-w-0 flex-1 rounded-2xl border border-white/[0.08] bg-[#111111] shadow-[0_24px_60px_-32px_rgba(0,0,0,0.9)]"
+        <section
+            className="min-w-0 flex-1 rounded-2xl finance-surface"
         >
-            <div className="flex flex-wrap items-center justify-between gap-3 p-3">
+            <div className="flex flex-wrap items-center justify-between gap-3 px-4 pb-3 pt-4">
                 <div className="flex flex-wrap items-center gap-3">
-                    <h2 className="text-sm uppercase text-white/60">
-                        {activeTabConfig.label} de {format(new Date(selectedMonth || new Date()), "MMMM 'de' yyyy", { locale: ptBR })}
+                    <h2 className="text-base font-semibold uppercase text-white">
+                        {activeTabConfig.label} <span className="mx-1.5 font-normal text-white/25">·</span><span className="font-normal capitalize text-white/45">{formatMonthLabel(selectedMonth || getCurrentMonthKey())}</span>
                     </h2>
-                    <span className="rounded-full border border-white/[0.05] bg-[#111111] px-2 py-0.5 text-xs text-white/40">
-                        {transactions.length} {transactions.length === 1 ? "item encontrado" : "itens encontrados"}
+                    <span className="text-xs text-white/40">
+                        {transactions.length} {transactions.length === 1 ? "transação" : "transações"}
+                        <span className="mx-1.5 text-white/20">|</span>
+                        <span className="font-medium text-white/75">R$ {formatCurrencyBRL(transactions.reduce((sum, transaction) => sum + transaction.value, 0))}</span>
                     </span>
                 </div>
                 <div className="flex flex-wrap items-center justify-end gap-2">
-                    <div className="hidden flex-wrap items-center gap-1 sm:flex">
-                        <TableControlButton label="STATUS" active={showStatus} onClick={() => toggleViewPreference("showStatus")} />
-                        <TableControlButton label="DATA" active={showDate} onClick={() => toggleViewPreference("showDate")} />
-                        <TableControlButton label="DESCRIÇÃO" active={showDescription} onClick={() => toggleViewPreference("showDescription")} />
-                        <TableControlButton label="CATEGORIA" active={showCategory} onClick={() => toggleViewPreference("showCategory")} />
-                        <TableControlButton label="TAGS" active={showTags} onClick={() => toggleViewPreference("showTags")} />
-                        <TableControlButton label="BENEFICIÁRIO" active={showBeneficiary} onClick={() => toggleViewPreference("showBeneficiary")} />
-                        <TableControlButton label="VALOR" active={showValue} onClick={() => toggleViewPreference("showValue")} />
+                    <div className="hidden flex-wrap items-center gap-0.5 rounded-lg border border-white/[0.07] bg-black/30 p-0.5 sm:flex" role="group" aria-label="Colunas visíveis">
+                        <TableControlButton label="Status" active={showStatus} onClick={() => toggleViewPreference("showStatus")} />
+                        <TableControlButton label="Data" active={showDate} onClick={() => toggleViewPreference("showDate")} />
+                        <TableControlButton label="Descrição" active={showDescription} onClick={() => toggleViewPreference("showDescription")} />
+                        <TableControlButton label="Categoria" active={showCategory} onClick={() => toggleViewPreference("showCategory")} />
+                        <TableControlButton label="Tags" active={showTags} onClick={() => toggleViewPreference("showTags")} />
+                        <TableControlButton label="Beneficiário" active={showBeneficiary} onClick={() => toggleViewPreference("showBeneficiary")} />
+                        <TableControlButton label="Valor" active={showValue} onClick={() => toggleViewPreference("showValue")} />
                     </div>
                 </div>
             </div>
 
             {transactions.length < 1 ? (
-                <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] px-3 py-6 text-center text-sm text-white/55">{activeTabConfig.emptyMessage}</div>
+                <div className="mx-4 mb-4 rounded-xl border border-dashed border-white/[0.1] px-4 py-10 text-center">
+                    <p className="text-sm text-white/70">{activeTabConfig.emptyMessage}</p>
+                    <p className="mt-1 text-xs text-white/40">Troque o mês ou limpe os filtros para ver outras transações.</p>
+                </div>
             ) : (
-                <div className="elegant-scrollbar min-w-0 overflow-x-auto rounded-2xl pb-4">
-                    <table className="w-full max-w-full table-fixed border-separate border-spacing-0 text-sm text-white/85">
+                <div className="elegant-scrollbar min-w-0 overflow-x-auto px-2 pb-2">
+                    <table className="finance-table w-full max-w-full table-fixed border-separate border-spacing-0 text-sm text-white/85">
                         <colgroup>
                             {selectionMode && <col className="w-[4%]" />}
                             {showStatus && <col className="w-[17%]" />}
@@ -418,7 +415,7 @@ function TransactionsTable({ tabs, activeTab, wallets, beneficiariesById, transa
                             </tr>
                         </thead>
                         <tbody>
-                            {transactions.map((transaction, index) => {
+                            {transactions.map((transaction) => {
                                 const group = transactionGroupsById.get(transaction.groupId);
                                 const seriesIndicator = resolveTransactionSeriesIndicator(transaction, group);
                                 const wallet = resolveTransactionWallet(wallets, transaction.inWallet);
@@ -442,24 +439,14 @@ function TransactionsTable({ tabs, activeTab, wallets, beneficiariesById, transa
                                     : transaction.status === "pending" && transaction.isProjected ? "Prevista" : STATUS_LABELS[transaction.status];
 
                                 return (
-                                    <motion.tr
+                                    <tr
                                         key={transaction.id}
-                                        initial={shouldReduceMotion ? false : ROW_ENTRANCE_INITIAL}
-                                        animate={ROW_ENTRANCE_ANIMATE}
-                                        transition={{
-                                            delay: shouldReduceMotion ? 0 : getItemEntranceDelay(index),
-                                            duration: 0.38,
-                                            ease: ENTRANCE_EASE,
-                                        }}
                                         onClick={() => handleRowClick(transaction)}
                                         onContextMenu={(event) => handleRowContextMenu(event, transaction)}
                                         className={`${selectionMode && canBulkEdit ? "cursor-pointer" : "cursor-context-menu"} transition-colors ${
-                                            isSelected
-                                                ? "bg-sky-500/[0.09] odd:bg-sky-500/[0.12] hover:bg-sky-900/[0.6]  shadow-[inset_3px_0_0_rgba(0,_170,226,_0.7)]"
-                                                : contextMenu?.transactionId === transaction.id
-                                                  ? " "
-                                                  : "odd:bg-white/[0.01] hover:bg-white/[0.01] odd:hover:bg-white/[0.02]"
+                                            selectionMode && !canBulkEdit ? "opacity-45" : ""
                                         }`}
+                                        aria-selected={selectionMode ? isSelected : undefined}
                                     >
                                         {selectionMode && (
                                             <td className="border-b border-white/[0.04] px-3 py-2.5">
@@ -475,16 +462,16 @@ function TransactionsTable({ tabs, activeTab, wallets, beneficiariesById, transa
                                             <td className="overflow-hidden whitespace-nowrap border-b border-white/[0.04] px-3 py-2.5">
                                                 <div className="flex min-w-0 items-center gap-2 overflow-hidden whitespace-nowrap">
                                                     <div className="flex shrink-0 items-center gap-2">
-                                                        <WalletAvatar wallet={wallet} className="h-8 w-8 rounded-md border border-white/[0.1]" iconSize={16} iconStrokeWidth={1.8} />
+                                                        <WalletAvatar wallet={wallet} className="h-7 w-7 rounded-lg border border-white/[0.1]" iconSize={14} iconStrokeWidth={1.8} />
                                                     </div>
                                                     <span
-                                                        className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[11px]/4 uppercase tracking-[0.08em] ${statusBadgeClass}`}
+                                                        className={`inline-flex shrink-0 items-center gap-1 rounded-md border px-2 py-0.5 text-[11px]/4 font-medium ${statusBadgeClass}`}
                                                     >
                                                         {statusLabel}
                                                     </span>
-                                                    {seriesIndicator?.kind === "installment" && <span className="text-xs text-white/55">{seriesIndicator.label}</span>}
+                                                    {seriesIndicator?.kind === "installment" && <span className="text-xs text-white/45">{seriesIndicator.label}</span>}
                                                     {seriesIndicator?.kind === "recurring" && (
-                                                        <span className={`inline-flex`} role="img" title="Transacao recorrente" aria-label="Transacao recorrente">
+                                                        <span className="inline-flex text-white/45" role="img" title="Transacao recorrente" aria-label="Transacao recorrente">
                                                             <Repeat2 strokeWidth={2} size={15} />
                                                         </span>
                                                     )}
@@ -492,8 +479,9 @@ function TransactionsTable({ tabs, activeTab, wallets, beneficiariesById, transa
                                             </td>
                                         )}
                                         {showDate && (
-                                            <td className="overflow-hidden whitespace-nowrap border-b border-white/[0.04] px-3 py-2.5 text-white/70">
-                                                {formatTransactionDate(transaction.date, "dd/MM/yyyy")}
+                                            <td className="overflow-hidden whitespace-nowrap border-b border-white/[0.04] px-3 py-2.5">
+                                                <span className="font-medium text-white/85">{formatTransactionDate(transaction.date, "dd")}</span>
+                                                <span className="text-white/40">{formatTransactionDate(transaction.date, "/MM/yyyy")}</span>
                                             </td>
                                         )}
                                         {showDescription && (
@@ -515,10 +503,10 @@ function TransactionsTable({ tabs, activeTab, wallets, beneficiariesById, transa
                                                 ) : (
                                                     <div className="flex min-w-0 max-w-full items-center gap-2">
                                                         <span
-                                                            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-white/[0.1]"
+                                                            className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg"
                                                             style={{ color: categoryColor, backgroundColor: categoryBackground }}
                                                         >
-                                                            <CategoryIcon size={16} />
+                                                            <CategoryIcon size={14} />
                                                         </span>
                                                         <span className="truncate">{getTransactionCategoryDisplayLabel(transaction.category)}</span>
                                                     </div>
@@ -528,13 +516,13 @@ function TransactionsTable({ tabs, activeTab, wallets, beneficiariesById, transa
                                         {showTags && (
                                             <td className="overflow-hidden whitespace-nowrap border-b border-white/[0.04] px-3 py-2.5 text-white/70">
                                                 {visibleTags.length < 1 ? (
-                                                    <span className="text-white/35">Sem tags</span>
+                                                    <span className="text-white/25">—</span>
                                                 ) : (
                                                     <div className="flex min-w-0 max-w-full flex-nowrap items-center gap-1.5 overflow-hidden">
                                                         {visibleTags.map((tag) => (
                                                             <span
                                                                 key={tag.id}
-                                                                className="min-w-0 max-w-[96px] truncate rounded-full border border-white/12 px-2 py-0.5 text-[11px]/4 font-medium uppercase text-white/75"
+                                                                className="min-w-0 max-w-[96px] truncate rounded-md px-2 py-0.5 text-[11px]/4 font-medium uppercase text-white/80"
                                                                 style={{ backgroundColor: `${tag.color ?? "#64748B"}26` }}
                                                             >
                                                                 {tag.name}
@@ -573,10 +561,11 @@ function TransactionsTable({ tabs, activeTab, wallets, beneficiariesById, transa
                                         )}
                                         {showValue && (
                                             <td className={`overflow-hidden whitespace-nowrap border-b border-white/[0.04] px-3 py-2.5 text-right font-semibold ${typeMeta.amountColorClass}`}>
-                                                R$ {formatCurrencyBRL(transaction.value)}
+                                                <span className="mr-1 text-xs font-normal opacity-50">R$</span>
+                                                {formatCurrencyBRL(transaction.value)}
                                             </td>
                                         )}
-                                    </motion.tr>
+                                    </tr>
                                 );
                             })}
                         </tbody>
@@ -592,7 +581,7 @@ function TransactionsTable({ tabs, activeTab, wallets, beneficiariesById, transa
                     <TransactionContextMenu state={contextMenu} actions={contextActions} onSelect={handleSelectAction} onClose={() => setContextMenu(null)} />
                 </div>
             )}
-        </motion.section>
+        </section>
     );
 }
 

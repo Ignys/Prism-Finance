@@ -1,10 +1,8 @@
 import { useMemo } from "react";
-import { motion, useReducedMotion } from "framer-motion";
 import { Calendar, CircleSlash, Lock, RotateCcw, Wallet } from "lucide-react";
 import type { CreditCard, CreditCardInvoice } from "../../../context/FinanceContext";
 import { MonthPickerControl } from "../../common/MonthPickerControl";
 import { WalletAvatar } from "../../common/WalletAvatar";
-import { PANEL_ENTRANCE_ANIMATE, PANEL_ENTRANCE_INITIAL, PANEL_ENTRANCE_TRANSITION } from "../entranceMotion";
 import { MultiSelectCombobox } from "../../transactions/MultiSelectCombobox";
 import { type ComboboxOptionBase } from "../../transactions/SingleSelectCombobox";
 import {
@@ -61,8 +59,6 @@ export function StatementOverviewPanel({
     const selectedCard = creditCards.find((card) => card.id === selectedCardIds[0]) ?? null;
     const focusedInvoice = summary.focusedInvoice;
     const cardOptions = useMemo<CreditCardOption[]>(() => creditCards.map((card) => ({ id: card.id, label: card.name, searchText: card.name, card })), [creditCards]);
-
-    const shouldReduceMotion = useReducedMotion();
     const usagePercent = summary.limitTotalScope > 0 ? Math.min(100, Math.max(0, Math.round(((summary.limitTotalScope - summary.availableLimitEstimate) / summary.limitTotalScope) * 100))) : 0;
 
     const { payableInvoice, payableCreditCard, payButtonLabel, manualActionMode, manualActionInvoices, manualActionLabel } = useMemo(
@@ -71,11 +67,8 @@ export function StatementOverviewPanel({
     );
 
     return (
-        <motion.article
-            initial={shouldReduceMotion ? false : PANEL_ENTRANCE_INITIAL}
-            animate={PANEL_ENTRANCE_ANIMATE}
-            transition={PANEL_ENTRANCE_TRANSITION}
-            className="relative overflow-hidden rounded-2xl border border-white/[0.08] bg-[#111111] p-4"
+        <article
+            className="relative overflow-hidden rounded-2xl finance-surface p-4"
         >
             <div className="pointer-events-none absolute -bottom-20 -right-20 h-40 w-40 rounded-full bg-red-400/10 blur-3xl" />
 
@@ -213,7 +206,7 @@ export function StatementOverviewPanel({
                     <p className="mt-0.5 text-sm font-medium text-white">{formatCurrency(summary.limitTotalScope)}</p>
                 </div>
             </div>
-        </motion.article>
+        </article>
     );
 }
 interface CreditCardOption extends ComboboxOptionBase {

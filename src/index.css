@@ -111,3 +111,113 @@ body::-webkit-scrollbar-thumb {
   font-optical-sizing: auto;
   font-style: normal;
 }
+/* Tabelas de transações e faturas: cabeçalho em faixa, linhas arejadas, números tabulares */
+.finance-table {
+  font-variant-numeric: tabular-nums;
+}
+
+.finance-table thead th {
+  background: rgba(255, 255, 255, 0.025);
+  border-bottom: 0;
+  padding-top: 0.625rem;
+  padding-bottom: 0.625rem;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  text-transform: none;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.finance-table thead th * {
+  text-transform: none;
+}
+
+.finance-table thead th:first-child {
+  border-radius: 0.75rem 0 0 0.75rem;
+}
+
+.finance-table thead th:last-child {
+  border-radius: 0 0.75rem 0.75rem 0;
+}
+
+.finance-table tbody tr:first-child td,
+.finance-table tbody tr:first-child th {
+  padding-top: 0.875rem;
+}
+
+.finance-table tbody td,
+.finance-table tbody th {
+  padding-top: 0.75rem;
+  padding-bottom: 0.75rem;
+  border-bottom-color: rgba(255, 255, 255, 0.05);
+  transition: background-color 150ms ease;
+}
+
+.finance-table tbody tr:last-child td,
+.finance-table tbody tr:last-child th {
+  border-bottom-color: transparent;
+}
+
+.finance-table tbody tr:hover td,
+.finance-table tbody tr:hover th {
+  background-color: rgba(255, 255, 255, 0.025);
+}
+
+.finance-table tbody tr:hover > :first-child {
+  box-shadow: inset 2px 0 0 rgba(255, 255, 255, 0.35);
+}
+
+.finance-table tbody td:last-child {
+  letter-spacing: -0.01em;
+}
+
+.finance-table tbody tr[aria-selected="true"] td,
+.finance-table tbody tr[aria-selected="true"] th {
+  background-color: rgba(56, 189, 248, 0.07);
+  border-bottom-color: rgba(56, 189, 248, 0.12);
+}
+
+.finance-table tbody tr[aria-selected="true"]:hover td,
+.finance-table tbody tr[aria-selected="true"]:hover th {
+  background-color: rgba(56, 189, 248, 0.1);
+}
+
+.finance-table tbody tr[aria-selected="true"] > :first-child {
+  box-shadow: inset 2px 0 0 rgb(56, 189, 248);
+}
+
+/* Páginas de transações e faturas: rótulos em caixa normal, números alinhados */
+.finance-page {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Superfície dos painéis: leve luz no topo em vez de sombra genérica */
+.finance-surface {
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0) 120px),
+    #101011;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 30px 60px -40px rgba(0, 0, 0, 0.95);
+}
+
+.finance-page input:focus-visible,
+.finance-page select:focus-visible,
+.finance-page button:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.35);
+  outline-offset: 2px;
+}
+
+@keyframes command-palette-in {
+  from { opacity: 0; transform: translateY(-6px) scale(0.985); }
+  to { opacity: 1; transform: none; }
+}
+
+.command-palette-in {
+  animation: command-palette-in 140ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .command-palette-in { animation: none; }
+}

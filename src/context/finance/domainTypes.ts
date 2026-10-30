@@ -251,6 +251,35 @@ export interface PlanningRevenueOverride {
     updatedAt: string;
 }
 
+/**
+ * Uma regra de orçamento. `category` com categoria-pai também casa as subcategorias;
+ * `text` procura o trecho na descrição, sem diferenciar maiúsculas e acentos.
+ */
+export type PlanningBudgetRule =
+    | { kind: "category"; categoryId: string }
+    | { kind: "recurring"; groupId: string }
+    | { kind: "tag"; tagId: string }
+    | { kind: "beneficiary"; beneficiaryId: string }
+    | { kind: "wallet"; walletId: string }
+    | { kind: "creditCard"; creditCardId: string }
+    | { kind: "text"; text: string };
+
+export type PlanningBudgetRuleKind = PlanningBudgetRule["kind"];
+
+export interface PlanningBudget {
+    id: string;
+    name: string;
+    /** A despesa entra se atender a pelo menos uma regra daqui... */
+    include: PlanningBudgetRule[];
+    /** ...e a nenhuma daqui. */
+    exclude: PlanningBudgetRule[];
+    /** Teto mensal de gastos. */
+    amount: number;
+    /** Percentual do teto (1–100) a partir do qual o orçamento entra em alerta. */
+    alertPercent: number;
+    createdAt: string;
+}
+
 export interface ReportPeriod {
     startMonth: string;
     endMonth: string;
@@ -261,6 +290,7 @@ export interface PlanningState {
     simulatedIncomes: PlanningSimulatedIncome[];
     wishlistSelections: PlanningWishlistSelection[];
     revenueOverrides: PlanningRevenueOverride[];
+    budgets: PlanningBudget[];
     disabledInheritedExpenseIds: string[];
     disabledIncomeIds: string[];
     disabledSimulatedExpenseIds: string[];

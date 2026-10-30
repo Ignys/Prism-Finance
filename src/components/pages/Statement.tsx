@@ -295,7 +295,7 @@ export function StatementPage() {
     };
 
     return (
-        <div className="flex">
+        <div className="finance-page flex">
             <div className="flex flex-col gap-3 2xl:flex-row w-full">
                 <div className="min-w-0 flex-1 space-y-3">
                     <StatementContentPanel

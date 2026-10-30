@@ -1,13 +1,13 @@
-import { RotateCcw, Tag, Trash2, X } from "lucide-react";
+import { RotateCcw, Tag, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
 import { type Tag as FinanceTag, useFinanceActions, useFinanceTags } from "../../context/FinanceContext";
 import { useModal } from "../../context/ModalContext";
 import { ConfirmActionModal } from "./ConfirmActionModal";
+import { FIELD_EMBEDDED_INPUT_CLASS, FIELD_ICON_CONTROL_CLASS } from "../transactions/transactionForm.constants";
+import { ModalBody, ModalCancelButton, ModalFooter, ModalFooterAction, ModalHeader, ModalPanel, ModalPrimaryButton } from "./ModalChrome";
 import { ModalStructure } from "./ModalStructure";
 
-const FIELD_LABEL_CLASS = "text-[11px] uppercase tracking-[0.12em] text-white/50";
-const FIELD_INPUT_CLASS = "rounded-xl border border-white/[0.1] bg-black/35 p-2.5 text-white outline-none transition-colors placeholder:text-white/35 focus:border-white/[0.24]";
 
 interface AddTagProps {
     mode?: "create" | "edit";
@@ -118,111 +118,60 @@ export function AddTag({ mode = "create", tagId, initialTag }: AddTagProps) {
 
     return (
         <ModalStructure height="auto" width="520px">
-            <div className="rounded-2xl border border-white/[0.09] bg-[#131313] p-4 text-white shadow-[0_26px_70px_-38px_rgba(0,0,0,0.95)]">
-                <div className="flex items-start justify-between gap-3">
-                    <div>
-                        <h2 className="text-2xl font-medium">{isEditMode ? "Editar tag" : "Nova tag"}</h2>
-                        <p className="text-xs uppercase tracking-[0.12em] text-white/45">Cadastro de tags</p>
-                    </div>
-                    <button
-                        type="button"
-                        onClick={closeModal}
-                        disabled={submitting}
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-white/[0.12] bg-white/[0.03] text-white/70 transition-colors hover:border-white/[0.22] hover:text-white disabled:cursor-not-allowed disabled:opacity-55"
-                        aria-label="Fechar modal"
-                        title="Fechar"
-                    >
-                        <X size={15} />
-                    </button>
-                </div>
+            <ModalPanel>
+                <ModalHeader title={isEditMode ? "Editando tag" : "Nova tag"} disabled={submitting} />
 
-                <section className="mt-4 grid grid-cols-1 gap-3">
-                    {mode === "edit" && !editingTag && <p className="rounded-md border border-amber-400/25 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">Tag nao encontrada.</p>}
+                <ModalBody className="flex flex-col gap-3">
+                    {mode === "edit" && !editingTag && <p className="rounded-xl border border-amber-400/25 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">Tag não encontrada.</p>}
 
-                    <label className="flex flex-col gap-1.5">
-                        <span className={FIELD_LABEL_CLASS}>Nome</span>
+                    <label className={`${FIELD_ICON_CONTROL_CLASS} flex min-h-[50px] items-center gap-2`}>
+                        <span
+                            aria-hidden="true"
+                            className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-white/[0.12]"
+                            style={{ color: color || "#CBD5E1", backgroundColor: `${color || "#64748B"}22` }}
+                        >
+                            <Tag size={14} />
+                        </span>
                         <input
+                            aria-label="Nome da tag"
                             type="text"
                             value={name}
                             onChange={(event) => setName(event.target.value)}
-                            className={FIELD_INPUT_CLASS}
+                            className={FIELD_EMBEDDED_INPUT_CLASS}
                             placeholder="Nome da tag"
                             maxLength={50}
                         />
                     </label>
 
-                    <div className="flex items-center gap-3">
-                        <input type="color" value={color} onChange={(event) => setColor(event.target.value)} className="h-10 w-14 rounded border border-white/[0.12] bg-black/35 p-1" />
-                        <input type="text" value={color} onChange={(event) => setColor(event.target.value)} className={FIELD_INPUT_CLASS} placeholder="#64748B" />
-                    </div>
+                    <label className={`${FIELD_ICON_CONTROL_CLASS} flex min-h-[50px] items-center gap-2`}>
+                        <input aria-label="Cor" type="color" value={color} onChange={(event) => setColor(event.target.value)} className="h-7 w-7 shrink-0 cursor-pointer rounded-md border border-white/[0.12] bg-transparent p-0.5" />
+                        <input aria-label="Código da cor" type="text" value={color} onChange={(event) => setColor(event.target.value)} className={FIELD_EMBEDDED_INPUT_CLASS} placeholder="#64748B" />
+                    </label>
+                </ModalBody>
 
-                    <div className="rounded-xl border border-white/[0.1] bg-black/35 p-3">
-                        <p className={`${FIELD_LABEL_CLASS} mb-2`}>Preview</p>
-                        <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-black/20 p-2.5">
-                            <span
-                                className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-white/10"
-                                style={{ color: color || "#CBD5E1", backgroundColor: `${color || "#64748B"}22` }}
-                            >
-                                <Tag size={15} />
-                            </span>
-                            <span className="font-medium text-white">{normalizedName || "Nome da tag"}</span>
-                        </div>
-                    </div>
-                </section>
-
-                <div className="mt-5 flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2">
-                        {isEditMode && editingTag && (
+                <ModalFooter
+                    start={
+                        isEditMode && editingTag ? (
                             <>
-                                <button
-                                    type="button"
-                                    onClick={() => void handleToggleActive()}
-                                    disabled={submitting}
-                                    className={`inline-flex min-w-28 items-center justify-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
-                                        editingTag.isActive
-                                            ? "border-amber-400/25 bg-amber-500/10 text-amber-100 hover:border-amber-400/45 hover:text-amber-50"
-                                            : "border-emerald-400/35 bg-emerald-500/15 text-emerald-100 hover:border-emerald-400/55 hover:bg-emerald-500/20"
-                                    }`}
-                                >
+                                <ModalFooterAction onClick={() => void handleToggleActive()} disabled={submitting}>
                                     {editingTag.isActive ? <Trash2 size={15} /> : <RotateCcw size={15} />}
                                     {editingTag.isActive ? "Arquivar" : "Reativar"}
-                                </button>
-
+                                </ModalFooterAction>
                                 {!editingTag.isActive ? (
-                                    <button
-                                        type="button"
-                                        onClick={openPermanentDeleteModal}
-                                        disabled={submitting}
-                                        className="inline-flex min-w-40 items-center justify-center gap-2 rounded-xl border border-red-400/25 bg-red-500/10 px-3 py-2 text-sm font-medium text-red-200 transition-colors hover:border-red-400/45 hover:text-red-100 disabled:cursor-not-allowed disabled:opacity-60"
-                                    >
-                                        <Trash2 size={15} />
-                                        Excluir em definitivo
-                                    </button>
+                                    <ModalFooterAction tone="danger" onClick={openPermanentDeleteModal} disabled={submitting}>
+                                        <Trash2 size={15} /> Excluir em definitivo
+                                    </ModalFooterAction>
                                 ) : null}
                             </>
-                        )}
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                        <button
-                            type="button"
-                            onClick={closeModal}
-                            disabled={submitting}
-                            className="inline-flex min-w-24 items-center justify-center rounded-xl border border-white/[0.12] bg-white/[0.03] px-4 py-2 text-sm font-medium text-white/70 transition-colors hover:border-white/[0.2] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                            Cancelar
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => void handleSubmit()}
-                            disabled={(mode === "edit" && !editingTag) || !normalizedName || submitting}
-                            className="inline-flex min-w-28 items-center justify-center rounded-xl border border-emerald-400/35 bg-emerald-500/15 px-4 py-2 text-sm font-semibold text-emerald-100 transition-colors hover:border-emerald-400/55 hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                            {submitting ? "Processando..." : "Concluir"}
-                        </button>
-                    </div>
-                </div>
-            </div>
+                        ) : null
+                    }
+                >
+                    <ModalCancelButton disabled={submitting} />
+                    <ModalPrimaryButton onClick={() => void handleSubmit()} disabled={(mode === "edit" && !editingTag) || !normalizedName || submitting}>
+                        {submitting ? "Salvando..." : "Salvar"}
+                    </ModalPrimaryButton>
+                </ModalFooter>
+            </ModalPanel>
         </ModalStructure>
     );
 }

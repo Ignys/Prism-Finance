@@ -61,10 +61,31 @@ export async function signInWithEmail(email: string, password: string): Promise<
     }
 }
 
-export async function signUpWithEmail(email: string, password: string): Promise<void> {
-    const { error } = await getSupabaseClient().auth.signUp({
+/** Retorna true quando o Supabase exige confirmação de e-mail antes do primeiro login. */
+export async function signUpWithEmail(email: string, password: string): Promise<boolean> {
+    const { data, error } = await getSupabaseClient().auth.signUp({
         email,
         password,
+        options: { emailRedirectTo: window.location.origin },
+    });
+
+    if (error) {
+        throw error;
+    }
+
+    // Com confirmação ligada, o Supabase não acusa e-mail existente: devolve um usuário sem identidades.
+    if (data.user?.identities?.length === 0) {
+        throw new Error("User already registered");
+    }
+
+    return data.session === null;
+}
+
+export async function resendSignUpConfirmation(email: string): Promise<void> {
+    const { error } = await getSupabaseClient().auth.resend({
+        type: "signup",
+        email,
+        options: { emailRedirectTo: window.location.origin },
     });
 
     if (error) {

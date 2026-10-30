@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { CalendarCheck, ChevronLeft, ChevronRight } from "lucide-react";
 
 interface MonthGridPanelProps {
     selectedMonth: string;
@@ -47,34 +47,29 @@ export function MonthGridPanel({ selectedMonth, onMonthChange, shortcutMonth, sh
         }
     }, [selectedMonth]);
 
+    const currentMonthKey = getCurrentMonthKey();
+    const yearNavClass =
+        "inline-flex h-7 w-7 items-center justify-center rounded-lg text-white/45 transition-colors hover:bg-white/[0.07] hover:text-white";
+
     return (
         <div className="relative">
-            <div className="flex items-center justify-between gap-2">
-                <button
-                    type="button"
-                    onClick={() => setPickerYear((current) => current - 1)}
-                    className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/[0.12] bg-white/[0.02] text-white/75 transition-colors hover:border-white/[0.24] hover:bg-white/[0.06] hover:text-white"
-                    aria-label="Ano anterior"
-                    title="Ano anterior"
-                >
+            <div className="flex items-center justify-between">
+                <button type="button" onClick={() => setPickerYear((current) => current - 1)} className={yearNavClass} aria-label="Ano anterior" title="Ano anterior">
                     <ChevronLeft size={15} />
                 </button>
-                <p className="text-sm font-semibold tracking-[0.12em] text-white/85">{pickerYear}</p>
-                <button
-                    type="button"
-                    onClick={() => setPickerYear((current) => current + 1)}
-                    className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/[0.12] bg-white/[0.02] text-white/75 transition-colors hover:border-white/[0.24] hover:bg-white/[0.06] hover:text-white"
-                    aria-label="Próximo ano"
-                    title="Próximo ano"
-                >
+                <p className="text-sm font-semibold tabular-nums tracking-[0.12em] text-white/90">
+                    {pickerYear}
+                </p>
+                <button type="button" onClick={() => setPickerYear((current) => current + 1)} className={yearNavClass} aria-label="Próximo ano" title="Próximo ano">
                     <ChevronRight size={15} />
                 </button>
             </div>
 
-            <div className="mt-3 grid grid-cols-3 gap-2">
+            <div className="mt-2 grid grid-cols-3 gap-1">
                 {MONTHS.map((monthLabel, monthIndex) => {
                     const monthKey = `${pickerYear}-${padMonthPart(monthIndex + 1)}`;
                     const isSelected = monthKey === selectedMonth;
+                    const isCurrent = monthKey === currentMonthKey;
 
                     return (
                         <button
@@ -82,13 +77,19 @@ export function MonthGridPanel({ selectedMonth, onMonthChange, shortcutMonth, sh
                             type="button"
                             onClick={() => onMonthChange(monthKey)}
                             aria-pressed={isSelected}
-                            className={`inline-flex items-center justify-center gap-1 rounded-xl border px-2 py-2 text-xs font-medium transition-all ${
+                            aria-current={isCurrent ? "date" : undefined}
+                            className={`relative inline-flex h-8 items-center justify-center rounded-lg text-xs font-medium transition-colors ${
                                 isSelected
-                                    ? "border-emerald-300/50 bg-emerald-500/20 text-amber-50"
-                                    : "border-white/[0.1] bg-white/[0.02] text-white/75 hover:border-white/[0.25] hover:bg-white/[0.08] hover:text-white"
+                                    ? "bg-emerald-500/20 text-emerald-100 ring-1 ring-inset ring-emerald-400/40"
+                                    : "text-white/60 hover:bg-white/[0.06] hover:text-white"
                             }`}
                         >
-                            <span>{monthLabel}</span>
+                            {monthLabel}
+                            {isCurrent && (
+                                <span
+                                    className={`absolute bottom-1 left-1/2 h-1 w-1 -translate-x-1/2 rounded-full ${isSelected ? "bg-emerald-200" : "bg-emerald-400"}`}
+                                />
+                            )}
                         </button>
                     );
                 })}
@@ -96,9 +97,10 @@ export function MonthGridPanel({ selectedMonth, onMonthChange, shortcutMonth, sh
 
             <button
                 type="button"
-                onClick={() => onMonthChange(shortcutMonth ?? getCurrentMonthKey())}
-                className="mt-3 w-full rounded-xl border border-white/[0.12] bg-white/[0.03] px-3 py-2 text-xs font-semibold uppercase tracking-[0.08em] text-white/75 transition-colors hover:border-white/[0.24] hover:bg-white/[0.08] hover:text-white"
+                onClick={() => onMonthChange(shortcutMonth ?? currentMonthKey)}
+                className="mt-2 inline-flex w-full items-center justify-center gap-1.5 rounded-lg border-t border-white/[0.06] px-2 pt-2 pb-1 text-[11px] font-medium text-emerald-300/80 transition-colors hover:text-emerald-200"
             >
+                <CalendarCheck size={13} />
                 {shortcutLabel}
             </button>
         </div>

@@ -1,8 +1,7 @@
 import { addMonths, format, isValid, parse, startOfMonth } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import type { Beneficiary, CreditCardInvoice, ReportPeriod, Transaction } from "../../../context/FinanceContext";
+import type { Beneficiary, CreditCardInvoice, ReportPeriod, Tag, Transaction } from "../../../context/FinanceContext";
 import { getMonthKeyFromDateValue } from "../../../context/financeTypes";
-import { invoicePaymentContributions } from "./invoicePaymentContributions";
 import { getTransactionCategoryDisplay } from "../../../lib/transactionCategory";
 
 export type { ReportPeriod } from "../../../context/FinanceContext";
@@ -14,6 +13,9 @@ export interface MonthReport {
     income: number;
     spending: number;
     walletSpending: number;
+    /** Compras de cartões selecionados, no mês da fatura. */
+    cardSpending: number;
+    /** Pagamentos de fatura de cartões fora da seleção. */
     invoiceSpending: number;
     net: number;
     transactionCount: number;
@@ -45,7 +47,7 @@ export interface BeneficiaryReport {
 }
 
 export interface MethodReport {
-    key: "wallet" | "invoice_payment";
+    key: "wallet" | "credit_card" | "invoice_payment";
     label: string;
     amount: number;
     count: number;
@@ -72,6 +74,8 @@ export interface ReportsDataset {
     categoryReports: CategoryReport[];
     incomeCategoryReports: CategoryReport[];
     beneficiaryReports: BeneficiaryReport[];
+    /** Despesas por tag; uma transação com várias tags entra em todas, então a soma pode passar de 100%. */
+    tagReports: CategoryReport[];
     summary: ReportsSummary;
 }
 
@@ -100,7 +104,13 @@ interface BeneficiaryAccumulator {
 
 interface ExpenseCounters {
     walletCount: number;
+    cardCount: number;
     invoicePaymentCount: number;
+}
+
+export interface ReportScope {
+    walletIds: string[];
+    creditCardIds: string[];
 }
 
 const MONTH_KEY_FORMAT = "yyyy-MM";
@@ -124,7 +134,7 @@ function shiftMonth(monthKey: string, offset: number): string {
     return format(addMonths(parsedMonth ?? startOfMonth(new Date()), offset), MONTH_KEY_FORMAT);
 }
 
-function formatMonthLabel(monthKey: string, pattern = "MMM/yy"): string {
+export function formatMonthLabel(monthKey: string, pattern = "MMM/yy"): string {
     const parsedMonth = parseMonthKey(monthKey);
     if (!parsedMonth) {
         return monthKey;
@@ -175,6 +185,7 @@ function buildMonthReports(period: ReportPeriod): MonthReport[] {
         income: 0,
         spending: 0,
         walletSpending: 0,
+        cardSpending: 0,
         invoiceSpending: 0,
         net: 0,
         transactionCount: 0,
@@ -235,75 +246,26 @@ function ensureBeneficiaryAccumulator(
     return nextBeneficiary;
 }
 
-function addWalletCategoryContribution(categoryReports: Map<string, CategoryAccumulator>, transaction: Transaction): void {
-    const category = ensureCategoryAccumulator(categoryReports, transaction);
-    category.totalAmount = roundToCents(category.totalAmount + transaction.value);
-    category.walletAmount = roundToCents(category.walletAmount + transaction.value);
-    category.count += 1;
-}
+const UNCOLORED_TAG = "#a3a3a3";
 
-function addWalletBeneficiaryContribution(
-    beneficiaryReports: Map<string, BeneficiaryAccumulator>,
-    beneficiariesById: Map<string, Beneficiary>,
-    transaction: Transaction,
-): void {
-    const beneficiary = ensureBeneficiaryAccumulator(beneficiaryReports, transaction, beneficiariesById);
-    beneficiary.totalAmount = roundToCents(beneficiary.totalAmount + transaction.value);
-    beneficiary.walletAmount = roundToCents(beneficiary.walletAmount + transaction.value);
-    beneficiary.count += 1;
-}
-
-function addInvoiceCategoryContribution(
-    categoryReports: Map<string, CategoryAccumulator>,
-    paymentTransaction: Transaction,
-    invoice: CreditCardInvoice | undefined,
-    linkedPurchases: Transaction[],
-): void {
-    invoicePaymentContributions(paymentTransaction, invoice?.totalAmount ?? 0, linkedPurchases).forEach(({ purchase, amount }) => {
-        const category = ensureCategoryAccumulator(categoryReports, purchase);
-        category.totalAmount = roundToCents(category.totalAmount + amount);
-        category.invoiceAmount = roundToCents(category.invoiceAmount + amount);
-        category.count += 1;
+function ensureTagAccumulators(accumulators: Map<string, CategoryAccumulator>, transaction: Transaction, tagsById: Map<string, Tag>): CategoryAccumulator[] {
+    return (transaction.tagIds ?? []).flatMap((tagId) => {
+        const tag = tagsById.get(tagId);
+        if (!tag) return [];
+        const accumulator = accumulators.get(tag.id) ?? {
+            key: tag.id,
+            label: tag.name,
+            icon: "tag",
+            color: tag.color ?? UNCOLORED_TAG,
+            type: "expense" as const,
+            totalAmount: 0,
+            walletAmount: 0,
+            invoiceAmount: 0,
+            count: 0,
+        };
+        accumulators.set(tag.id, accumulator);
+        return [accumulator];
     });
-}
-
-function addInvoiceBeneficiaryContribution(
-    beneficiaryReports: Map<string, BeneficiaryAccumulator>,
-    beneficiariesById: Map<string, Beneficiary>,
-    paymentTransaction: Transaction,
-    invoice: CreditCardInvoice | undefined,
-    linkedPurchases: Transaction[],
-): void {
-    invoicePaymentContributions(paymentTransaction, invoice?.totalAmount ?? 0, linkedPurchases).forEach(({ purchase, amount }) => {
-        const beneficiary = ensureBeneficiaryAccumulator(beneficiaryReports, purchase, beneficiariesById);
-        beneficiary.totalAmount = roundToCents(beneficiary.totalAmount + amount);
-        beneficiary.invoiceAmount = roundToCents(beneficiary.invoiceAmount + amount);
-        beneficiary.count += 1;
-    });
-}
-
-function getLinkedPurchasesByInvoiceId(lookupTransactions: Transaction[]): Map<string, Transaction[]> {
-    const purchasesByInvoiceId = new Map<string, Transaction[]>();
-
-    lookupTransactions.forEach((transaction) => {
-        if (transaction.type !== "spending" || transaction.paymentMethod !== "credit_card" || !transaction.invoiceId) {
-            return;
-        }
-
-        if (transaction.commitment === "forecast" || transaction.status === "cancelled" || transaction.status === "skipped") {
-            return;
-        }
-
-        const linkedTransactions = purchasesByInvoiceId.get(transaction.invoiceId);
-        if (linkedTransactions) {
-            linkedTransactions.push(transaction);
-            return;
-        }
-
-        purchasesByInvoiceId.set(transaction.invoiceId, [transaction]);
-    });
-
-    return purchasesByInvoiceId;
 }
 
 function toCategoryReports(categoryReports: Map<string, CategoryAccumulator>, totalAmount: number): CategoryReport[] {
@@ -330,76 +292,11 @@ function toBeneficiaryReports(beneficiaryReports: Map<string, BeneficiaryAccumul
         .sort((left, right) => right.totalAmount - left.totalAmount || right.count - left.count || left.name.localeCompare(right.name, "pt-BR", { sensitivity: "base" }));
 }
 
-function buildSpendingReports(
-    transactions: Transaction[],
-    creditCardInvoices: CreditCardInvoice[],
-    lookupTransactions: Transaction[],
-    monthKeys: Set<string>,
-    counters: ExpenseCounters,
-    beneficiaries: Beneficiary[],
-): { categoryReports: CategoryReport[]; beneficiaryReports: BeneficiaryReport[] } {
-    const categoryReports = new Map<string, CategoryAccumulator>();
-    const invoicesById = new Map(creditCardInvoices.map((invoice) => [invoice.id, invoice]));
-    const purchasesByInvoiceId = getLinkedPurchasesByInvoiceId(lookupTransactions);
-    const beneficiaryReports = new Map<string, BeneficiaryAccumulator>();
-    const beneficiariesById = new Map(beneficiaries.map((beneficiary) => [beneficiary.id, beneficiary]));
-
-    transactions.forEach((transaction) => {
-        const monthKey = getMonthKeyFromDateValue(transaction.date);
-        if (!monthKeys.has(monthKey)) {
-            return;
-        }
-
-        if (isWalletSpendingTransaction(transaction)) {
-            counters.walletCount += 1;
-            addWalletCategoryContribution(categoryReports, transaction);
-            addWalletBeneficiaryContribution(beneficiaryReports, beneficiariesById, transaction);
-            return;
-        }
-
-        if (!isInvoicePaymentTransaction(transaction)) {
-            return;
-        }
-
-        counters.invoicePaymentCount += 1;
-        const invoiceId = transaction.paymentForInvoiceId ?? transaction.invoicePaymentMeta?.invoiceId ?? null;
-        const invoice = invoiceId ? invoicesById.get(invoiceId) : undefined;
-        const linkedPurchases = invoiceId ? purchasesByInvoiceId.get(invoiceId) ?? [] : [];
-        addInvoiceCategoryContribution(categoryReports, transaction, invoice, linkedPurchases);
-        addInvoiceBeneficiaryContribution(beneficiaryReports, beneficiariesById, transaction, invoice, linkedPurchases);
-    });
-
-    const totalSpending = Array.from(categoryReports.values()).reduce((sum, category) => sum + category.totalAmount, 0);
-
-    return {
-        categoryReports: toCategoryReports(categoryReports, totalSpending),
-        beneficiaryReports: toBeneficiaryReports(beneficiaryReports, totalSpending),
-    };
-}
-
-function buildIncomeCategoryReports(transactions: Transaction[], monthKeys: Set<string>): CategoryReport[] {
-    const categoryReports = new Map<string, CategoryAccumulator>();
-
-    transactions.forEach((transaction) => {
-        const monthKey = getMonthKeyFromDateValue(transaction.date);
-        if (!monthKeys.has(monthKey) || !isIncomeTransaction(transaction)) {
-            return;
-        }
-
-        const category = ensureCategoryAccumulator(categoryReports, transaction);
-        category.totalAmount = roundToCents(category.totalAmount + transaction.value);
-        category.walletAmount = roundToCents(category.walletAmount + transaction.value);
-        category.count += 1;
-    });
-
-    const totalIncome = Array.from(categoryReports.values()).reduce((sum, category) => sum + category.totalAmount, 0);
-    return toCategoryReports(categoryReports, totalIncome);
-}
-
 function buildSummary(monthReports: MonthReport[], categoryReports: CategoryReport[], counters: ExpenseCounters): ReportsSummary {
     const income = roundToCents(monthReports.reduce((sum, report) => sum + report.income, 0));
     const spending = roundToCents(monthReports.reduce((sum, report) => sum + report.spending, 0));
     const walletSpending = roundToCents(monthReports.reduce((sum, report) => sum + report.walletSpending, 0));
+    const cardSpending = roundToCents(monthReports.reduce((sum, report) => sum + report.cardSpending, 0));
     const invoiceSpending = roundToCents(monthReports.reduce((sum, report) => sum + report.invoiceSpending, 0));
     const transactionCount = monthReports.reduce((sum, report) => sum + report.transactionCount, 0);
     const net = roundToCents(income - spending);
@@ -407,7 +304,7 @@ function buildSummary(monthReports: MonthReport[], categoryReports: CategoryRepo
     const bestMonth = monthReports.reduce<MonthReport | null>((best, report) => (!best || report.net > best.net ? report : best), null);
     const worstMonth = monthReports.reduce<MonthReport | null>((worst, report) => (!worst || report.net < worst.net ? report : worst), null);
     const mostFrequentCategory = categoryReports.reduce<CategoryReport | null>((current, report) => (!current || report.count > current.count ? report : current), null);
-    const expenseEventCount = counters.walletCount + counters.invoicePaymentCount;
+    const expenseEventCount = counters.walletCount + counters.cardCount + counters.invoicePaymentCount;
 
     return {
         income,
@@ -420,74 +317,146 @@ function buildSummary(monthReports: MonthReport[], categoryReports: CategoryRepo
         averageTicket: expenseEventCount > 0 ? roundToCents(spending / expenseEventCount) : 0,
         bestMonth,
         worstMonth,
-        methodReports: [
+        methodReports: ([
             {
                 key: "wallet",
                 label: "Carteira",
                 amount: walletSpending,
                 count: counters.walletCount,
-                colorClassName: "bg-cyan-400",
-                iconClassName: "text-cyan-200 bg-cyan-500/12",
+                colorClassName: "bg-amber-500",
+                iconClassName: "text-amber-300 bg-amber-500/12",
+            },
+            {
+                key: "credit_card",
+                label: "Cartão",
+                amount: cardSpending,
+                count: counters.cardCount,
+                colorClassName: "bg-violet-400",
+                iconClassName: "text-violet-200 bg-violet-500/12",
             },
             {
                 key: "invoice_payment",
-                label: "Fatura paga",
+                label: "Fatura",
                 amount: invoiceSpending,
                 count: counters.invoicePaymentCount,
-                colorClassName: "bg-amber-400",
-                iconClassName: "text-amber-200 bg-amber-500/12",
+                colorClassName: "bg-stone-400",
+                iconClassName: "text-stone-200 bg-stone-500/12",
             },
-        ],
+        ] satisfies MethodReport[]).filter((method) => method.count > 0),
     };
 }
 
+const INVOICE_PAYMENT_CATEGORY: Transaction["category"] = {
+    id: null,
+    label: "Pagamento de cartão",
+    parentLabel: null,
+    icon: "credit-card",
+    color: "#d6d3d1",
+    type: "expense",
+};
+
+function isCardPurchaseTransaction(transaction: Transaction): boolean {
+    return isIncludedTransaction(transaction) && transaction.type === "spending" && transaction.paymentMethod === "credit_card" && transaction.commitment !== "forecast";
+}
+
+function getInvoicePaymentCardId(transaction: Transaction, invoicesById: Map<string, CreditCardInvoice>): string | null {
+    const invoiceId = transaction.paymentForInvoiceId ?? transaction.invoicePaymentMeta?.invoiceId ?? null;
+    return transaction.invoicePaymentMeta?.creditCardId ?? (invoiceId ? invoicesById.get(invoiceId)?.creditCardId ?? null : null);
+}
+
+export function getInvoiceMonthKey(transaction: Transaction, invoicesById: Map<string, CreditCardInvoice>): string {
+    return (transaction.invoiceId ? invoicesById.get(transaction.invoiceId)?.cycleKey : undefined) ?? getMonthKeyFromDateValue(transaction.date);
+}
+
+export function isScopedCardPurchase(transaction: Transaction, creditCardIds: Set<string>): boolean {
+    return isCardPurchaseTransaction(transaction) && transaction.creditCardId !== null && creditCardIds.has(transaction.creditCardId);
+}
+
+/**
+ * Relatório restrito às contas selecionadas. Compras de cartão entram no mês da fatura;
+ * o pagamento de fatura de um cartão também selecionado é movimento interno e não conta.
+ */
 export function buildReportsDataset(
     period: ReportPeriod,
     transactions: Transaction[],
     creditCardInvoices: CreditCardInvoice[],
-    lookupTransactions: Transaction[] = transactions,
+    scope: ReportScope,
     beneficiaries: Beneficiary[] = [],
+    tags: Tag[] = [],
 ): ReportsDataset {
     const monthReports = buildMonthReports(period);
     const monthReportsByKey = new Map(monthReports.map((report) => [report.monthKey, report]));
+    const walletIds = new Set(scope.walletIds);
+    const creditCardIds = new Set(scope.creditCardIds);
+    const invoicesById = new Map(creditCardInvoices.map((invoice) => [invoice.id, invoice]));
+    const beneficiariesById = new Map(beneficiaries.map((beneficiary) => [beneficiary.id, beneficiary]));
+    const spendingCategories = new Map<string, CategoryAccumulator>();
+    const incomeCategories = new Map<string, CategoryAccumulator>();
+    const beneficiaryAccumulators = new Map<string, BeneficiaryAccumulator>();
+    const tagsById = new Map(tags.map((tag) => [tag.id, tag]));
+    const tagAccumulators = new Map<string, CategoryAccumulator>();
+    const counters: ExpenseCounters = { walletCount: 0, cardCount: 0, invoicePaymentCount: 0 };
+
+    const addSpending = (transaction: Transaction, report: MonthReport, method: "wallet" | "card" | "invoice") => {
+        report.spending = roundToCents(report.spending + transaction.value);
+        if (method === "wallet") report.walletSpending = roundToCents(report.walletSpending + transaction.value);
+        if (method === "card") report.cardSpending = roundToCents(report.cardSpending + transaction.value);
+        if (method === "invoice") report.invoiceSpending = roundToCents(report.invoiceSpending + transaction.value);
+        counters[method === "wallet" ? "walletCount" : method === "card" ? "cardCount" : "invoicePaymentCount"] += 1;
+
+        const categorySource = method === "invoice" ? { ...transaction, category: INVOICE_PAYMENT_CATEGORY } : transaction;
+        const accumulators = [
+            ensureCategoryAccumulator(spendingCategories, categorySource),
+            ensureBeneficiaryAccumulator(beneficiaryAccumulators, transaction, beneficiariesById),
+            ...ensureTagAccumulators(tagAccumulators, transaction, tagsById),
+        ];
+        accumulators.forEach((accumulator) => {
+            accumulator.totalAmount = roundToCents(accumulator.totalAmount + transaction.value);
+            if (method === "wallet") accumulator.walletAmount = roundToCents(accumulator.walletAmount + transaction.value);
+            else accumulator.invoiceAmount = roundToCents(accumulator.invoiceAmount + transaction.value);
+            accumulator.count += 1;
+        });
+    };
 
     transactions.forEach((transaction) => {
-        const report = monthReportsByKey.get(getMonthKeyFromDateValue(transaction.date));
-        if (!report) {
+        const isCardPurchase = isCardPurchaseTransaction(transaction);
+        const report = isCardPurchase
+            ? isScopedCardPurchase(transaction, creditCardIds) ? monthReportsByKey.get(getInvoiceMonthKey(transaction, invoicesById)) : undefined
+            : walletIds.has(transaction.inWallet) ? monthReportsByKey.get(getMonthKeyFromDateValue(transaction.date)) : undefined;
+        if (!report) return;
+
+        if (isCardPurchase) {
+            addSpending(transaction, report, "card");
+        } else if (isIncomeTransaction(transaction)) {
+            report.income = roundToCents(report.income + transaction.value);
+            const category = ensureCategoryAccumulator(incomeCategories, transaction);
+            category.totalAmount = roundToCents(category.totalAmount + transaction.value);
+            category.walletAmount = roundToCents(category.walletAmount + transaction.value);
+            category.count += 1;
+        } else if (isWalletSpendingTransaction(transaction)) {
+            addSpending(transaction, report, "wallet");
+        } else if (isInvoicePaymentTransaction(transaction)) {
+            const cardId = getInvoicePaymentCardId(transaction, invoicesById);
+            if (cardId && creditCardIds.has(cardId)) return;
+            addSpending(transaction, report, "invoice");
+        } else {
             return;
         }
 
-        if (isIncomeTransaction(transaction)) {
-            report.income = roundToCents(report.income + transaction.value);
-            report.transactionCount += 1;
-        } else if (isWalletSpendingTransaction(transaction)) {
-            report.spending = roundToCents(report.spending + transaction.value);
-            report.walletSpending = roundToCents(report.walletSpending + transaction.value);
-            report.transactionCount += 1;
-        } else if (isInvoicePaymentTransaction(transaction)) {
-            report.spending = roundToCents(report.spending + transaction.value);
-            report.invoiceSpending = roundToCents(report.invoiceSpending + transaction.value);
-            report.transactionCount += 1;
-        }
-
+        report.transactionCount += 1;
         report.net = roundToCents(report.income - report.spending);
     });
 
-    const counters: ExpenseCounters = {
-        walletCount: 0,
-        invoicePaymentCount: 0,
-    };
-    const monthKeys = new Set(monthReports.map((report) => report.monthKey));
-    const spendingReports = buildSpendingReports(transactions, creditCardInvoices, lookupTransactions, monthKeys, counters, beneficiaries);
-    const categoryReports = spendingReports.categoryReports;
-    const incomeCategoryReports = buildIncomeCategoryReports(transactions, monthKeys);
-    const summary = buildSummary(monthReports, categoryReports, counters);
+    const totalSpending = monthReports.reduce((sum, report) => sum + report.spending, 0);
+    const totalIncome = monthReports.reduce((sum, report) => sum + report.income, 0);
+    const categoryReports = toCategoryReports(spendingCategories, totalSpending);
 
     return {
         monthReports,
         categoryReports,
-        incomeCategoryReports,
-        beneficiaryReports: spendingReports.beneficiaryReports,
-        summary,
+        incomeCategoryReports: toCategoryReports(incomeCategories, totalIncome),
+        beneficiaryReports: toBeneficiaryReports(beneficiaryAccumulators, totalSpending),
+        tagReports: toCategoryReports(tagAccumulators, totalSpending),
+        summary: buildSummary(monthReports, categoryReports, counters),
     };
 }

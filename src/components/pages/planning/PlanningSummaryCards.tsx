@@ -1,4 +1,3 @@
-import { motion } from "framer-motion";
 import type { PlanningSummary } from "./planningPageShared";
 import { formatCurrency } from "./planningPageShared";
 
@@ -89,19 +88,16 @@ export function PlanningSummaryCards({ summary }: PlanningSummaryCardsProps) {
 
     return (
         <section className="grid gap-2 sm:grid-cols-2 2xl:grid-cols-1">
-            {cards.map((card, index) => (
-                <motion.article
+            {cards.map((card) => (
+                <article
                     key={card.id}
-                    initial={{ opacity: 0, y: 12 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.2, delay: index * 0.03, ease: "easeOut" }}
                     className="relative overflow-hidden rounded-2xl border border-white/[0.08] bg-[#111111] p-4 text-left"
                 >
                     <div className="pointer-events-none absolute -bottom-24 -right-20 h-36 w-36 rounded-full bg-white/[0.05] blur-3xl" />
                     <p className="text-[10px] uppercase tracking-[0.14em] text-white/38">{card.label}</p>
                     <p className={`mt-1 text-xl font-semibold ${card.valueClassName ?? "text-white"}`}>{formatCurrency(card.value)}</p>
                     {card.helper && <p className="mt-1 text-xs text-white/52">{card.helper}</p>}
-                </motion.article>
+                </article>
             ))}
         </section>
     );

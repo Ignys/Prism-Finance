@@ -1,4 +1,4 @@
-import { Info, RotateCcw, Trash2, X } from "lucide-react";
+import { FolderTree, Info, RotateCcw, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
 import { SYSTEM_EXPENSE_CARD_INVOICE_CATEGORY_ID, type Category, useFinanceActions, useFinanceCategories } from "../../context/FinanceContext";
@@ -8,10 +8,30 @@ import { normalizeCategoryIconName } from "../../lib/categoryIcons";
 import { CategoryIconPicker } from "../common/CategoryIconPicker";
 import { ConfirmActionModal } from "./ConfirmActionModal";
 import { ModalStructure } from "./ModalStructure";
-import { FIELD_LABEL_CLASS } from "../transactions/transactionForm.constants";
+import { ModalBody, ModalCancelButton, ModalFooter, ModalFooterAction, ModalHeader, ModalPanel, ModalPrimaryButton } from "./ModalChrome";
+import { FIELD_EMBEDDED_INPUT_CLASS, FIELD_ICON_CONTROL_CLASS } from "../transactions/transactionForm.constants";
+import { TransactionFieldIcon } from "../transactions/TransactionFieldIcon";
+import { SingleSelectCombobox, type ComboboxOptionBase } from "../transactions/SingleSelectCombobox";
+import { CategoryOptionContent } from "../transactions/TransactionFormParts";
 
+const NO_PARENT_OPTION_ID = "__no-parent__";
 
-const FIELD_INPUT_CLASS = "rounded-xl border border-white/[0.1] bg-black/35 p-2.5 text-white outline-none transition-colors placeholder:text-white/35 focus:border-white/[0.24]";
+interface ParentOption extends ComboboxOptionBase {
+    category: Category | null;
+}
+
+function ParentOptionContent({ option }: { option: ParentOption }) {
+    if (option.category) {
+        return <CategoryOptionContent option={{ label: option.label, category: option.category, level: 0 }} />;
+    }
+
+    return (
+        <div className="flex items-center gap-2">
+            <TransactionFieldIcon icon={FolderTree} />
+            <span className="truncate text-white/70">{option.label}</span>
+        </div>
+    );
+}
 
 const CATEGORY_TYPES = [
     { value: "expense", label: "Despesa" },
@@ -99,6 +119,13 @@ export function AddCategory({ mode = "create", categoryId, initialCategory }: Ad
         const currentParentId = editingCategory?.parentId ?? parentId;
         return categories.filter((item) => item.type === type && !blockedParentIds.has(item.id) && !isInvoicePaymentCategoryId(item.id) && (item.isActive || item.id === currentParentId));
     }, [blockedParentIds, categories, editingCategory?.parentId, parentId, type]);
+    const parentOptions = useMemo<ParentOption[]>(
+        () => [
+            { id: NO_PARENT_OPTION_ID, label: "Sem categoria maior", searchText: "sem categoria maior nenhuma", category: null },
+            ...availableParents.map((category) => ({ id: category.id, label: category.name, searchText: category.name, category })),
+        ],
+        [availableParents],
+    );
 
     useEffect(() => {
         if (!parentId) {
@@ -186,146 +213,80 @@ export function AddCategory({ mode = "create", categoryId, initialCategory }: Ad
 
     return (
         <ModalStructure height="auto" width="620px">
-            <div className="rounded-2xl border border-white/[0.09] bg-[#131313] p-4 text-white shadow-[0_26px_70px_-38px_rgba(0,0,0,0.95)]">
-                <header className="flex items-center justify-between gap-3">
-                    <h1 className="text-sm ml-1 uppercase opacity-50">{isEditMode ? "Editar categoria" : "Nova categoria"}</h1>
-                    <button
-                        type="button"
-                        onClick={closeModal}
-                        disabled={submitting}
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/[0.12] bg-white/[0.03] text-white/70 transition-colors hover:border-white/[0.22] hover:text-white disabled:cursor-not-allowed disabled:opacity-55"
-                        aria-label="Fechar modal"
-                        title="Fechar"
-                    >
-                        <X size={15} />
-                    </button>
-                </header>
+            <ModalPanel>
+                <ModalHeader title={isEditMode ? "Editando categoria" : "Nova categoria"} disabled={submitting} />
 
-                <section className="mt-2 grid grid-cols-1 gap-2">
-                    {mode === "edit" && !editingCategory && <p className="rounded-md border border-amber-400/25 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">Categoria nao encontrada.</p>}
+                <ModalBody className="flex flex-col gap-2">
+                    {mode === "edit" && !editingCategory && <p className="rounded-xl border border-amber-400/25 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">Categoria não encontrada.</p>}
 
                     {isInvoicePaymentCategory && (
-                        <p className="flex items-center gap-2 rounded-md border border-blue-300/25 bg-blue-500/10 px-3 py-2 text-[12px] text-blue-200">
-                            <Info size={16} /> <p className="ml-2">Essa categoria é nativa para os pagamentos de fatura. <br /> Você pode editar apenas nome, cor e ícone.</p>
-                        </p>
+                        <div className="flex items-start gap-2 rounded-xl border border-blue-300/25 bg-blue-500/10 px-3 py-2 text-xs leading-5 text-blue-200">
+                            <Info size={15} className="mt-0.5 shrink-0" />
+                            <p>Essa categoria é nativa para os pagamentos de fatura. Você pode editar apenas nome, cor e ícone.</p>
+                        </div>
                     )}
 
-                    <div className="flex justify-between gap-2">
-                        <label className="flex flex-col gap-1.5 w-1/2">
-                            <span className={FIELD_LABEL_CLASS}>Nome</span>
-                            <input type="text" value={name} onChange={(event) => setName(event.target.value)} className={FIELD_INPUT_CLASS} placeholder="Nome da categoria" />
-                        </label>
-
-                        <label className="flex flex-col gap-1.5 w-1/2">
-                            <span className={FIELD_LABEL_CLASS}>Tipo</span>
-                            <select
-                                value={type}
-                                onChange={(event) => setType(event.target.value as (typeof CATEGORY_TYPES)[number]["value"])}
+                    <div className="flex gap-1 rounded-xl border border-white/[0.1] bg-black/35 p-1" role="radiogroup" aria-label="Tipo">
+                        {CATEGORY_TYPES.map((item) => (
+                            <button
+                                key={item.value}
+                                type="button"
+                                role="radio"
+                                aria-checked={type === item.value}
+                                onClick={() => setType(item.value)}
                                 disabled={isInvoicePaymentCategory}
-                                className={`${FIELD_INPUT_CLASS} pb-3.5 disabled:cursor-not-allowed disabled:opacity-60`}
+                                className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+                                    type === item.value ? (item.value === "income" ? "bg-emerald-500/20 text-emerald-200" : "bg-red-500/15 text-red-200") : "text-white/65 hover:bg-white/[0.06]"
+                                }`}
                             >
-                                {CATEGORY_TYPES.map((item) => (
-                                    <option key={item.value} value={item.value}>
-                                        {item.label}
-                                    </option>
-                                ))}
-                            </select>
-                        </label>
+                                {item.label}
+                            </button>
+                        ))}
                     </div>
 
-                    <label className="flex flex-col gap-1.5">
-                        <span className={FIELD_LABEL_CLASS}>Categoria maior</span>
-                        <select
-                            value={parentId}
-                            onChange={(event) => setParentId(event.target.value)}
-                            disabled={isInvoicePaymentCategory}
-                            className={`${FIELD_INPUT_CLASS} disabled:cursor-not-allowed disabled:opacity-60`}
-                        >
-                            <option value="">Sem categoria maior</option>
-                            {availableParents.map((item) => (
-                                <option key={item.id} value={item.id}>
-                                    {item.name}
-                                </option>
-                            ))}
-                        </select>
+                    <label className={`${FIELD_ICON_CONTROL_CLASS} flex min-h-[50px] items-center gap-2`}>
+                        <input aria-label="Cor da categoria" type="color" value={color} onChange={(event) => setColor(event.target.value)} className="h-7 w-7 shrink-0 cursor-pointer rounded-md border border-white/[0.12] bg-transparent p-0.5" />
+                        <input aria-label="Nome da categoria" type="text" value={name} onChange={(event) => setName(event.target.value)} className={FIELD_EMBEDDED_INPUT_CLASS} placeholder="Nome da categoria" />
                     </label>
 
-                    <CategoryIconPicker value={icon} categoryType={type} onChange={setIcon} />
+                    <SingleSelectCombobox
+                        hideLabel
+                        label="Categoria maior"
+                        value={parentId || NO_PARENT_OPTION_ID}
+                        placeholder="Sem categoria maior"
+                        emptyMessage="Nenhuma categoria encontrada."
+                        options={parentOptions}
+                        onChange={(value) => setParentId(value === NO_PARENT_OPTION_ID ? "" : value)}
+                        renderOptionContent={(option) => <ParentOptionContent option={option} />}
+                        disabled={isInvoicePaymentCategory}
+                    />
 
-                    <div className="rounded-xl border border-white/[0.1] bg-black/35 p-3">
-                        <p className={`${FIELD_LABEL_CLASS} mb-2`}>Cor da categoria</p>
-                        <div className="flex items-center gap-3">
-                            <input
-                                type="color"
-                                value={color}
-                                onChange={(event) => setColor(event.target.value)}
-                                className="h-10 w-14 rounded-lg border border-white/[0.16] bg-black/40 p-1"
-                            />
-                            <input
-                                type="text"
-                                value={color}
-                                onChange={(event) => setColor(event.target.value)}
-                                className={FIELD_INPUT_CLASS}
-                                placeholder="#4B5563"
-        
-                            />
-                        </div>
-                    </div>
-                </section>
+                    <CategoryIconPicker value={icon} categoryType={type} onChange={setIcon} color={color} />
+                </ModalBody>
 
-                <div className="mt-5 flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2">
-                        {isEditMode && editingCategory && !isInvoicePaymentCategory && (
+                <ModalFooter
+                    start={
+                        isEditMode && editingCategory && !isInvoicePaymentCategory ? (
                             <>
-                                <button
-                                    type="button"
-                                    onClick={() => void handleToggleActive()}
-                                    disabled={submitting}
-                                    className={`inline-flex min-w-28 items-center justify-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
-                                        editingCategory.isActive
-                                            ? "border-amber-400/25 bg-amber-500/10 text-amber-100 hover:border-amber-400/45 hover:text-amber-50"
-                                            : "border-emerald-400/35 bg-emerald-500/15 text-emerald-100 hover:border-emerald-400/55 hover:bg-emerald-500/20"
-                                    }`}
-                                >
+                                <ModalFooterAction onClick={() => void handleToggleActive()} disabled={submitting}>
                                     {editingCategory.isActive ? <Trash2 size={15} /> : <RotateCcw size={15} />}
                                     {editingCategory.isActive ? "Arquivar" : "Reativar"}
-                                </button>
-
+                                </ModalFooterAction>
                                 {!editingCategory.isActive ? (
-                                    <button
-                                        type="button"
-                                        onClick={openPermanentDeleteModal}
-                                        disabled={submitting}
-                                        className="inline-flex min-w-40 items-center justify-center gap-2 rounded-xl border border-red-400/25 bg-red-500/10 px-3 py-2 text-sm font-medium text-red-200 transition-colors hover:border-red-400/45 hover:text-red-100 disabled:cursor-not-allowed disabled:opacity-60"
-                                    >
-                                        <Trash2 size={15} />
-                                        Excluir
-                                    </button>
+                                    <ModalFooterAction tone="danger" onClick={openPermanentDeleteModal} disabled={submitting}>
+                                        <Trash2 size={15} /> Excluir
+                                    </ModalFooterAction>
                                 ) : null}
                             </>
-                        )}
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                        <button
-                            type="button"
-                            onClick={closeModal}
-                            disabled={submitting}
-                            className="inline-flex min-w-24 items-center justify-center rounded-xl border border-white/[0.12] bg-white/[0.03] px-4 py-2 text-sm font-medium text-white/70 transition-colors hover:border-white/[0.2] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                            Cancelar
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => void handleSubmit()}
-                            disabled={!normalizedName || !normalizedIcon || (mode === "edit" && !editingCategory) || submitting}
-                            className="inline-flex min-w-28 items-center justify-center rounded-xl border border-emerald-400/35 bg-emerald-500/15 px-4 py-2 text-sm font-semibold text-emerald-100 transition-colors hover:border-emerald-400/55 hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                            {submitting ? "Processando..." : "Concluir"}
-                        </button>
-                    </div>
-                </div>
-            </div>
+                        ) : null
+                    }
+                >
+                    <ModalCancelButton disabled={submitting} />
+                    <ModalPrimaryButton onClick={() => void handleSubmit()} disabled={!normalizedName || !normalizedIcon || (mode === "edit" && !editingCategory) || submitting}>
+                        {submitting ? "Salvando..." : "Salvar"}
+                    </ModalPrimaryButton>
+                </ModalFooter>
+            </ModalPanel>
         </ModalStructure>
     );
 }

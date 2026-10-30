@@ -1,4 +1,3 @@
-import { motion, useReducedMotion } from "framer-motion";
 import { useEffect, useMemo, useState, type MouseEvent, type ReactNode } from "react";
 import { ArrowDown, ArrowUp, Circle, CreditCard as CreditCardIcon, Link2, Repeat2, Search } from "lucide-react";
 import { type Beneficiary, type CreditCard, type CreditCardInvoice, type Transaction, useFinanceBeneficiaries, useFinanceSession, useFinanceTransactionGroups } from "../../../context/FinanceContext";
@@ -8,10 +7,10 @@ import { getCategoryIconComponent } from "../../../lib/categoryIcons";
 import { useLocalPreferenceSection } from "../../../lib/localPreferences";
 import { getTransactionCategoryDisplayLabel } from "../../../lib/transactionCategory";
 import { BeneficiaryAvatar } from "../../common/BeneficiaryAvatar";
-import { ENTRANCE_EASE, getItemEntranceDelay, PANEL_ENTRANCE_ANIMATE, PANEL_ENTRANCE_INITIAL, PANEL_ENTRANCE_TRANSITION } from "../entranceMotion";
 import { TableColumnToggleButton } from "../../common/TableColumnToggleButton";
 import { WalletAvatar } from "../../common/WalletAvatar";
 import { BulkTransactionEditModal } from "../../modal/BulkTransactionEditModal";
+import { STATUS_BADGE_CLASS, STATUS_LABELS } from "../transactions/transactionsPageShared";
 import { BulkHeaderCheckbox, BulkRowCheckbox, FloatingTransactionBulkFooter } from "../../transactions/TransactionBulkSelectionControls";
 import { TransactionContextMenu, type TransactionContextMenuState } from "../../transactions/TransactionContextMenu";
 import { buildTransactionContextActions, type TransactionContextAction } from "../../transactions/transactionContextActions";
@@ -61,8 +60,6 @@ const DEFAULT_STATEMENT_TABLE_VIEW_PREFERENCES: StatementTableViewPreferences = 
     showValue: true,
 };
 
-const ROW_ENTRANCE_INITIAL = { opacity: 0, y: 10 };
-const ROW_ENTRANCE_ANIMATE = { opacity: 1, y: 0 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -136,17 +133,17 @@ const TRANSACTION_STATUS_SORT_ORDER: Record<StatementTransactionVisualStatus, nu
 };
 
 const TRANSACTION_STATUS_BADGE_CLASS: Record<StatementTransactionVisualStatus, string> = {
-    posted: "border-emerald-400/25 bg-emerald-500/10 text-emerald-200",
-    forecast: "border-sky-400/25 bg-sky-500/10 text-sky-200",
+    posted: STATUS_BADGE_CLASS.paid,
+    forecast: STATUS_BADGE_CLASS.pending,
     payment: "border-violet-400/25 bg-violet-500/10 text-violet-200",
-    skipped: "border-slate-400/25 bg-slate-500/10 text-slate-200",
+    skipped: STATUS_BADGE_CLASS.skipped,
 };
 
 const TRANSACTION_STATUS_LABELS: Record<StatementTransactionVisualStatus, string> = {
-    posted: "LANÇADO",
-    forecast: "PREVISTO",
-    payment: "PAGAMENTO",
-    skipped: "IGNORADA",
+    posted: "Lançado",
+    forecast: "Previsto",
+    payment: "Pagamento",
+    skipped: STATUS_LABELS.skipped,
 };
 
 const SORT_DEFAULT_DIRECTION: Record<StatementSortField, StatementSortDirection> = {
@@ -380,7 +377,6 @@ export function StatementContentPanel({
     }, [filteredTransactionSnapshots, sortMode]);
     const displayedTransactions = useMemo(() => sortedTransactionSnapshots.map((snapshot) => snapshot.transaction), [sortedTransactionSnapshots]);
     const bulkSelection = useTransactionBulkSelection(displayedTransactions);
-    const shouldReduceMotion = useReducedMotion();
 
     const contextTransaction = useMemo(
         () => sortedTransactionSnapshots.find((snapshot) => snapshot.transaction.id === contextMenu?.transactionId)?.transaction ?? null,
@@ -466,10 +462,7 @@ export function StatementContentPanel({
     const canCreateCardSpending = cardById.size > 0;
     return (
         <div className="flex flex-col gap-3">
-            <motion.div
-                initial={shouldReduceMotion ? false : { opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.42, ease: ENTRANCE_EASE }}
+            <div
                 className="relative w-full min-w-0"
             >
                 <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-white/40" />
@@ -480,43 +473,46 @@ export function StatementContentPanel({
                     placeholder="Buscar"
                     className="w-full rounded-xl border border-white/[0.08] bg-black/25 py-2 pl-9 pr-3 text-sm text-white outline-none transition-colors placeholder:text-white/30 focus:border-white/[0.24] focus:bg-black/40"
                 />
-            </motion.div>
+            </div>
 
             <div className="flex w-full min-w-0 flex-col gap-3 lg:flex-row lg:items-start">
-                <motion.section
-                    initial={shouldReduceMotion ? false : PANEL_ENTRANCE_INITIAL}
-                    animate={PANEL_ENTRANCE_ANIMATE}
-                    transition={PANEL_ENTRANCE_TRANSITION}
-                    className="min-w-0 flex-1 rounded-2xl border border-white/[0.08] bg-[#111111] shadow-[0_24px_60px_-32px_rgba(0,0,0,0.9)]"
+                <section
+                    className="min-w-0 flex-1 rounded-2xl finance-surface"
                 >
-                    <div className="flex flex-wrap items-center justify-between gap-3 p-3">
-                        <div className="flex flex-wrap items-center gap-3 ">
-                            <p className="text-sm uppercase text-white/60">FATURA DE {invoiceMonthLabel}</p>
-                            <span className="rounded-full border border-white/[0.05] bg-[#111111] px-2 py-0.5 text-xs text-white/40">
-                                {sortedTransactionSnapshots.length} {sortedTransactionSnapshots.length === 1 ? "item encontrado" : "itens encontrados"}
+                    <div className="flex flex-wrap items-center justify-between gap-3 px-4 pb-3 pt-4">
+                        <div className="flex flex-wrap items-center gap-3">
+                            <h2 className="text-base font-semibold uppercase text-white">
+                                Fatura <span className="mx-1.5 font-normal text-white/25">·</span><span className="font-normal capitalize text-white/45">{invoiceMonthLabel}</span>
+                            </h2>
+                            <span className="text-xs text-white/40">
+                                {sortedTransactionSnapshots.length} {sortedTransactionSnapshots.length === 1 ? "lançamento" : "lançamentos"}
+                                <span className="mx-1.5 text-white/20">|</span>
+                                <span className="font-medium text-white/75">
+                                    {formatCurrency(sortedTransactionSnapshots.reduce((sum, { transaction }) => sum + (transaction.systemKind === "invoice_payment" ? -transaction.value : transaction.value), 0))}
+                                </span>
                             </span>
                         </div>
                         <div className="flex flex-wrap items-center justify-end gap-2">
-                            <div className="hidden flex-wrap items-center gap-1 sm:flex">
-                                <TableColumnToggleButton label="STATUS" active={showStatus} onClick={() => toggleViewPreference("showStatus")} />
-                                <TableColumnToggleButton label="DATA" active={showDate} onClick={() => toggleViewPreference("showDate")} />
-                                <TableColumnToggleButton label="DESCRICAO" active={showDescription} onClick={() => toggleViewPreference("showDescription")} />
-                                <TableColumnToggleButton label="CATEGORIA" active={showCategory} onClick={() => toggleViewPreference("showCategory")} />
-                                <TableColumnToggleButton label="TAGS" active={showTags} onClick={() => toggleViewPreference("showTags")} />
-                                <TableColumnToggleButton label="BENEFICIARIO" active={showBeneficiary} onClick={() => toggleViewPreference("showBeneficiary")} />
-                                <TableColumnToggleButton label="VALOR" active={showValue} onClick={() => toggleViewPreference("showValue")} />
+                            <div className="hidden flex-wrap items-center gap-0.5 rounded-lg border border-white/[0.07] bg-black/30 p-0.5 sm:flex" role="group" aria-label="Colunas visíveis">
+                                <TableColumnToggleButton label="Status" active={showStatus} onClick={() => toggleViewPreference("showStatus")} />
+                                <TableColumnToggleButton label="Data" active={showDate} onClick={() => toggleViewPreference("showDate")} />
+                                <TableColumnToggleButton label="Descrição" active={showDescription} onClick={() => toggleViewPreference("showDescription")} />
+                                <TableColumnToggleButton label="Categoria" active={showCategory} onClick={() => toggleViewPreference("showCategory")} />
+                                <TableColumnToggleButton label="Tags" active={showTags} onClick={() => toggleViewPreference("showTags")} />
+                                <TableColumnToggleButton label="Beneficiário" active={showBeneficiary} onClick={() => toggleViewPreference("showBeneficiary")} />
+                                <TableColumnToggleButton label="Valor" active={showValue} onClick={() => toggleViewPreference("showValue")} />
                             </div>
                         </div>
                     </div>
 
                     {sortedTransactionSnapshots.length < 1 ? (
-                        <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] px-3 py-6 text-center text-sm text-white/55">
-                            <p>Nenhuma compra encontrada para {invoiceMonthLabel}.</p>
-                            {!canCreateCardSpending && <p className="mt-3 text-xs text-white/40">Cadastre um cartão para lançar gastos em fatura.</p>}
+                        <div className="mx-4 mb-4 rounded-xl border border-dashed border-white/[0.1] px-4 py-10 text-center">
+                            <p className="text-sm text-white/70">Nenhuma compra encontrada para {invoiceMonthLabel}.</p>
+                            <p className="mt-1 text-xs text-white/40">{canCreateCardSpending ? "Troque o mês ou o cartão para ver outras faturas." : "Cadastre um cartão para lançar gastos em fatura."}</p>
                         </div>
                     ) : (
-                        <div className="elegant-scrollbar min-w-0 overflow-x-auto rounded-2xl pb-4">
-                            <table className="w-full max-w-full table-fixed border-separate border-spacing-0 text-sm text-white/85">
+                        <div className="elegant-scrollbar min-w-0 overflow-x-auto px-2 pb-2">
+                            <table className="finance-table w-full max-w-full table-fixed border-separate border-spacing-0 text-sm text-white/85">
                                 <colgroup>
                                     {selectionMode && <col className="w-[4%]" />}
                                     {showStatus && <col className="w-[17%]" />}
@@ -553,7 +549,7 @@ export function StatementContentPanel({
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {sortedTransactionSnapshots.map(({ transaction, transactionStatus, categoryLabel }, index) => {
+                                    {sortedTransactionSnapshots.map(({ transaction, transactionStatus, categoryLabel }) => {
                                         const group = transactionGroupsById.get(transaction.groupId);
                                         const seriesIndicator = resolveTransactionSeriesIndicator(transaction, group);
                                         const paymentInvoice = transaction.paymentForInvoiceId ? invoiceById.get(transaction.paymentForInvoiceId) : null;
@@ -570,24 +566,14 @@ export function StatementContentPanel({
                                         const isSelected = bulkSelection.selectedIdSet.has(transaction.id);
 
                                         return (
-                                            <motion.tr
+                                            <tr
                                                 key={transaction.id}
-                                                initial={shouldReduceMotion ? false : ROW_ENTRANCE_INITIAL}
-                                                animate={ROW_ENTRANCE_ANIMATE}
-                                                transition={{
-                                                    delay: shouldReduceMotion ? 0 : getItemEntranceDelay(index),
-                                                    duration: 0.38,
-                                                    ease: ENTRANCE_EASE,
-                                                }}
                                                 onClick={() => handleRowClick(transaction)}
                                                 onContextMenu={(event) => handleRowContextMenu(event, transaction)}
                                                 className={`${selectionMode && canBulkEdit ? "cursor-pointer" : "cursor-context-menu"} transition-colors ${
-                                                    isSelected
-                                                        ? "bg-emerald-500/[0.07] odd:bg-emerald-500/[0.1] hover:bg-emerald-900/[0.6] shadow-[inset_3px_0_0_rgba(110,231,183,0.65)]"
-                                                        : contextMenu?.transactionId === transaction.id
-                                                          ? " "
-                                                          : "odd:bg-white/[0.01] hover:bg-white/[0.01] odd:hover:bg-white/[0.02]"
+                                                    selectionMode && !canBulkEdit ? "opacity-45" : ""
                                                 }`}
+                                                aria-selected={selectionMode ? isSelected : undefined}
                                             >
                                                 {selectionMode && (
                                                     <td className="border-b border-white/[0.04] px-3 py-2.5">
@@ -602,27 +588,27 @@ export function StatementContentPanel({
                                                 {showStatus && (
                                                     <td className="overflow-hidden whitespace-nowrap border-b border-white/[0.04] px-3 py-2.5 text-white/70">
                                                         <div className="flex min-w-0 items-center gap-2 overflow-hidden whitespace-nowrap">
-                                                            <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center">
+                                                            <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center">
                                                                 {creditCard ? (
-                                                                    <WalletAvatar wallet={creditCard} className="h-8 w-8 rounded-md border border-white/[0.1]" iconSize={16} iconStrokeWidth={1.8} />
+                                                                    <WalletAvatar wallet={creditCard} className="h-7 w-7 rounded-lg border border-white/[0.1]" iconSize={14} iconStrokeWidth={1.8} />
                                                                 ) : (
-                                                                    <span className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-white/[0.12] bg-white/[0.03] text-white/45">
+                                                                    <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-white/[0.12] bg-white/[0.03] text-white/45">
                                                                         <CreditCardIcon size={14} />
                                                                     </span>
                                                                 )}
                                                             </span>
                                                             {transactionStatus ? (
                                                                 <span
-                                                                    className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[11px]/4 uppercase tracking-[0.08em] ${TRANSACTION_STATUS_BADGE_CLASS[transactionStatus]}`}
+                                                                    className={`inline-flex shrink-0 items-center gap-1 rounded-md border px-2 py-0.5 text-[11px]/4 font-medium ${TRANSACTION_STATUS_BADGE_CLASS[transactionStatus]}`}
                                                                 >
                                                                     {TRANSACTION_STATUS_LABELS[transactionStatus]}
                                                                 </span>
                                                             ) : (
                                                                 "--"
                                                             )}
-                                                            {seriesIndicator?.kind === "installment" && <span className="shrink-0 text-xs text-white/55">{seriesIndicator.label}</span>}
+                                                            {seriesIndicator?.kind === "installment" && <span className="shrink-0 text-xs text-white/45">{seriesIndicator.label}</span>}
                                                             {seriesIndicator?.kind === "recurring" && (
-                                                                <span className="inline-flex shrink-0 text-white/85" role="img" title="Transacao recorrente" aria-label="Transacao recorrente">
+                                                                <span className="inline-flex shrink-0 text-white/45" role="img" title="Transacao recorrente" aria-label="Transacao recorrente">
                                                                     <Repeat2 strokeWidth={2} size={15} />
                                                                 </span>
                                                             )}
@@ -630,8 +616,9 @@ export function StatementContentPanel({
                                                     </td>
                                                 )}
                                                 {showDate && (
-                                                    <td className="overflow-hidden whitespace-nowrap border-b border-white/[0.04] px-3 py-2.5 text-white/70">
-                                                        {formatTransactionDate(transaction.date, "dd/MM/yyyy")}
+                                                    <td className="overflow-hidden whitespace-nowrap border-b border-white/[0.04] px-3 py-2.5">
+                                                        <span className="font-medium text-white/85">{formatTransactionDate(transaction.date, "dd")}</span>
+                                                        <span className="text-white/40">{formatTransactionDate(transaction.date, "/MM/yyyy")}</span>
                                                     </td>
                                                 )}
                                                 {showDescription && (
@@ -650,10 +637,10 @@ export function StatementContentPanel({
                                                     <td className="overflow-hidden whitespace-nowrap border-b border-white/[0.04] px-3 py-2.5 text-white/70">
                                                         <div className="flex min-w-0 max-w-full items-center gap-2">
                                                             <span
-                                                                className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-white/[0.1]"
+                                                                className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg"
                                                                 style={{ color: categoryColor, backgroundColor: categoryBackground }}
                                                             >
-                                                                <CategoryIcon size={16} />
+                                                                <CategoryIcon size={14} />
                                                             </span>
                                                             <span className="truncate">{categoryLabel}</span>
                                                         </div>
@@ -662,13 +649,13 @@ export function StatementContentPanel({
                                                 {showTags && (
                                                     <td className="overflow-hidden whitespace-nowrap border-b border-white/[0.04] px-3 py-2.5 text-white/70">
                                                         {visibleTags.length < 1 ? (
-                                                            <span className="text-white/35">Sem tags</span>
+                                                            <span className="text-white/25">—</span>
                                                         ) : (
                                                             <div className="flex min-w-0 max-w-full flex-nowrap items-center gap-1.5 overflow-hidden">
                                                                 {visibleTags.map((tag) => (
                                                                     <span
                                                                         key={tag.id}
-                                                                        className="min-w-0 max-w-[96px] truncate rounded-full border border-white/12 px-2 py-0.5 text-[11px]/4 font-medium uppercase text-white/75"
+                                                                        className="min-w-0 max-w-[96px] truncate rounded-md px-2 py-0.5 text-[11px]/4 font-medium uppercase text-white/80"
                                                                         style={{ backgroundColor: `${tag.color ?? "#64748B"}26` }}
                                                                     >
                                                                         {tag.name}
@@ -699,10 +686,11 @@ export function StatementContentPanel({
                                                 )}
                                                 {showValue && (
                                                     <td className={`overflow-hidden whitespace-nowrap border-b border-white/[0.04] px-3 py-2.5 text-right font-semibold ${isInvoicePayment ? "text-emerald-300" : "text-red-400"}`}>
-                                                        {formatCurrency(isInvoicePayment ? -transaction.value : transaction.value)}
+                                                        <span className="mr-1 text-xs font-normal opacity-50">R$</span>
+                                                        {formatCurrencyBRL(isInvoicePayment ? -transaction.value : transaction.value)}
                                                     </td>
                                                 )}
-                                            </motion.tr>
+                                            </tr>
                                         );
                                     })}
                                 </tbody>
@@ -716,7 +704,7 @@ export function StatementContentPanel({
                             <TransactionContextMenu state={contextMenu} actions={contextActions} onSelect={handleSelectAction} onClose={() => setContextMenu(null)} />
                         </div>
                     )}
-                </motion.section>
+                </section>
 
                 {summaryAside ? <div className="w-full lg:w-64 lg:shrink-0">{summaryAside}</div> : null}
             </div>

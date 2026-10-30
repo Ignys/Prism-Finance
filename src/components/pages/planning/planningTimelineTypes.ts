@@ -4,7 +4,7 @@ export type BalanceTone = "positive" | "tight" | "negative";
 export type ItemIconTone = "expense" | "income" | "wishlist" | "neutral";
 export type SimulatedIncomeSource = "simulated_income" | "legacy_override";
 export type PlanningPanel = "income" | "inherited_expenses" | "projections";
-export type PlanningTab = "timeline" | "reports";
+export type PlanningTab = "timeline" | "reports" | "budgets";
 
 export interface IncomeItem {
     id: string;

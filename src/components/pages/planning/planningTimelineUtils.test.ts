@@ -34,6 +34,23 @@ describe("planning cash timeline", () => {
         expect(result.months[0].currentAccumulated).toBe(900);
     });
 
+    it("shows past months before the current one without shifting the current opening balance", () => {
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date("2026-02-15T12:00:00Z"));
+        const group = fixtureGroup();
+        const stored = fixtureTransaction({ scheduledDate: "2026-01-20", paidAt: "2026-01-20T12:00:00Z", status: "paid" });
+        const transaction = toTransactionList([stored], [group], [], [], [], [])[0];
+        const result = buildTimelineProjection({
+            wallets: [fixtureWallet], creditCards: [], creditCardInvoices: [], transactions: [transaction],
+            ledgerEntries: createLedgerEntriesForPaidTransaction(stored, group),
+            wishItems: [], planning: fixtureSnapshot().planning, monthsToShow: 3, pastMonthsToShow: 3,
+        });
+        expect(result.months.map((month) => month.monthKey).slice(0, 4)).toEqual(["2025-11", "2025-12", "2026-01", "2026-02"]);
+        expect(result.months[0].openingMonthBalance).toBe(1000);
+        expect(result.months[3].isCurrentMonth).toBe(true);
+        expect(result.months[3].openingMonthBalance).toBe(900);
+    });
+
     it("keeps pending expenses on their scheduled month", () => {
         expect(project("2026-02-20", null).months[0].walletSpendings).toBe(100);
     });

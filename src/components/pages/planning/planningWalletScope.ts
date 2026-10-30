@@ -69,26 +69,3 @@ export function getScopedCreditCardsByIds(creditCards: CreditCard[], selectedCre
     const selectedCreditCardIdSet = new Set(selectedCreditCardIds);
     return creditCards.filter((creditCard) => selectedCreditCardIdSet.has(creditCard.id));
 }
-
-export function getReportScopedTransactions(
-    transactions: Transaction[],
-    selectedWalletIds: string[],
-    selectedCreditCardIds: string[],
-    allWalletsSelected: boolean,
-    allCreditCardsSelected: boolean,
-): Transaction[] {
-    if (allWalletsSelected && allCreditCardsSelected) {
-        return transactions;
-    }
-
-    const selectedWalletIdSet = new Set(selectedWalletIds);
-    const selectedCreditCardIdSet = new Set(selectedCreditCardIds);
-
-    return transactions.filter((transaction) => {
-        const belongsToWallet = selectedWalletIdSet.has(transaction.inWallet);
-        const belongsToCreditCard =
-            (transaction.creditCardId !== null && selectedCreditCardIdSet.has(transaction.creditCardId)) ||
-            (transaction.invoicePaymentMeta?.creditCardId !== undefined && selectedCreditCardIdSet.has(transaction.invoicePaymentMeta.creditCardId));
-        return belongsToWallet || belongsToCreditCard;
-    });
-}

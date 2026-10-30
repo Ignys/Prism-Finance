@@ -1,3 +1,5 @@
+import { Check } from "lucide-react";
+
 interface TableColumnToggleButtonProps {
     label: string;
     active: boolean;
@@ -9,8 +11,12 @@ export function TableColumnToggleButton({ label, active, onClick }: TableColumnT
         <button
             type="button"
             onClick={onClick}
-            className={`${active ? "border-neutral-100/[0.2] bg-neutral-600/30 text-white/70" : "border-white/[0.1] bg-white/[0.03] text-white/30"} rounded-lg border px-2.5 py-1 text-xs transition-colors hover:cursor-pointer`}
+            aria-pressed={active}
+            className={`${
+                active ? "bg-white/[0.09] text-white/90 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]" : "text-white/35 hover:bg-white/[0.04] hover:text-white/65"
+            } inline-flex cursor-pointer items-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition-colors`}
         >
+            <Check size={12} strokeWidth={2.5} className={active ? "opacity-70" : "opacity-0"} aria-hidden />
             {label}
         </button>
     );

@@ -1,4 +1,4 @@
-import { Flag, Trash2, X } from "lucide-react";
+import { CircleDollarSign, Flag, Image as ImageIcon, Link2, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
 import type { Category, WishItem, WishItemPriority } from "../../context/FinanceContext";
@@ -8,11 +8,12 @@ import { useModal } from "../../context/ModalContext";
 import { extractCurrencyDigits, formatCurrencyFromDigits, parseCurrencyDigitsToNumber } from "../../lib/currencyMask";
 import { WISH_ITEM_PRIORITY_OPTIONS } from "../../lib/wishlistPriority";
 import { CategoryOptionContent } from "../transactions/TransactionFormParts";
-import { FIELD_LABEL_CLASS } from "../transactions/transactionForm.constants";
+import { FIELD_EMBEDDED_INPUT_CLASS, FIELD_ICON_CONTROL_CLASS } from "../transactions/transactionForm.constants";
+import { IconTextField } from "../transactions/IconTextField";
+import { TransactionFieldIcon } from "../transactions/TransactionFieldIcon";
 import { SingleSelectCombobox, type ComboboxOptionBase } from "../transactions/SingleSelectCombobox";
+import { ModalBody, ModalCancelButton, ModalFooter, ModalFooterAction, ModalHeader, ModalPanel, ModalPrimaryButton } from "./ModalChrome";
 import { ModalStructure } from "./ModalStructure";
-
-const FIELD_INPUT_CLASS = "rounded-xl border border-white/[0.1] bg-black/35 p-2.5 text-white outline-none transition-colors placeholder:text-white/35 focus:border-white/[0.24]";
 
 interface CategoryOption extends ComboboxOptionBase {
     category: Category;
@@ -212,138 +213,80 @@ export function AddWishItem({ mode = "create", wishItemId, initialWishItem }: Ad
 
     return (
         <ModalStructure height="auto" width="620px">
-            <div className="rounded-2xl border border-white/[0.09] bg-[#131313] p-4 text-white shadow-[0_26px_70px_-38px_rgba(0,0,0,0.95)]">
-                <header className="flex items-center justify-between gap-3">
-                    <h1 className="ml-1 text-sm uppercase opacity-50">{isEditMode ? "EDITAR ITEM DA LISTA DE DESEJOS" : "NOVO ITEM NA LISTA DE DESEJOS"}</h1>
-                    <button
-                        type="button"
-                        onClick={closeModal}
-                        disabled={submitting}
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/[0.12] bg-white/[0.03] text-white/70 transition-colors hover:border-white/[0.22] hover:text-white disabled:cursor-not-allowed disabled:opacity-55"
-                        aria-label="Fechar modal"
-                        title="Fechar"
-                    >
-                        <X size={15} />
-                    </button>
-                </header>
+            <ModalPanel>
+                <ModalHeader title={isEditMode ? "Editando desejo" : "Novo desejo"} disabled={submitting} />
 
-                <section className="mt-4 grid grid-cols-1 gap-3">
-                    {mode === "edit" && !editingWishItem ? <p className="rounded-md border border-amber-400/25 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">Item nao encontrado.</p> : null}
+                <ModalBody className="flex flex-col gap-2">
+                    {mode === "edit" && !editingWishItem ? <p className="rounded-xl border border-amber-400/25 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">Item não encontrado.</p> : null}
 
-                    <label className="flex flex-col gap-1.5">
-                        <span className={FIELD_LABEL_CLASS}>Valor</span>
-                        <input
-                            type="text"
-                            inputMode="numeric"
-                            value={formatCurrencyFromDigits(amountDigits)}
-                            onChange={(event) => setAmountDigits(extractCurrencyDigits(event.target.value))}
-                            className={FIELD_INPUT_CLASS}
-                            placeholder="R$ 0,00"
+                    <IconTextField ariaLabel="Descrição" value={description} onChange={setDescription} placeholder="O que você quer comprar? Ex.: Kindle, tênis novo" />
+
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                        <label className={`${FIELD_ICON_CONTROL_CLASS} flex min-h-[50px] items-center gap-2`}>
+                            <TransactionFieldIcon icon={CircleDollarSign} />
+                            <input
+                                aria-label="Valor"
+                                type="text"
+                                inputMode="numeric"
+                                value={formatCurrencyFromDigits(amountDigits)}
+                                onChange={(event) => setAmountDigits(extractCurrencyDigits(event.target.value))}
+                                className={`${FIELD_EMBEDDED_INPUT_CLASS} tabular-nums`}
+                                placeholder="R$ 0,00"
+                            />
+                        </label>
+
+                        <SingleSelectCombobox
+                            label="Categoria"
+                            hideLabel
+                            value={selectedCategoryOptionId}
+                            placeholder="Selecione uma categoria"
+                            emptyMessage="Nenhuma categoria disponível."
+                            options={categoryOptions}
+                            onChange={handleCategorySelect}
+                            renderOptionContent={(option) => <CategoryOptionContent option={option} />}
                         />
-                    </label>
-
-                    <SingleSelectCombobox
-                        label="Categoria"
-                        value={selectedCategoryOptionId}
-                        placeholder="Selecione uma categoria"
-                        emptyMessage="Nenhuma categoria disponivel."
-                        options={categoryOptions}
-                        onChange={handleCategorySelect}
-                        renderOptionContent={(option) => <CategoryOptionContent option={option} />}
-                        labelClassName={FIELD_LABEL_CLASS}
-                    />
-
-                    <div className="flex flex-col gap-2">
-                        <span className={FIELD_LABEL_CLASS}>Prioridade</span>
-                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-                            {WISH_ITEM_PRIORITY_OPTIONS.map((option) => {
-                                const isSelected = priority === option.value;
-
-                                return (
-                                    <button
-                                        key={option.value}
-                                        type="button"
-                                        onClick={() => setPriority(option.value)}
-                                        className={`rounded-xl border px-3 py-3 text-left transition-colors ${
-                                            isSelected ? "bg-white/[0.06] text-white" : "border-white/[0.1] bg-black/25 text-white/70 hover:border-white/[0.2] hover:text-white"
-                                        }`}
-                                        style={{
-                                            borderColor: isSelected ? `${option.color}66` : undefined,
-                                            boxShadow: isSelected ? `inset 0 0 0 1px ${option.color}33` : undefined,
-                                        }}
-                                    >
-                                        <div className="flex items-center gap-2">
-                                            <span
-                                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border"
-                                                style={{
-                                                    color: option.color,
-                                                    borderColor: `${option.color}44`,
-                                                    backgroundColor: `${option.color}14`,
-                                                }}
-                                            >
-                                                <Flag size={15} />
-                                            </span>
-                                            <div>
-                                                <p className="text-sm font-medium">{option.label}</p>
-                                            </div>
-                                        </div>
-                                    </button>
-                                );
-                            })}
-                        </div>
                     </div>
 
-                    <label className="flex flex-col gap-1.5">
-                        <span className={FIELD_LABEL_CLASS}>Descricao</span>
-                        <input type="text" value={description} onChange={(event) => setDescription(event.target.value)} className={FIELD_INPUT_CLASS} placeholder="Ex.: Kindle, tenis novo, fone" />
-                    </label>
+                    <div className="flex gap-1 rounded-xl border border-white/[0.1] bg-black/35 p-1" role="radiogroup" aria-label="Prioridade">
+                        {WISH_ITEM_PRIORITY_OPTIONS.map((option) => {
+                            const isSelected = priority === option.value;
 
-                    <label className="flex flex-col gap-1.5">
-                        <span className={FIELD_LABEL_CLASS}>Link</span>
-                        <input type="text" value={link} onChange={(event) => setLink(event.target.value)} className={FIELD_INPUT_CLASS} placeholder="https://..." />
-                    </label>
-
-                    <label className="flex flex-col gap-1.5">
-                        <span className={FIELD_LABEL_CLASS}>Link da imagem</span>
-                        <input type="text" value={imageUrl} onChange={(event) => setImageUrl(event.target.value)} className={FIELD_INPUT_CLASS} placeholder="https://imagem-do-produto..." />
-                    </label>
-                </section>
-
-                <div className="mt-5 flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2">
-                        {isEditMode && editingWishItem ? (
-                            <button
-                                type="button"
-                                onClick={() => void handleRemove()}
-                                disabled={submitting}
-                                className="inline-flex min-w-28 items-center justify-center gap-2 rounded-xl border border-red-400/25 bg-red-500/10 px-3 py-2 text-sm font-medium text-red-200 transition-colors hover:border-red-400/45 hover:text-red-100 disabled:cursor-not-allowed disabled:opacity-60"
-                            >
-                                <Trash2 size={15} />
-                                Remover
-                            </button>
-                        ) : null}
+                            return (
+                                <button
+                                    key={option.value}
+                                    type="button"
+                                    role="radio"
+                                    aria-checked={isSelected}
+                                    onClick={() => setPriority(option.value)}
+                                    className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${isSelected ? "" : "text-white/65 hover:bg-white/[0.06]"}`}
+                                    style={isSelected ? { color: option.color, backgroundColor: `${option.color}26` } : undefined}
+                                >
+                                    <Flag size={14} style={isSelected ? undefined : { color: option.color }} />
+                                    {option.label}
+                                </button>
+                            );
+                        })}
                     </div>
 
-                    <div className="flex items-center justify-end gap-2">
-                        <button
-                            type="button"
-                            onClick={closeModal}
-                            disabled={submitting}
-                            className="inline-flex min-w-24 items-center justify-center rounded-xl border border-white/[0.12] bg-white/[0.03] px-4 py-2 text-sm font-medium text-white/70 transition-colors hover:border-white/[0.2] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                            Cancelar
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => void handleSubmit()}
-                            disabled={(mode === "edit" && !editingWishItem) || !canSubmit || submitting}
-                            className="inline-flex min-w-28 items-center justify-center rounded-xl border border-emerald-400/35 bg-emerald-500/15 px-4 py-2 text-sm font-semibold text-emerald-100 transition-colors hover:border-emerald-400/55 hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                            {submitting ? "Salvando..." : "Concluir"}
-                        </button>
-                    </div>
-                </div>
-            </div>
+                    <IconTextField ariaLabel="Link do produto" value={link} onChange={setLink} placeholder="Link do produto (opcional)" icon={Link2} />
+                    <IconTextField ariaLabel="Link da imagem" value={imageUrl} onChange={setImageUrl} placeholder="Link da imagem (opcional)" icon={ImageIcon} />
+                </ModalBody>
+
+                <ModalFooter
+                    start={
+                        isEditMode && editingWishItem ? (
+                            <ModalFooterAction tone="danger" onClick={() => void handleRemove()} disabled={submitting}>
+                                <Trash2 size={15} /> Remover
+                            </ModalFooterAction>
+                        ) : null
+                    }
+                >
+                    <ModalCancelButton disabled={submitting} />
+                    <ModalPrimaryButton onClick={() => void handleSubmit()} disabled={(mode === "edit" && !editingWishItem) || !canSubmit || submitting}>
+                        {submitting ? "Salvando..." : "Salvar"}
+                    </ModalPrimaryButton>
+                </ModalFooter>
+            </ModalPanel>
         </ModalStructure>
     );
 }

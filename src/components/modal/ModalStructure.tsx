@@ -7,9 +7,11 @@ interface ModalStructureProps {
     children: React.ReactNode;
     topContent?: React.ReactNode;
     closeOnEscape?: boolean;
+    /** Conteúdo exibido ao lado do modal, fora dele; o modal continua centralizado sozinho. */
+    aside?: React.ReactNode;
 }
 
-export function ModalStructure({ height, width, children, topContent, closeOnEscape = true }: ModalStructureProps) {
+export function ModalStructure({ height, width, children, topContent, closeOnEscape = true, aside }: ModalStructureProps) {
     const { closeModal } = useModal();
     const background = useRef<HTMLDivElement>(null);
     const resolvedWidth = typeof width === "number" ? `${width}px` : width;
@@ -36,11 +38,12 @@ export function ModalStructure({ height, width, children, topContent, closeOnEsc
     }, [closeModal, closeOnEscape]);
 
     return (
-        <div style={{ width: `min(95vw, ${resolvedWidth})`, maxHeight: "94vh" }} ref={background} className="flex flex-col items-center gap-2">
+        <div style={{ width: `min(95vw, ${resolvedWidth})`, maxHeight: "94vh" }} ref={background} className="relative flex flex-col items-center gap-2">
             {topContent ? <div className="shrink-0">{topContent}</div> : null}
             <div style={{ height: resolvedHeight, maxHeight: topContent ? "calc(94vh - 40px)" : "90vh" }} className="flex w-full min-h-0 flex-col overflow-hidden">
                 {children}
             </div>
+            {aside ? <div className="absolute left-full top-0 ml-4 max-h-[90vh] w-[340px] overflow-y-auto">{aside}</div> : null}
         </div>
     );
 }

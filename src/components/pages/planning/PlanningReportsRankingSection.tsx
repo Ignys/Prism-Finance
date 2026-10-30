@@ -1,51 +1,43 @@
 import { BeneficiaryAvatar } from "../../common/BeneficiaryAvatar";
+import { PlanningReportsPanel, REPORT_MONO_STYLE } from "./PlanningReportsPanel";
 import { formatReportCurrency } from "./planningReportFormatting";
 import type { BeneficiaryReport } from "./planningReportsUtils";
 
-export function PlanningReportsRankingSection({ beneficiaryReports }: { beneficiaryReports: BeneficiaryReport[] }) {
-    return (
-        <section className="rounded-lg border border-white/[0.08] bg-[#111111] p-4">
-            <div className="mb-4 flex items-center justify-between gap-3">
-                <div>
-                    <p className="text-base font-medium text-white">Despesas dos Beneficiários</p>
-                </div>
-            </div>
-            <div className="space-y-2">
-                {beneficiaryReports.length > 0 ? (
-                    beneficiaryReports.slice(0, 5).map((beneficiary) => <RankingRow key={beneficiary.key} beneficiary={beneficiary} />)
-                ) : (
-                    <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-4 text-sm text-white/55">Nenhum gasto encontrado no período.</div>
-                )}
-            </div>
-        </section>
-    );
-}
+const RANKING_LIMIT = 5;
 
-function RankingRow({ beneficiary }: { beneficiary: BeneficiaryReport }) {
+export function PlanningReportsRankingSection({ beneficiaryReports }: { beneficiaryReports: BeneficiaryReport[] }) {
+    const visible = beneficiaryReports.slice(0, RANKING_LIMIT);
+
     return (
-        <div className="rounded-lg border border-white/[0.07] bg-white/[0.025] p-3">
-            <div className="flex items-center justify-between gap-3">
-                <div className="flex min-w-0 items-center gap-3">
-                    <BeneficiaryAvatar
-                        beneficiary={{
-                            name: beneficiary.name,
-                            avatarImage: beneficiary.avatarImage,
-                            avatarColor: beneficiary.avatarColor,
-                        }}
-                        className="h-10 w-10 rounded-lg border border-white/[0.12]"
-                    />
-                    <div className="min-w-0">
-                        <p className="truncate text-sm font-medium text-white">{beneficiary.name}</p>
-                    </div>
-                </div>
-                <div className="shrink-0 text-right">
-                    <p className="text-sm font-semibold text-white">{formatReportCurrency(beneficiary.totalAmount)}</p>
-                    <p className="text-xs text-white/42">{beneficiary.percent.toFixed(1)}%</p>
-                </div>
-            </div>
-            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/[0.06]">
-                <div className="h-full rounded-full bg-rose-400/80" style={{ width: `${Math.min(100, beneficiary.percent)}%` }} />
-            </div>
-        </div>
+        <PlanningReportsPanel title="Quem gastou">
+            {visible.length > 0 ? (
+                <ul className="divide-y divide-white/[0.06]">
+                    {visible.map((beneficiary) => (
+                        <li key={beneficiary.key} className="flex items-center gap-3 py-2.5 first:pt-0 last:pb-0">
+                            <BeneficiaryAvatar
+                                beneficiary={{ name: beneficiary.name, avatarImage: beneficiary.avatarImage, avatarColor: beneficiary.avatarColor }}
+                                className="h-9 w-9 shrink-0 rounded-full border border-white/[0.1]"
+                            />
+                            <div className="min-w-0 flex-1">
+                                <div className="flex items-baseline justify-between gap-3">
+                                    <p className="truncate text-sm text-white/85">{beneficiary.name}</p>
+                                    <p className="shrink-0 text-sm text-white" style={REPORT_MONO_STYLE}>
+                                        {formatReportCurrency(beneficiary.totalAmount)}
+                                    </p>
+                                </div>
+                                <div className="mt-1.5 flex items-center gap-2">
+                                    <div className="h-1 flex-1 overflow-hidden rounded-full bg-white/[0.06]">
+                                        <div className="h-full rounded-full bg-white/60" style={{ width: `${beneficiary.percent}%` }} />
+                                    </div>
+                                    <span className="w-11 shrink-0 text-right text-[11px] text-white/40">{beneficiary.percent.toFixed(1)}%</span>
+                                </div>
+                            </div>
+                        </li>
+                    ))}
+                </ul>
+            ) : (
+                <p className="py-8 text-center text-sm text-white/45">Nenhuma despesa com beneficiário no período.</p>
+            )}
+        </PlanningReportsPanel>
     );
 }

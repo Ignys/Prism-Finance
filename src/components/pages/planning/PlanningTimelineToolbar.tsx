@@ -6,7 +6,7 @@ import { MultiSelectCombobox } from "../../transactions/MultiSelectCombobox";
 import { SingleSelectCombobox, type ComboboxOptionBase } from "../../transactions/SingleSelectCombobox";
 import { Switch } from "../../ui/Switch";
 import { PLANNING_CONTROL_CENTER_TRIGGER_CLASS, PLANNING_CONTROL_TRIGGER_CLASS, PlanningControlGroup } from "./PlanningControlGroup";
-import { CreditCardOptionContent, type CreditCardOption } from "./PlanningReportsToolbar";
+import { CreditCardOptionContent, type CreditCardOption } from "./CreditCardOptionContent";
 
 export interface PlanningTimelineToolbarProps {
     compareMode: boolean;
@@ -23,7 +23,7 @@ export interface PlanningTimelineToolbarProps {
     onTimelineMonthCountChange: (monthCount: number) => void;
 }
 
-interface WalletOption extends ComboboxOptionBase {
+export interface WalletOption extends ComboboxOptionBase {
     wallet: Wallet;
 }
 
@@ -144,7 +144,7 @@ export function PlanningTimelineToolbar({
     );
 }
 
-function WalletOptionContent({ option }: { option: WalletOption }) {
+export function WalletOptionContent({ option }: { option: WalletOption }) {
     return (
         <div className="flex min-w-0 items-center gap-2">
             <WalletAvatar wallet={option.wallet} className="h-7 w-7 rounded-md border border-white/10" iconSize={15} iconStrokeWidth={1.7} />

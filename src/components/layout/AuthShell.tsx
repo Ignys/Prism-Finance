@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { usePage } from "../../context/PageContext";
+import { CommandPalette } from "../common/commandPalette/CommandPalette";
 import { Header } from "../home/Header";
 import { DisplayModal } from "../modal/DisplayModal";
 import { AppSidebar } from "./AppSidebar";
@@ -22,6 +23,7 @@ export function AuthShell({ children, mainClassName = "text-white" }: AuthShellP
     return (
         <>
             <DisplayModal />
+            <CommandPalette />
             <div className="min-h-screen bg-[#0e0e10] text-white">
                 <div className="flex min-h-screen">
                     <AppSidebar isMobileOpen={isMobileSidebarOpen} onCloseMobile={closeMobileSidebar} />

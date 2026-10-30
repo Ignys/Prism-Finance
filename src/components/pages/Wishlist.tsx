@@ -1,56 +1,17 @@
-import { motion, useReducedMotion } from "framer-motion";
-import { ExternalLink, Flag, Gift, Plus, Search, UserRound } from "lucide-react";
+import { Gift, Plus, Search, UserRound } from "lucide-react";
 import { useEffect, useMemo, useState, type MouseEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import type { SharedWishlistSnapshot, WishItem } from "../../context/FinanceContext";
 import { useFinanceCategories, useFinanceFamily, useFinancePlanning, useFinanceSession, useFinanceSharedWishlists, useFinanceWishItems } from "../../context/FinanceContext";
 import { useModal } from "../../context/ModalContext";
-import { getCategoryIconComponent } from "../../lib/categoryIcons";
-import { getWishItemPriorityMeta } from "../../lib/wishlistPriority";
 import { resolveUserDisplayName } from "../../lib/userProfile";
 import { AddWishItem } from "../modal/AddWishItem";
-import { ENTRANCE_EASE, getItemEntranceDelay, PANEL_ENTRANCE_ANIMATE, PANEL_ENTRANCE_INITIAL, PANEL_ENTRANCE_TRANSITION } from "./entranceMotion";
 import { getCurrentMonthKey } from "./planning/planningTimelineUtils";
+import { WishlistItemCard } from "./wishlist/WishlistItemCard";
 import { WishlistContextMenu, type WishlistContextMenuState } from "./wishlist/WishlistContextMenu";
 import { buildWishlistContextActions, type WishlistContextAction } from "./wishlist/wishlistContextActions";
 import { buildWishlistProjectionMonthByItemId } from "./wishlist/wishlistProjectionMonths";
 import { useWishlistContextActionHandler } from "./wishlist/useWishlistContextActionHandler";
-
-const currencyFormatter = new Intl.NumberFormat("pt-BR", {
-    style: "currency",
-    currency: "BRL",
-    minimumFractionDigits: 2,
-});
-
-function resolveWishLink(link: string | null): string | null {
-    if (!link?.trim()) {
-        return null;
-    }
-
-    if (/^https?:\/\//i.test(link)) {
-        return link;
-    }
-
-    return `https://${link}`;
-}
-
-function WishlistItemImage({ src, alt }: { src: string | null; alt: string }) {
-    const [hasError, setHasError] = useState(false);
-
-    useEffect(() => {
-        setHasError(false);
-    }, [src]);
-
-    if (!src || hasError) {
-        return null;
-    }
-
-    return (
-        <div className="mb-3 h-40 w-full overflow-hidden rounded-2xl border-white/[0.08] bg-black/20 sm:mb-0 sm:h-full sm:w-30 sm:shrink-0">
-            <img src={src} alt={alt} loading="lazy" onError={() => setHasError(true)} className="h-full w-full object-cover" />
-        </div>
-    );
-}
 
 function buildEmptyWishlist(ownerUid: string, ownerName: string, isCurrentUser: boolean): SharedWishlistSnapshot {
     return {
@@ -66,6 +27,11 @@ function buildEmptyWishlist(ownerUid: string, ownerName: string, isCurrentUser: 
 
 type WishlistSortOption = "price" | "priority";
 
+const SORT_OPTIONS: { value: WishlistSortOption; label: string }[] = [
+    { value: "price", label: "Preço" },
+    { value: "priority", label: "Prioridade" },
+];
+
 export function WishlistPage() {
     const { user } = useFinanceSession();
     const family = useFinanceFamily();
@@ -76,7 +42,6 @@ export function WishlistPage() {
     const { openModal } = useModal();
     const navigate = useNavigate();
     const handleWishlistContextAction = useWishlistContextActionHandler();
-    const shouldReduceMotion = useReducedMotion();
     const [activeOwnerUid, setActiveOwnerUid] = useState("");
     const [sortOption, setSortOption] = useState<WishlistSortOption>("price");
     const [searchTerm, setSearchTerm] = useState("");
@@ -189,7 +154,6 @@ export function WishlistPage() {
     const isOwnWishlist = activeWishlist.owner.isCurrentUser;
     const hasFamilyTabs = wishlistTabs.length > 1;
     const normalizedSearchTerm = searchTerm.trim().toLocaleLowerCase("pt-BR");
-    const sortLabel = sortOption === "price" ? "Preço" : "Prioridade";
 
     const visibleItems = useMemo(() => {
         const filteredItems = activeWishlist.items.filter((item) => {
@@ -259,13 +223,8 @@ export function WishlistPage() {
     return (
         <>
             <div className="flex min-h-[calc(100vh-8rem)] w-full flex-col">
-                <motion.header
-                    initial={shouldReduceMotion ? false : { opacity: 0, y: -10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.42, ease: ENTRANCE_EASE }}
-                    className="flex flex-wrap items-end justify-between gap-2 text-left mb-3"
-                >
-                    {hasFamilyTabs ? (
+                {hasFamilyTabs ? (
+                    <header className="flex flex-wrap items-end justify-between gap-2 text-left mb-3">
                         <div className="flex flex-wrap gap-2">
                             {wishlistTabs
                                 .sort((a, b) => Number(b.owner.isCurrentUser) - Number(a.owner.isCurrentUser))
@@ -293,46 +252,48 @@ export function WishlistPage() {
                                     );
                                 })}
                         </div>
-                    ) : null}
+                    </header>
+                ) : null}
 
-                    <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
+                <section>
+                    <div className="mb-4 flex flex-wrap items-center gap-2">
+                        <div className="relative min-w-0 grow basis-56">
+                            <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-white/40" />
+                            <input
+                                type="text"
+                                value={searchTerm}
+                                onChange={(event) => setSearchTerm(event.target.value)}
+                                placeholder="Buscar"
+                                className="w-full rounded-xl border border-white/[0.08] bg-black/25 py-2 pl-9 pr-3 text-sm text-white outline-none transition-colors placeholder:text-white/30 focus:border-white/[0.24] focus:bg-black/40"
+                            />
+                        </div>
+
+                        <div role="radiogroup" aria-label="Ordenar por" className="inline-flex rounded-xl border border-white/[0.08] bg-black/25 p-0.5 text-xs font-medium">
+                            {SORT_OPTIONS.map((option) => (
+                                <button
+                                    key={option.value}
+                                    type="button"
+                                    role="radio"
+                                    aria-checked={sortOption === option.value}
+                                    onClick={() => setSortOption(option.value)}
+                                    className={`rounded-lg px-3 py-1.5 transition-colors ${sortOption === option.value ? "bg-white/10 text-white" : "text-white/55 hover:text-white"}`}
+                                >
+                                    {option.label}
+                                </button>
+                            ))}
+                        </div>
+
                         {isOwnWishlist ? (
                             <button
                                 type="button"
                                 onClick={() => openModal(<AddWishItem />)}
-                                className="inline-flex flex-1 items-center justify-center gap-1 rounded-full border border-emerald-300/25 bg-emerald-500/10 px-4 py-2 text-xs font-medium uppercase text-emerald-100 transition-colors hover:bg-emerald-500/16 sm:flex-none"
+                                className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-emerald-300/25 bg-emerald-500/10 px-3 py-2 text-xs font-medium text-emerald-100 transition-colors hover:bg-emerald-500/16"
                             >
-                                <Plus size={12} />
-                                Adicionar novo item
+                                <Plus size={14} />
+                                Adicionar
                             </button>
                         ) : null}
-
-                        <button
-                            type="button"
-                            onClick={() => setSortOption((current) => (current === "price" ? "priority" : "price"))}
-                            className="inline-flex flex-1 items-center justify-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-medium uppercase text-white/80 transition-colors hover:text-white sm:flex-none"
-                        >
-                            Ordenar por: {sortLabel}
-                        </button>
                     </div>
-                </motion.header>
-
-                <section className="">
-                    <motion.div
-                        initial={shouldReduceMotion ? false : PANEL_ENTRANCE_INITIAL}
-                        animate={PANEL_ENTRANCE_ANIMATE}
-                        transition={PANEL_ENTRANCE_TRANSITION}
-                        className="relative w-full mb-3"
-                    >
-                        <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-white/40" />
-                        <input
-                            type="text"
-                            value={searchTerm}
-                            onChange={(event) => setSearchTerm(event.target.value)}
-                            placeholder="Buscar"
-                            className="w-full rounded-xl border border-white/[0.08] bg-black/25 py-2 pl-9 pr-3 text-sm text-white outline-none transition-colors placeholder:text-white/30 focus:border-white/[0.24] focus:bg-black/40"
-                        />
-                    </motion.div>
                     {activeWishlist.items.length === 0 ? (
                         <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-white/[0.08] bg-white/[0.02] px-6 py-14 text-center">
                             <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-white/[0.05] text-white/70">
@@ -352,109 +313,18 @@ export function WishlistPage() {
                             </div>
                         </div>
                     ) : (
-                        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-                            {visibleItems.map((wishItem, index) => {
-                                const resolvedLink = resolveWishLink(wishItem.link);
-                                const CategoryIcon = getCategoryIconComponent(wishItem.categoryIcon, "expense");
-                                const priorityMeta = getWishItemPriorityMeta(wishItem.priority);
-                                const categoryAccentColor = wishItem.categoryColor ?? "#94A3B8";
-                                const projectionMonth = isOwnWishlist ? projectionMonthByWishItemId.get(wishItem.id) : null;
-
-                                return (
-                                    <motion.article
-                                        key={wishItem.id}
-                                        initial={shouldReduceMotion ? false : { opacity: 0, y: 22, scale: 0.985 }}
-                                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                                        transition={{
-                                            delay: shouldReduceMotion ? 0 : getItemEntranceDelay(index),
-                                            duration: 0.46,
-                                            ease: ENTRANCE_EASE,
-                                        }}
-                                        role={isOwnWishlist ? "button" : undefined}
-                                        tabIndex={isOwnWishlist ? 0 : -1}
-                                        onClick={isOwnWishlist ? () => openModal(<AddWishItem mode="edit" wishItemId={wishItem.id} />) : undefined}
-                                        onContextMenu={(event) => handleWishItemContextMenu(event, wishItem.id)}
-                                        onKeyDown={
-                                            isOwnWishlist
-                                                ? (event) => {
-                                                      if (event.key === "Enter" || event.key === " ") {
-                                                          event.preventDefault();
-                                                          openModal(<AddWishItem mode="edit" wishItemId={wishItem.id} />);
-                                                      }
-                                                  }
-                                                : undefined
-                                        }
-                                        className={`flex h-auto min-w-0 flex-col justify-between gap-4 rounded-2xl bg-white/[0.03] p-4 text-left sm:min-h-35 sm:flex-row ${
-                                            isOwnWishlist ? "cursor-pointer transition-colors hover:border-neutral-300/20 hover:bg-white/[0.05]" : ""
-                                        }`}
-                                    >
-                                        <WishlistItemImage src={wishItem.imageUrl} alt={wishItem.description} />
-                                        <div className="flex min-w-0 grow flex-col justify-between">
-                                            <div>
-                                                <div className="mb-1 flex items-start justify-between gap-3">
-                                                    <h2 className="min-w-0 break-words text-lg font-normal text-white sm:text-xl">{wishItem.description}</h2>
-                                                    {projectionMonth ? (
-                                                        <button
-                                                            type="button"
-                                                            onClick={(event) => openProjectedWishlistMonth(event, projectionMonth.monthKey)}
-                                                            onKeyDown={(event) => event.stopPropagation()}
-                                                            className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-fuchsia-300/25 bg-fuchsia-500/10 px-2.5 py-0.5 text-[11px] font-medium uppercase text-fuchsia-100 transition-colors hover:border-fuchsia-300/40 hover:bg-fuchsia-500/16"
-                                                            title={`Abrir projeções de ${projectionMonth.label}`}
-                                                        >
-                                                            {projectionMonth.label}
-                                                        </button>
-                                                    ) : null}
-                                                </div>
-
-                                                <div className="flex flex-wrap items-center justify-between gap-2">
-                                                    <p className="text-lg font-light text-white/70">{currencyFormatter.format(wishItem.value)}</p>
-
-                                                    <div
-                                                        className="inline-flex items-center gap-0.5 rounded-lg border px-2 py-1.5 text-xs font-medium"
-                                                        style={{
-                                                            color: priorityMeta.color,
-                                                            borderColor: `${priorityMeta.color}40`,
-                                                            backgroundColor: `${priorityMeta.color}14`,
-                                                        }}
-                                                    >
-                                                        {Array.from({ length: wishItem.priority }, (_, index) => (
-                                                            <Flag key={`${wishItem.id}-priority-flag-${index}`} size={14} />
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            <div className="mt-2 flex flex-wrap items-center justify-between gap-3 border-t border-white/[0.07] pt-3">
-                                                <span className="inline-flex items-center gap-2 rounded-full border-white/[0.1] text-xs font-medium text-white/75 transition-colors">
-                                                    <span
-                                                        className="inline-flex h-7 w-7 items-center justify-center rounded-lg border"
-                                                        style={{
-                                                            color: categoryAccentColor,
-                                                            borderColor: `${categoryAccentColor}35`,
-                                                            backgroundColor: `${categoryAccentColor}18`,
-                                                        }}
-                                                    >
-                                                        <CategoryIcon size={14} />
-                                                    </span>
-                                                    {wishItem.categoryLabel}
-                                                </span>
-
-                                                {resolvedLink ? (
-                                                    <a
-                                                        href={resolvedLink}
-                                                        target="_blank"
-                                                        rel="noreferrer"
-                                                        onClick={(event) => event.stopPropagation()}
-                                                        className="inline-flex items-center gap-2 rounded-full border border-white/[0.1] bg-white/[0.04] px-3 py-1.5 text-xs font-medium text-white/75 transition-colors hover:border-white/[0.18] hover:text-white"
-                                                    >
-                                                        <ExternalLink size={13} />
-                                                        Abrir link
-                                                    </a>
-                                                ) : null}
-                                            </div>
-                                        </div>
-                                    </motion.article>
-                                );
-                            })}
+                        <div className="grid grid-cols-1 gap-3 min-[480px]:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+                            {visibleItems.map((wishItem) => (
+                                <WishlistItemCard
+                                    key={wishItem.id}
+                                    item={wishItem}
+                                    isEditable={isOwnWishlist}
+                                    projectionMonth={isOwnWishlist ? projectionMonthByWishItemId.get(wishItem.id) : null}
+                                    onEdit={() => openModal(<AddWishItem mode="edit" wishItemId={wishItem.id} />)}
+                                    onContextMenu={(event) => handleWishItemContextMenu(event, wishItem.id)}
+                                    onOpenProjectionMonth={openProjectedWishlistMonth}
+                                />
+                            ))}
                         </div>
                     )}
                 </section>

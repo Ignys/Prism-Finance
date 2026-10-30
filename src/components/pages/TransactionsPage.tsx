@@ -434,7 +434,7 @@ export function TransactionsPage() {
     };
 
     return (
-        <div className="w-full flex">
+        <div className="finance-page w-full flex pb-4">
             <div className="flex flex-col gap-3 2xl:flex-row w-full">
                 <div className="min-w-0 flex-1 space-y-3">
                     <TransactionsFiltersPanel

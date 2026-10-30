@@ -6,6 +6,8 @@ export type AppPage =
     | "spending"
     | "income"
     | "planning"
+    | "reports"
+    | "budgets"
     | "settings"
     | "wallets"
     | "creditCards"
@@ -47,6 +49,8 @@ const PAGE_PATHS: Record<AppPage, string> = {
     income: "/transactions/income",
     transfer: "/transactions/transfer",
     planning: "/planning",
+    reports: "/reports",
+    budgets: "/budgets",
     settings: "/settings",
     wallets: "/registry/carteiras",
     creditCards: "/registry/cartoes",
@@ -91,7 +95,9 @@ export function getPageFromPathname(pathname: string): AppPage {
     if (path === "/registry/tags") return "tags";
     if (path === "/registry") return "registry";
 
-    if (path === "/planning" || path === "/analises") return "planning";
+    if (path === "/planning" || path === "/planejamento" || path === "/analises") return "planning";
+    if (path === "/reports" || path === "/relatorios") return "reports";
+    if (path === "/budgets" || path === "/orcamentos" || path.startsWith("/budgets/") || path.startsWith("/orcamentos/")) return "budgets";
     if (path === "/statement" || path === "/fatura") return "statement";
     if (path === "/wishlist") return "wishlist";
     if (path === "/settings" || path === "/configuracoes") return "settings";

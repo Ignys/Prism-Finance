@@ -1,6 +1,4 @@
-import { motion, useReducedMotion } from "framer-motion";
 import { BALANCE_TONE_CLASS_NAMES, type MonthProjection, type PlanningPanel } from "./planningTimelineTypes";
-import { getPlanningMonthEntranceDelay, PLANNING_ENTRANCE_EASE } from "./planningEntranceMotion";
 import { buildPlanningTimelineMonthSummary } from "./planningTimelineMonthSummary";
 import { formatCurrency } from "./planningTimelineUtils";
 import { PlanningTimelineSection } from "./PlanningTimelineSection";
@@ -14,19 +12,11 @@ interface PlanningMonthCardProps {
     onSelectPanel: (monthKey: string, panel: PlanningPanel) => void;
 }
 
-export function PlanningMonthCard({ month, index, compareMode, isSelected, selectedPanel, onSelectPanel }: PlanningMonthCardProps) {
-    const shouldReduceMotion = useReducedMotion();
+export function PlanningMonthCard({ month, compareMode, isSelected, selectedPanel, onSelectPanel }: PlanningMonthCardProps) {
     const { actionItems, footerBalanceTone, visibleAccumulated, visibleMonthBalance } = buildPlanningTimelineMonthSummary(month, compareMode);
 
     return (
-        <motion.article
-            initial={shouldReduceMotion ? false : { opacity: 0, y: 24, scale: 0.975, filter: "blur(6px)" }}
-            animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
-            transition={{
-                delay: shouldReduceMotion ? 0 : getPlanningMonthEntranceDelay(index),
-                duration: 0.52,
-                ease: PLANNING_ENTRANCE_EASE,
-            }}
+        <article
             className="flex w-[300px] shrink-0 flex-col rounded-lg border border-white/[0.08] bg-white/[0.035] p-4"
         >
             <div className="flex items-start justify-between gap-3">
@@ -78,6 +68,6 @@ export function PlanningMonthCard({ month, index, compareMode, isSelected, selec
                     </div>
                 </div>
             </footer>
-        </motion.article>
+        </article>
     );
 }

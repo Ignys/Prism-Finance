@@ -8,7 +8,7 @@ interface PageSkeletonScreenProps {
 type SkeletonVariant = "home" | "planning" | "registry" | "settings" | "statement" | "transactions" | "wishlist";
 
 function resolveSkeletonVariant(page: AppPage | undefined): SkeletonVariant {
-    if (page === "planning") return "planning";
+    if (page === "planning" || page === "reports" || page === "budgets") return "planning";
     if (page === "settings") return "settings";
     if (page === "statement") return "statement";
     if (page === "transactions" || page === "income" || page === "spending" || page === "transfer") return "transactions";

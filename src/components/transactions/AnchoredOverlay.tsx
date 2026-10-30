@@ -54,8 +54,9 @@ export function AnchoredOverlay<T extends HTMLElement>({
             const viewportHeight = window.innerHeight;
             const availableBelow = Math.max(0, viewportHeight - anchorRect.bottom - OVERLAY_GAP - VIEWPORT_PADDING);
             const availableAbove = Math.max(0, anchorRect.top - OVERLAY_GAP - VIEWPORT_PADDING);
-            const minimumComfortableHeight = Math.min(220, preferredMaxHeight);
-            const placeBelow = availableBelow >= minimumComfortableHeight || availableBelow >= availableAbove;
+            // Abre para baixo só se o conteúdo inteiro couber; senão tenta para cima, e só então fica no lado com mais espaço.
+            const contentHeight = Math.min(preferredMaxHeight, overlayRef.current?.scrollHeight ?? preferredMaxHeight);
+            const placeBelow = availableBelow >= contentHeight || (availableAbove < contentHeight && availableBelow >= availableAbove);
             const availableHeight = placeBelow ? availableBelow : availableAbove;
             const width = Math.min(overlayWidth ?? anchorRect.width, viewportWidth - VIEWPORT_PADDING * 2);
             const anchorLeft = align === "end" ? anchorRect.right - width : align === "center" ? anchorRect.left + anchorRect.width / 2 - width / 2 : anchorRect.left;
@@ -88,7 +89,7 @@ export function AnchoredOverlay<T extends HTMLElement>({
             window.removeEventListener("resize", updatePosition);
             window.removeEventListener("scroll", updatePosition, true);
         };
-    }, [anchorRef, isOpen, preferredMaxHeight, overlayWidth, align]);
+    }, [anchorRef, overlayRef, isOpen, preferredMaxHeight, overlayWidth, align]);
 
     if (!isOpen) {
         return null;

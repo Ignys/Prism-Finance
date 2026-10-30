@@ -1,5 +1,5 @@
-import { ReceiptText, TriangleAlert } from "lucide-react";
-import { useMemo } from "react";
+import { ChevronRight, ReceiptText, TriangleAlert } from "lucide-react";
+import { type ReactNode, useMemo } from "react";
 import { type Transaction, useFinanceCreditCardInvoices, useFinanceCreditCards } from "../../../context/FinanceContext";
 import { getCreditCardInvoiceReadState } from "../../../context/finance/invoiceStatus";
 import { getMonthKeyFromDateValue } from "../../../context/financeTypes";
@@ -36,7 +36,7 @@ export function SpendingBillsAlertCard({ transactions }: SpendingBillsAlertCardP
     const creditCards = useFinanceCreditCards();
     const creditCardInvoices = useFinanceCreditCardInvoices();
 
-    const overdueNonCardSpendingsCount = useMemo(() => {
+    const overdueNonCardSpendings = useMemo(() => {
         const todayReference = new Date();
         const today = new Date(todayReference.getFullYear(), todayReference.getMonth(), todayReference.getDate());
 
@@ -54,7 +54,7 @@ export function SpendingBillsAlertCard({ transactions }: SpendingBillsAlertCardP
             }
 
             return isDateBeforeToday(transaction.date, today);
-        }).length;
+        });
     }, [transactions]);
 
     const overdueInvoiceAlertsByCard = useMemo<OverdueInvoiceByCardAlert[]>(() => {
@@ -100,83 +100,81 @@ export function SpendingBillsAlertCard({ transactions }: SpendingBillsAlertCardP
         return Array.from(alertsByCard.values()).sort((a, b) => a.selectedDueDate.localeCompare(b.selectedDueDate));
     }, [creditCardInvoices, creditCards]);
 
-    if (overdueNonCardSpendingsCount < 1 && overdueInvoiceAlertsByCard.length < 1) {
+    if (overdueNonCardSpendings.length < 1 && overdueInvoiceAlertsByCard.length < 1) {
         return null;
     }
 
+    const overdueCount = overdueNonCardSpendings.length;
+    const overdueTotal = overdueNonCardSpendings.reduce((sum, transaction) => sum + transaction.value, 0);
+    const alertCount = (overdueCount > 0 ? 1 : 0) + overdueInvoiceAlertsByCard.length;
+
     return (
-        <section className="w-full space-y-2">
-            {overdueNonCardSpendingsCount > 0 && (
-                <article className="relative overflow-hidden rounded-2xl border border-red-400/28 bg-[#111111] p-4 shadow-[0_24px_60px_-32px_rgba(0,0,0,0.9)]">
-                    <div className="pointer-events-none absolute -left-20 -top-20 h-36 w-36 rounded-full bg-red-500/14 blur-3xl" />
-                    <div className="pointer-events-none absolute -bottom-24 -right-16 h-36 w-36 rounded-full bg-rose-500/11 blur-3xl" />
+        <section className="rounded-2xl border border-white/[0.08] bg-[#111111] p-4">
+            <div className="mb-3 flex items-center gap-2">
+                <span className="relative flex h-2 w-2">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-rose-400 opacity-60 motion-reduce:hidden" />
+                    <span className="relative inline-flex h-2 w-2 rounded-full bg-rose-400" />
+                </span>
+                <p className="text-lg font-medium text-white">Precisa de atenção</p>
+                <span className="ml-auto text-sm tabular-nums text-neutral-500">{alertCount}</span>
+            </div>
 
-                    <div className="relative flex items-start justify-between gap-3 text-left">
-                        <div className="flex items-start gap-2">
-                            <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-red-300/30 bg-red-500/18 text-red-100">
-                                <TriangleAlert size={15} />
-                            </span>
-                            <div>
-                                <p className="text-base font-medium text-red-100">Contas atrasadas</p>
-                                <p className="text-sm text-red-100/72">
-                                    Você tem {overdueNonCardSpendingsCount} {overdueNonCardSpendingsCount === 1 ? "conta atrasada" : "contas atrasadas"}.
-                                </p>
-                            </div>
-                        </div>
-                        <span className="rounded-full border border-red-300/30 bg-red-500/16 px-2.5 py-1 text-xs font-semibold text-red-100">
-                            {overdueNonCardSpendingsCount}
-                        </span>
-                    </div>
-
-                    <footer className="relative mt-3 flex justify-end">
-                        <button
-                            type="button"
-                            onClick={() => goToPage("transactions", { page: "transactions", tab: "spending" })}
-                            className="rounded-full border border-red-300/30 bg-red-500/15 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.05em] text-red-100 transition-colors hover:border-red-300/45 hover:bg-red-500/20"
-                        >
-                            Ver despesas atrasadas
-                        </button>
-                    </footer>
-                </article>
-            )}
-
-            {overdueInvoiceAlertsByCard.map((alert) => (
-                <article key={alert.cardId} className="relative overflow-hidden rounded-2xl border border-amber-400/25 bg-[#111111] p-4 shadow-[0_24px_60px_-32px_rgba(0,0,0,0.9)]">
-                    <div className="pointer-events-none absolute -left-20 -top-20 h-36 w-36 rounded-full bg-amber-500/15 blur-3xl" />
-                    <div className="pointer-events-none absolute -bottom-24 -right-16 h-36 w-36 rounded-full bg-yellow-400/10 blur-3xl" />
-
-                    <div className="relative text-left">
-                        <div className="flex items-start gap-2">
-                            <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-amber-300/25 bg-amber-500/16 text-amber-100">
-                                <ReceiptText size={15} />
-                            </span>
-                            <div>
-                                <p className="text-base font-medium text-amber-100">Fatura vencida - {alert.cardName}</p>
-                                <p className="text-sm text-amber-100/70">Valor em aberto: R$ {formatCurrencyBRL(alert.openAmount)}</p>
-                                {alert.overdueInvoiceCount > 1 && (
-                                    <p className="text-xs text-amber-100/60">Inclui {alert.overdueInvoiceCount} faturas vencidas desse cartao.</p>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-
-                    <footer className="relative mt-3 flex justify-end">
-                        <button
-                            type="button"
-                            onClick={() =>
-                                goToPage("statement", {
-                                    page: "statement",
-                                    selectedCardId: alert.cardId,
-                                    selectedMonth: alert.selectedMonth,
-                                })
-                            }
-                            className="rounded-full border border-amber-300/30 bg-amber-500/15 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.05em] text-amber-100 transition-colors hover:border-amber-300/45 hover:bg-amber-500/20"
-                        >
-                            Ver fatura
-                        </button>
-                    </footer>
-                </article>
-            ))}
+            <div className="space-y-1.5">
+                {overdueCount > 0 && (
+                    <AlertRow
+                        tone="rose"
+                        icon={<TriangleAlert size={18} />}
+                        title={overdueCount === 1 ? "1 conta atrasada" : `${overdueCount} contas atrasadas`}
+                        detail="Despesas pendentes com vencimento passado"
+                        amount={overdueTotal}
+                        onClick={() => goToPage("transactions", { page: "transactions", tab: "spending" })}
+                    />
+                )}
+                {overdueInvoiceAlertsByCard.map((alert) => (
+                    <AlertRow
+                        key={alert.cardId}
+                        tone="amber"
+                        icon={<ReceiptText size={18} />}
+                        title={`Fatura vencida do ${alert.cardName}`}
+                        detail={alert.overdueInvoiceCount > 1 ? `${alert.overdueInvoiceCount} faturas em aberto` : "Valor ainda em aberto"}
+                        amount={alert.openAmount}
+                        onClick={() => goToPage("statement", { page: "statement", selectedCardId: alert.cardId, selectedMonth: alert.selectedMonth })}
+                    />
+                ))}
+            </div>
         </section>
+    );
+}
+
+const ALERT_TONES = {
+    rose: { tile: "border-rose-400/30 bg-rose-500/10 text-rose-200", amount: "text-rose-300" },
+    amber: { tile: "border-amber-300/30 bg-amber-300/10 text-amber-200", amount: "text-amber-300" },
+};
+
+interface AlertRowProps {
+    tone: keyof typeof ALERT_TONES;
+    icon: ReactNode;
+    title: string;
+    detail: string;
+    amount: number;
+    onClick: () => void;
+}
+
+function AlertRow({ tone, icon, title, detail, amount, onClick }: AlertRowProps) {
+    const colors = ALERT_TONES[tone];
+    return (
+        <button
+            type="button"
+            onClick={onClick}
+            className="group flex w-full items-center gap-3 rounded-2xl border border-white/[0.06] bg-white/[0.02] p-2 pr-2.5 text-left outline-none transition-colors hover:border-white/[0.12] hover:bg-white/[0.04] focus-visible:ring-2 focus-visible:ring-sky-400/60"
+        >
+            <span className={`flex h-12 w-11 shrink-0 items-center justify-center rounded-xl border ${colors.tile}`}>{icon}</span>
+            <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-medium text-white">{title}</span>
+                <span className="mt-1 block truncate text-xs text-neutral-500">{detail}</span>
+            </span>
+            <span className={`shrink-0 text-sm font-semibold tabular-nums ${colors.amount}`}>R$ {formatCurrencyBRL(amount)}</span>
+            <ChevronRight size={16} className="shrink-0 text-neutral-600 transition-transform group-hover:translate-x-0.5 group-hover:text-neutral-300" />
+        </button>
     );
 }

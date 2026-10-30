@@ -5,7 +5,6 @@ import {
     type PlanningSimulatedExpense,
     type PlanningSimulatedIncome,
     type PlanningWishlistSelection,
-    type ReportPeriod,
     useFinanceActions,
     useFinanceCreditCardInvoices,
     useFinanceCreditCards,
@@ -22,10 +21,10 @@ import { AddWishItem } from "../modal/AddWishItem";
 import { PlanningInvoiceMonthModal } from "../modal/PlanningInvoiceMonthModal";
 import { PlanningSimulationModal, type PlanningSimulationModalDraft } from "../modal/PlanningSimulationModal";
 import { PlanningDetailsAside } from "./planning/PlanningDetailsAside";
-import { DEFAULT_PLANNING_TAB, PlanningPageHeader } from "./planning/PlanningPageHeader";
-import { PlanningReportsTab } from "./planning/PlanningReportsTab";
+import { PlanningPageHeader } from "./planning/PlanningPageHeader";
 import { PlanningTimelinePanel } from "./planning/PlanningTimelinePanel";
-import { DEFAULT_TIMELINE_MONTHS, type InheritedExpenseItem, type MonthProjection, type PlanningPanel, type PlanningTab, type SimulatedExpenseItem, type SimulatedIncomeItem } from "./planning/planningTimelineTypes";
+import { PlanningTimelineToolbar } from "./planning/PlanningTimelineToolbar";
+import { DEFAULT_TIMELINE_MONTHS, type InheritedExpenseItem, type MonthProjection, type PlanningPanel, type SimulatedExpenseItem, type SimulatedIncomeItem } from "./planning/planningTimelineTypes";
 import { buildTimelineProjection, getCurrentMonthKey, mergePlanningUpdate, parseCurrencyInput } from "./planning/planningTimelineUtils";
 import {
     getAllCreditCardIds,
@@ -33,11 +32,12 @@ import {
     getScopedCreditCardInvoices,
     getScopedCreditCardsByIds,
     getScopedLedgerEntries,
-    getReportScopedTransactions,
     getScopedTransactions,
     getScopedWallets,
     resolveSelectedIds,
 } from "./planning/planningWalletScope";
+
+const TIMELINE_PAST_MONTHS = 3;
 
 function isValidPlanningMonthKey(monthKey: string): boolean {
     return /^\d{4}-(0[1-9]|1[0-2])$/.test(monthKey);
@@ -65,7 +65,6 @@ export function PlanningPage() {
     const requestedMonthKey = searchParams.get("month");
     const requestedPanel = searchParams.get("panel");
 
-    const [activePlanningTab, setActivePlanningTab] = useState<PlanningTab>(DEFAULT_PLANNING_TAB);
     const [selectedMonthKey, setSelectedMonthKey] = useState(() =>
         requestedMonthKey && isValidPlanningMonthKey(requestedMonthKey) && requestedMonthKey >= currentMonthKey ? requestedMonthKey : currentMonthKey,
     );
@@ -80,20 +79,14 @@ export function PlanningPage() {
         () => resolveSelectedIds(creditCardIds, planning.timelineSelectedCreditCardIds ?? []),
         [creditCardIds, planning.timelineSelectedCreditCardIds],
     );
-    const reportsSelectedWalletIds = useMemo(() => resolveSelectedIds(walletIds, planning.reportsSelectedWalletIds ?? []), [planning.reportsSelectedWalletIds, walletIds]);
-    const reportsSelectedCreditCardIds = useMemo(
-        () => resolveSelectedIds(creditCardIds, planning.reportsSelectedCreditCardIds ?? []),
-        [creditCardIds, planning.reportsSelectedCreditCardIds],
-    );
     const compareMode = planning.timelineCompareMode ?? true;
     const horizontalMode = planning.timelineHorizontalMode ?? false;
     const timelineMonthCount = planning.timelineMonthCount ?? DEFAULT_TIMELINE_MONTHS;
-    const reportPeriod = planning.reportsPeriod;
-    const timelinePeriod = monthPeriod(currentMonthKey, 2, timelineMonthCount - 1);
+    const timelinePeriod = monthPeriod(currentMonthKey, TIMELINE_PAST_MONTHS, timelineMonthCount - 1);
     const selectedPeriod = monthPeriod(selectedMonthKey, 2);
     const projectionPeriod = {
-        startDate: [timelinePeriod.startDate, selectedPeriod.startDate, monthPeriod(reportPeriod.startMonth).startDate].sort()[0],
-        endDate: [timelinePeriod.endDate, selectedPeriod.endDate, monthPeriod(reportPeriod.endMonth).endDate].sort().reverse()[0],
+        startDate: [timelinePeriod.startDate, selectedPeriod.startDate].sort()[0],
+        endDate: [timelinePeriod.endDate, selectedPeriod.endDate].sort().reverse()[0],
     };
     const transactions = useFinanceTransactions(projectionPeriod);
     const creditCardInvoices = useFinanceCreditCardInvoices(projectionPeriod);
@@ -104,17 +97,6 @@ export function PlanningPage() {
     const scopedTransactions = useMemo(
         () => getScopedTransactions(transactions, timelineSelectedWalletIds, scopedCreditCards, timelineSelectedWalletIds.length === walletIds.length),
         [scopedCreditCards, timelineSelectedWalletIds, transactions, walletIds.length],
-    );
-    const reportScopedTransactions = useMemo(
-        () =>
-            getReportScopedTransactions(
-                transactions,
-                reportsSelectedWalletIds,
-                reportsSelectedCreditCardIds,
-                reportsSelectedWalletIds.length === walletIds.length,
-                reportsSelectedCreditCardIds.length === creditCardIds.length,
-            ),
-        [creditCardIds.length, reportsSelectedCreditCardIds, reportsSelectedWalletIds, transactions, walletIds.length],
     );
 
     useEffect(() => {
@@ -128,7 +110,6 @@ export function PlanningPage() {
 
         if (isPlanningPanel(requestedPanel)) {
             setSelectedPanel(requestedPanel);
-            setActivePlanningTab("timeline");
         }
     }, [currentMonthKey, requestedMonthKey, requestedPanel]);
 
@@ -143,12 +124,13 @@ export function PlanningPage() {
                 wishItems,
                 planning,
                 monthsToShow: timelineMonthCount,
+                pastMonthsToShow: TIMELINE_PAST_MONTHS,
                 pinnedMonthKey: selectedMonthKey,
             }),
         [planning, scopedCreditCardInvoices, scopedCreditCards, scopedLedgerEntries, scopedTransactions, scopedWallets, selectedMonthKey, timelineMonthCount, wishItems],
     );
 
-    const currentMonth = projection.months[0] ?? null;
+    const currentMonth = projection.months.find((month) => month.isCurrentMonth) ?? projection.months[0] ?? null;
     const selectedMonth = projection.months.find((month) => month.monthKey === selectedMonthKey) ?? currentMonth;
 
     const commitExpenseDraft = async (monthKey: string, draft: Pick<PlanningSimulationModalDraft, "description" | "amountInput" | "installmentCount">) => {
@@ -569,102 +551,60 @@ export function PlanningPage() {
         );
     };
 
-    const handleReportsWalletIdsChange = (walletIds: string[]) => {
-        void updatePlanningState(
-            mergePlanningUpdate(planning, {
-                reportsSelectedWalletIds: walletIds,
-            }),
-        );
-    };
-
-    const handleReportsCreditCardIdsChange = (creditCardIds: string[]) => {
-        void updatePlanningState(
-            mergePlanningUpdate(planning, {
-                reportsSelectedCreditCardIds: creditCardIds,
-            }),
-        );
-    };
-
-    const handleReportsPeriodChange = (period: ReportPeriod) => {
-        void updatePlanningState(
-            mergePlanningUpdate(planning, {
-                reportsPeriod: period,
-            }),
-        );
-    };
-
-    const isReportsTab = activePlanningTab === "reports";
-
     return (
-        <>
-            <div className="flex flex-col min-h-full gap-3">
-                <PlanningPageHeader
-                    activePlanningTab={activePlanningTab}
-                    onTabChange={setActivePlanningTab}
-                    timelineToolbarProps={{
-                        compareMode,
-                        horizontalMode,
-                        timelineMonthCount,
-                        wallets,
-                        creditCards,
-                        selectedWalletIds: timelineSelectedWalletIds,
-                        selectedCreditCardIds: timelineSelectedCreditCardIds,
-                        onCompareModeChange: handleTimelineCompareModeChange,
-                        onSelectedCreditCardIdsChange: handleTimelineCreditCardIdsChange,
-                        onHorizontalModeChange: handleTimelineHorizontalModeChange,
-                        onSelectedWalletIdsChange: handleTimelineWalletIdsChange,
-                        onTimelineMonthCountChange: handleTimelineMonthCountChange,
-                    }}
-                    reportsToolbarProps={{
-                        creditCards,
-                        period: reportPeriod,
-                        selectedCreditCardIds: reportsSelectedCreditCardIds,
-                        selectedWalletIds: reportsSelectedWalletIds,
-                        wallets,
-                        onPeriodChange: handleReportsPeriodChange,
-                        onSelectedCreditCardIdsChange: handleReportsCreditCardIdsChange,
-                        onSelectedWalletIdsChange: handleReportsWalletIdsChange,
-                    }}
+        <div className="flex flex-col min-h-full gap-3">
+            <PlanningPageHeader
+                toolbar={
+                    <PlanningTimelineToolbar
+                        compareMode={compareMode}
+                        horizontalMode={horizontalMode}
+                        timelineMonthCount={timelineMonthCount}
+                        wallets={wallets}
+                        creditCards={creditCards}
+                        selectedWalletIds={timelineSelectedWalletIds}
+                        selectedCreditCardIds={timelineSelectedCreditCardIds}
+                        onCompareModeChange={handleTimelineCompareModeChange}
+                        onSelectedCreditCardIdsChange={handleTimelineCreditCardIdsChange}
+                        onHorizontalModeChange={handleTimelineHorizontalModeChange}
+                        onSelectedWalletIdsChange={handleTimelineWalletIdsChange}
+                        onTimelineMonthCountChange={handleTimelineMonthCountChange}
+                    />
+                }
+            />
+
+            <div className="flex max-h-[calc(100vh-11rem)] flex-1 flex-col gap-2 xl:flex-row overflow-clip">
+                <PlanningTimelinePanel
+                    months={projection.months}
+                    selectedMonthKey={selectedMonth?.monthKey ?? null}
+                    selectedPanel={selectedPanel}
+                    compareMode={compareMode}
+                    horizontalMode={horizontalMode}
+                    onSelectPanel={handleSelectPanel}
                 />
 
-                {isReportsTab ? (
-                    <PlanningReportsTab period={reportPeriod} transactions={reportScopedTransactions} allTransactions={transactions} creditCardInvoices={creditCardInvoices} />
-                ) : (
-                    <div className="flex max-h-[calc(100vh-11rem)] flex-1 flex-col gap-2 xl:flex-row overflow-clip">
-                        <PlanningTimelinePanel
-                            months={projection.months}
-                            selectedMonthKey={selectedMonth?.monthKey ?? null}
-                            selectedPanel={selectedPanel}
-                            compareMode={compareMode}
-                            horizontalMode={horizontalMode}
-                            onSelectPanel={handleSelectPanel}
-                        />
-
-                        <PlanningDetailsAside
-                            selectedMonth={selectedMonth}
-                            fallbackMonth={currentMonth}
-                            selectedPanel={selectedPanel}
-                            activeWishItems={activeWishItems}
-                            wishlistSelectionByWishItemId={wishlistSelectionByWishItemId}
-                            onAddIncome={(month) => openSimulationModal(month, "income")}
-                            onDeleteExpense={handleDeleteExpense}
-                            onDeleteIncome={handleDeleteIncome}
-                            onEditExpense={openExpenseEditModal}
-                            onEditIncome={openIncomeEditModal}
-                            onEditWishlistItem={openWishlistItemOnWishlistPage}
-                            onOpenTransaction={openTransactionOnTransactionsPage}
-                            onOpenInvoice={openInvoiceOnStatementPage}
-                            onMoveInvoice={openInvoiceMonthModal}
-                            onRestoreInvoiceMonth={(invoiceId) => setInvoiceMonthOverride(invoiceId, null)}
-                            onToggleExpense={handleToggleSimulatedExpense}
-                            onToggleIncome={handleToggleIncome}
-                            onToggleSimulatedIncome={handleToggleSimulatedIncome}
-                            onToggleInheritedExpense={handleToggleInheritedExpense}
-                            onToggleWishlistSelection={handleToggleWishlistSelection}
-                        />
-                    </div>
-                )}
+                <PlanningDetailsAside
+                    selectedMonth={selectedMonth}
+                    fallbackMonth={currentMonth}
+                    selectedPanel={selectedPanel}
+                    activeWishItems={activeWishItems}
+                    wishlistSelectionByWishItemId={wishlistSelectionByWishItemId}
+                    onAddIncome={(month) => openSimulationModal(month, "income")}
+                    onDeleteExpense={handleDeleteExpense}
+                    onDeleteIncome={handleDeleteIncome}
+                    onEditExpense={openExpenseEditModal}
+                    onEditIncome={openIncomeEditModal}
+                    onEditWishlistItem={openWishlistItemOnWishlistPage}
+                    onOpenTransaction={openTransactionOnTransactionsPage}
+                    onOpenInvoice={openInvoiceOnStatementPage}
+                    onMoveInvoice={openInvoiceMonthModal}
+                    onRestoreInvoiceMonth={(invoiceId) => setInvoiceMonthOverride(invoiceId, null)}
+                    onToggleExpense={handleToggleSimulatedExpense}
+                    onToggleIncome={handleToggleIncome}
+                    onToggleSimulatedIncome={handleToggleSimulatedIncome}
+                    onToggleInheritedExpense={handleToggleInheritedExpense}
+                    onToggleWishlistSelection={handleToggleWishlistSelection}
+                />
             </div>
-        </>
+        </div>
     );
 }

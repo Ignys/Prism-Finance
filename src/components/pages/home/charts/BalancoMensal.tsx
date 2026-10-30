@@ -1,145 +1,225 @@
-﻿import { useFinanceTransactions } from "../../../../context/FinanceContext";
+import type { ChartData, ChartOptions, ScriptableContext } from "chart.js";
+import { Line } from "react-chartjs-2";
+import { type Transaction, useFinanceTransactions } from "../../../../context/FinanceContext";
 import { transactionSettlementDate } from "../../../../lib/transactionSettlementDate";
 
-export function BalancoMensal() {
-    const transactions = useFinanceTransactions();
+const INCOME_COLOR = "#34d399";
+const SPENDING_COLOR = "#fb7185";
+const INVOICE_COLOR = "#fcd34d";
 
-    const currentDate = new Date();
+function areaFill(rgb: string) {
+    return (context: ScriptableContext<"line">) => {
+        const { ctx, chartArea } = context.chart;
+        if (!chartArea) return "transparent";
+        const gradient = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
+        gradient.addColorStop(0, `rgba(${rgb}, 0.22)`);
+        gradient.addColorStop(1, `rgba(${rgb}, 0)`);
+        return gradient;
+    };
+}
+
+interface BalancoMensalProps {
+    /** "AAAA-MM"; sem ele, o mês atual. */
+    monthKey?: string;
+    /** Já filtradas pelas carteiras desejadas; sem elas, todas. */
+    transactions?: Transaction[];
+    /** Esconde o mês e a frase "Sobrou x%" (o relatório já mostra o período). */
+    hideCaptions?: boolean;
+    className?: string;
+}
+
+export function BalancoMensal({ monthKey, transactions: scopedTransactions, hideCaptions = false, className = "" }: BalancoMensalProps = {}) {
+    const allTransactions = useFinanceTransactions();
+    const transactions = scopedTransactions ?? allTransactions;
+
+    const now = new Date();
+    const [keyYear, keyMonth] = (monthKey ?? "").split("-").map(Number);
+    const currentDate = keyYear && keyMonth ? new Date(keyYear, keyMonth - 1, 1) : now;
     const currentMonth = currentDate.getMonth();
     const currentYear = currentDate.getFullYear();
+    const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+    // Mês passado mostra a linha inteira; o mês atual para em hoje.
+    const isCurrentMonth = currentYear === now.getFullYear() && currentMonth === now.getMonth();
+    const today = isCurrentMonth ? now.getDate() : daysInMonth;
     const monthLabel = new Intl.DateTimeFormat("pt-BR", {
         month: "long",
         year: "numeric",
     }).format(currentDate);
 
-    const currentMonthTransactions = transactions.filter((t) => {
-        const transactionDate = transactionSettlementDate(t);
-        if (!transactionDate) {
-            return false;
+    const dailyIncome = Array<number>(daysInMonth).fill(0);
+    const dailySpending = Array<number>(daysInMonth).fill(0);
+    const dailyInvoice = Array<number>(daysInMonth).fill(0);
+    let incomes = 0;
+    let spending = 0;
+    let invoicePaymentSpending = 0;
+
+    for (const transaction of transactions) {
+        if (transaction.status !== "paid") continue;
+        const date = transactionSettlementDate(transaction);
+        if (!date || date.getMonth() !== currentMonth || date.getFullYear() !== currentYear) continue;
+        const day = date.getDate() - 1;
+        if (transaction.type === "income") {
+            dailyIncome[day] += transaction.value;
+            incomes += transaction.value;
+        } else if (transaction.type === "spending" && transaction.paymentMethod !== "credit_card") {
+            dailySpending[day] += transaction.value;
+            spending += transaction.value;
+            if (transaction.systemKind === "invoice_payment") {
+                dailyInvoice[day] += transaction.value;
+                invoicePaymentSpending += transaction.value;
+            }
         }
-        return transactionDate.getMonth() === currentMonth && transactionDate.getFullYear() === currentYear;
-    });
+    }
 
-    const isIncludedStatus = (status: string | null | undefined) => status === "paid";
-    const includedMonthTransactions = currentMonthTransactions.filter((tx) => isIncludedStatus(tx.status));
-
-    const incomes = includedMonthTransactions.filter((tx) => tx.type === "income").reduce((sum, tx) => sum + tx.value, 0);
-
-    const spendingTransactions = includedMonthTransactions.filter((tx) => tx.type === "spending").filter((tx) => tx.paymentMethod !== "credit_card");
-
-    const spending = spendingTransactions.reduce((sum, tx) => sum + tx.value, 0);
-    const invoicePaymentSpending = spendingTransactions.filter((tx) => tx.systemKind === "invoice_payment").reduce((sum, tx) => sum + tx.value, 0);
     const invoicePaymentSpendingInRange = Math.min(invoicePaymentSpending, spending);
     const monthlyRegularSpending = Math.max(0, spending - invoicePaymentSpendingInRange);
-
     const balance = incomes - spending;
-    const maxMonthlyValue = Math.max(incomes, spending, 0);
-    const incomeRelativeHeight = maxMonthlyValue > 0 ? (incomes / maxMonthlyValue) * 100 : 0;
-    const spendingRelativeHeight = maxMonthlyValue > 0 ? (spending / maxMonthlyValue) * 100 : 0;
-    const invoiceShareWithinSpending = spending > 0 ? (invoicePaymentSpendingInRange / spending) * 100 : 0;
-    const regularShareWithinSpending = spending > 0 ? (monthlyRegularSpending / spending) * 100 : 0;
-    const regularShareForDisplay = maxMonthlyValue > 0 ? (monthlyRegularSpending / maxMonthlyValue) * 100 : 0;
-    const invoiceShareForDisplay = maxMonthlyValue > 0 ? (invoicePaymentSpendingInRange / maxMonthlyValue) * 100 : 0;
-    const largestValue = Math.max(incomes, spending);
-    const balanceDifferenceVsLargest = largestValue > 0 ? (balance / largestValue) * 100 : null;
-    const balanceDifferenceVsIncome = incomes > 0 ? (balance / incomes) * 100 : null;
-    const spendingVsIncome = incomes > 0 ? (spending / incomes) * 100 : null;
+    const positive = balance >= 0;
+    const share = incomes > 0 ? Math.abs(balance / incomes) * 100 : null;
+    const isEmpty = incomes <= 0 && spending <= 0;
+
     const formatCurrency = (value: number) =>
         value.toLocaleString("pt-BR", {
             minimumFractionDigits: 2,
             maximumFractionDigits: 2,
         });
 
+    // Running totals up to today; future days stay empty so the lines stop at "now".
+    const cumulative = (daily: number[]) => {
+        let running = 0;
+        return daily.map((value, index) => {
+            running += value;
+            return index < today ? running : null;
+        });
+    };
+    const spendingLine = cumulative(dailySpending);
+
+    const chartData: ChartData<"line", (number | null)[]> = {
+        labels: Array.from({ length: daysInMonth }, (_, index) => String(index + 1)),
+        datasets: [
+            {
+                label: "Entrou",
+                data: cumulative(dailyIncome),
+                borderColor: INCOME_COLOR,
+                backgroundColor: areaFill("52, 211, 153"),
+                fill: "origin",
+                stepped: true,
+                borderWidth: 2,
+                pointRadius: 0,
+                pointHoverRadius: 4,
+            },
+            {
+                label: "Saiu",
+                data: spendingLine,
+                borderColor: SPENDING_COLOR,
+                backgroundColor: areaFill("251, 113, 133"),
+                fill: "origin",
+                stepped: true,
+                borderWidth: 2,
+                pointRadius: dailyInvoice.map((value) => (value > 0 ? 4.5 : 0)),
+                pointBackgroundColor: INVOICE_COLOR,
+                pointBorderColor: "#111111",
+                pointBorderWidth: 2,
+                pointHoverRadius: 5,
+            },
+        ],
+    };
+
+    const chartOptions: ChartOptions<"line"> = {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: { duration: 700, easing: "easeOutQuart" },
+        interaction: { mode: "index", intersect: false },
+        scales: {
+            x: {
+                grid: { display: false },
+                border: { display: false },
+                ticks: {
+                    color: "#525252",
+                    font: { size: 11 },
+                    autoSkip: false,
+                    maxRotation: 0,
+                    callback: (_value, index) => (index === 0 || index === today - 1 || index === daysInMonth - 1 ? String(index + 1) : ""),
+                },
+            },
+            y: {
+                beginAtZero: true,
+                border: { display: false },
+                grid: { color: "rgba(255, 255, 255, 0.04)" },
+                ticks: { display: false, maxTicksLimit: 4 },
+            },
+        },
+        plugins: {
+            legend: { display: false },
+            tooltip: {
+                backgroundColor: "rgba(10, 10, 10, 0.96)",
+                borderColor: "rgba(255, 255, 255, 0.12)",
+                borderWidth: 1,
+                cornerRadius: 10,
+                padding: 10,
+                callbacks: {
+                    title: (items) => `Até o dia ${items[0]?.label ?? ""}`,
+                    label: (item) => ` ${item.dataset.label}: R$ ${formatCurrency(Number(item.raw ?? 0))}`,
+                    afterBody: (items) => {
+                        const invoice = dailyInvoice[items[0]?.dataIndex ?? -1];
+                        return invoice ? `Fatura paga no dia: R$ ${formatCurrency(invoice)}` : "";
+                    },
+                },
+            },
+        },
+    };
+
+    const pills = [
+        { label: "Receitas", value: incomes, color: INCOME_COLOR },
+        { label: "Despesas", value: monthlyRegularSpending, color: SPENDING_COLOR },
+        { label: "Faturas pagas", value: invoicePaymentSpendingInRange, color: INVOICE_COLOR },
+    ];
+
     return (
-        <div className="relative w-full overflow-hidden rounded-2xl border border-white/[0.08] bg-[#111111] p-5 shadow-[0_24px_60px_-32px_rgba(0,0,0,0.9)]">
-            <div className={`pointer-events-none absolute -left-20 -top-24 h-44 w-44 rounded-full blur-3xl ${balance >= 0 ? "bg-emerald-400/[0.10]" : "bg-red-500/[0.08]"}`} />
-            <div className={`pointer-events-none absolute -bottom-24 -right-20 h-44 w-44 rounded-full blur-3xl ${balance >= 0 ? "bg-emerald-400/[0.10]" : "bg-red-500/[0.08]"}`} />
-
-            <div className="relative mb-5 flex items-center justify-between gap-3">
-                <p className="text-lg font-medium text-white">Balanço do mês</p>
-                <span className="rounded-full border border-white/[0.09] bg-white/[0.04] px-3 py-1 text-xs uppercase tracking-[0.12em] text-neutral-300">{monthLabel}</span>
-            </div>
-
-            <div className="relative flex justify-between gap-3">
-                <div className="w-[20%] rounded-xl border border-white/[0.06] bg-black/20 p-6">
-                    <div className="flex h-full items-end justify-center gap-3">
-                        <div className="h-full w-5 overflow-hidden rounded-full">
-                            <div className="flex h-full items-end">
-                                <div
-                                    className="w-full rounded-full bg-gradient-to-t from-emerald-500/50 to-emerald-400 transition-all duration-700 ease-out"
-                                    style={{ height: `${incomeRelativeHeight}%` }}
-                                />
-                            </div>
-                        </div>
-
-                        <div className="h-full w-5 overflow-hidden">
-                            <div className="flex h-full items-end">
-                                <div className="flex w-full flex-col-reverse gap-1 transition-all duration-700 ease-out" style={{ height: `${spendingRelativeHeight}%` }}>
-                                    {monthlyRegularSpending > 0 && <div className={`${!invoiceShareWithinSpending ? "rounded-full" : "rounded-b-full"} w-full bg-gradient-to-t from-red-500/50 to-red-400`} style={{ height: `${regularShareWithinSpending}%` }} />}
-                                    {invoicePaymentSpendingInRange > 0 && <div className={`${!monthlyRegularSpending ? "rounded-full" : "rounded-t-full"} w-full bg-amber-400 `} style={{ height: `${invoiceShareWithinSpending}%` }} />}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+        <div className={`w-full rounded-2xl border border-white/[0.08] bg-[#111111] p-4 sm:p-5 ${className}`}>
+            <div className="flex items-start justify-between gap-3">
+                <div>
+                    <p className="text-lg font-medium text-white">Balanço do mês</p>
+                    {hideCaptions ? null : <p className="text-sm capitalize text-neutral-500">{monthLabel}</p>}
                 </div>
-
-                <div className="flex w-full flex-col gap-3">
-                    <div className=" ">
-                        <div className="border-b border-white/[0.06] p-2.5 py-4">
-                            <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-2">
-                                    <div className="h-3 w-3 rounded bg-emerald-400" />
-                                    <span className="font-medium text-neutral-200">Receitas</span>
-                                </div>
-                                <div className="flex items-center gap-3 text-sm">
-                                    <span className="text-neutral-400">{incomeRelativeHeight.toFixed(1)}%</span>
-                                    <p className="font-semibold text-emerald-300">R$ {formatCurrency(incomes)}</p>
-                                </div>
-                            </div>
-                        </div>
-                        <div className="space-y-2 p-2.5 py-4">
-                            <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-2">
-                                    <div className="h-3 w-3 rounded bg-red-400" />
-                                    <span className="font-medium text-neutral-200">Despesas</span>
-                                </div>
-                                <div className="flex items-center gap-3 text-sm">
-                                    <span className="text-neutral-400">{regularShareForDisplay.toFixed(1)}%</span>
-                                    <p className=" font-semibold text-red-300">R$ {formatCurrency(monthlyRegularSpending)}</p>
-                                </div>
-                            </div>
-                            <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-2">
-                                    <div className="h-3 w-3 rounded bg-amber-400" />
-                                    <span className="font-medium text-neutral-200">Faturas</span>
-                                </div>
-                                <div className=" flex items-center gap-3 text-sm">
-                                    <span className="text-neutral-400">{invoiceShareForDisplay.toFixed(1)}%</span>
-                                    <p className=" font-semibold text-yellow-200">R$ {formatCurrency(invoicePaymentSpendingInRange)}</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className={`rounded-xl justify-between flex flex-col border p-3 ${balance >= 0 ? "border-emerald-500/30 bg-emerald-500/[0.08]" : "border-red-500/30 bg-red-700/[0.08]"}`}>
-                        <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                                <span className="text-lg font-medium text-neutral-200">Total do mês</span>
-                            </div>
-                            <div className=" flex items-center gap-3">
-                                <span className="text-neutral-400">{balanceDifferenceVsLargest !== null ? `${balanceDifferenceVsLargest.toFixed(1)}%` : "--"}</span>
-                                <span className={`font-semibold ${balance >= 0 ? "text-emerald-300" : "text-red-300"}`}>R$ {formatCurrency(balance)}</span>
-                            </div>
-                        </div>
-                        <p className="mt-1 text-sm text-right text-neutral-300">
-                            {incomes <= 0 && spending <= 0 && "Sem transações neste mês"}
-                            {incomes <= 0 && spending > 0 && "Você não teve ganhos no período e registrou despesas."}
-                            {incomes > 0 && balance < 0 && spendingVsIncome !== null && `Você gastou ${spendingVsIncome.toFixed(1)}% da sua renda.`}
-                            {incomes > 0 && balance >= 0 && balanceDifferenceVsIncome !== null && `Você economizou ${balanceDifferenceVsIncome.toFixed(1)}% da sua renda.`}
+                {!isEmpty && (
+                    <div className="text-right">
+                        <p className={`text-2xl font-semibold leading-none tabular-nums ${positive ? "text-emerald-300" : "text-rose-300"}`}>
+                            {positive ? "+" : "−"} R$ {formatCurrency(Math.abs(balance))}
                         </p>
+                        {hideCaptions ? null : (
+                        <p className="mt-1 text-xs text-neutral-500">
+                            {positive ? "Sobrou" : "Faltou"}
+                            {share !== null && `, ${share.toFixed(0)}% ${positive ? "do que entrou" : "além do que entrou"}`}
+                        </p>
+                        )}
                     </div>
-                </div>
+                )}
             </div>
+
+            {isEmpty ? (
+                <p className="mt-5 rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-6 text-center text-sm text-neutral-400">Nenhuma receita ou despesa paga neste mês</p>
+            ) : (
+                <>
+                    <div className="mt-4 h-44">
+                        <Line data={chartData} options={chartOptions} />
+                    </div>
+
+                    <ul className="mt-4 grid grid-cols-1 gap-1.5 sm:grid-cols-3">
+                        {pills.map((pill) => (
+                            <li key={pill.label} className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-2">
+                                <span className="flex items-center gap-1.5 text-xs text-neutral-500">
+                                    <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: pill.color }} />
+                                    {pill.label}
+                                </span>
+                                <span className={`mt-0.5 block text-sm font-semibold tabular-nums ${pill.value > 0 ? "text-white" : "text-neutral-600"}`}>
+                                    R$ {formatCurrency(pill.value)}
+                                </span>
+                            </li>
+                        ))}
+                    </ul>
+                </>
+            )}
         </div>
     );
 }

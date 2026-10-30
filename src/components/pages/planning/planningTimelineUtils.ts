@@ -371,13 +371,15 @@ export function buildTimelineProjection(params: {
     wishItems: WishItem[];
     planning: PlanningState;
     monthsToShow: number;
+    pastMonthsToShow?: number;
     pinnedMonthKey?: string | null;
 }): TimelineProjection {
     const currentMonth = getCurrentMonthKey();
     const safeMonthsToShow = TIMELINE_MONTH_OPTIONS.includes(params.monthsToShow as (typeof TIMELINE_MONTH_OPTIONS)[number]) ? params.monthsToShow : DEFAULT_TIMELINE_MONTHS;
     const pinnedMonthOffset = params.pinnedMonthKey ? getMonthOffset(currentMonth, params.pinnedMonthKey) : null;
     const monthsToBuild = pinnedMonthOffset !== null && pinnedMonthOffset >= 0 ? Math.max(safeMonthsToShow, pinnedMonthOffset + 1) : safeMonthsToShow;
-    const monthKeys = Array.from({ length: monthsToBuild }, (_, index) => shiftMonth(currentMonth, index));
+    const pastMonthsToShow = Math.max(0, params.pastMonthsToShow ?? 0);
+    const monthKeys = Array.from({ length: pastMonthsToShow + monthsToBuild }, (_, index) => shiftMonth(currentMonth, index - pastMonthsToShow));
     const openingBalance = getOpeningBalance(currentMonth, params.wallets, params.ledgerEntries);
     const disabledInheritedExpenseIds = new Set(params.planning.disabledInheritedExpenseIds ?? []);
     const disabledIncomeIds = new Set(params.planning.disabledIncomeIds ?? []);
@@ -420,12 +422,19 @@ export function buildTimelineProjection(params: {
         });
     });
 
-    let originalAccumulated = openingBalance;
-    let currentAccumulated = openingBalance;
+    const firstOpeningBalance = pastMonthsToShow > 0 ? getOpeningBalance(monthKeys[0], params.wallets, params.ledgerEntries) : openingBalance;
+    let originalAccumulated = firstOpeningBalance;
+    let currentAccumulated = firstOpeningBalance;
 
     return {
         openingBalance,
-        months: monthKeys.map((monthKey, index) => {
+        months: monthKeys.map((monthKey) => {
+            // Meses passados nao podem deslocar a projecao: o mes atual sempre parte do saldo real do ledger.
+            if (monthKey === currentMonth) {
+                originalAccumulated = openingBalance;
+                currentAccumulated = openingBalance;
+            }
+
             const openingMonthBalance = currentAccumulated;
             const reality = getMonthReality({
                 monthKey,
@@ -482,7 +491,7 @@ export function buildTimelineProjection(params: {
                 monthLabel: formatMonthLabel(monthKey),
                 shortMonthLabel: formatMonthLabel(monthKey, "MMMM"),
                 year: formatMonthLabel(monthKey, "yyyy"),
-                isCurrentMonth: index === 0,
+                isCurrentMonth: monthKey === currentMonth,
                 openingMonthBalance,
                 simulatedIncome,
                 simulatedIncomeItems,
@@ -505,6 +514,7 @@ export function mergePlanningUpdate(planning: PlanningState, update: Partial<Pla
         simulatedIncomes: update.simulatedIncomes ?? planning.simulatedIncomes,
         wishlistSelections: update.wishlistSelections ?? planning.wishlistSelections,
         revenueOverrides: update.revenueOverrides ?? planning.revenueOverrides,
+        budgets: update.budgets ?? planning.budgets ?? [],
         disabledInheritedExpenseIds: update.disabledInheritedExpenseIds ?? planning.disabledInheritedExpenseIds ?? [],
         disabledIncomeIds: update.disabledIncomeIds ?? planning.disabledIncomeIds ?? [],
         disabledSimulatedExpenseIds: update.disabledSimulatedExpenseIds ?? planning.disabledSimulatedExpenseIds ?? [],

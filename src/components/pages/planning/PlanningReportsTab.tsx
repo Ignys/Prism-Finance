@@ -1,71 +1,58 @@
-import { motion, useReducedMotion } from "framer-motion";
 import { useMemo } from "react";
-import { type CreditCardInvoice, type ReportPeriod, type Transaction, useFinanceBeneficiaries } from "../../../context/FinanceContext";
-import { REPORTS_ENTRANCE_CONTAINER_VARIANTS, REPORTS_ENTRANCE_GRID_VARIANTS, REPORTS_ENTRANCE_ITEM_VARIANTS } from "./planningReportsMotion";
-import { PlanningReportsCategoriesSection } from "./PlanningReportsCategoriesSection";
+import { type CreditCard, type CreditCardInvoice, type ReportPeriod, type Transaction, type Wallet, useFinanceBeneficiaries, useFinanceTags } from "../../../context/FinanceContext";
+import { PlanningReportsCardView } from "./PlanningReportsCardView";
+import { PlanningReportsCombinedView } from "./PlanningReportsCombinedView";
 import { PlanningReportsEmptyState } from "./PlanningReportsEmptyState";
-import { PlanningReportsFlowSection } from "./PlanningReportsFlowSection";
-import { PlanningReportsMethodSection } from "./PlanningReportsMethodSection";
-import { PlanningReportsMetricsSection } from "./PlanningReportsMetricsSection";
-import { PlanningReportsRankingSection } from "./PlanningReportsRankingSection";
-import { buildReportsDataset } from "./planningReportsUtils";
+import { PlanningReportsWalletView } from "./PlanningReportsWalletView";
+import { buildReportsDataset, type ReportScope } from "./planningReportsUtils";
+import { getReportScopeKind } from "./reportScope";
 
 interface PlanningReportsTabProps {
     period: ReportPeriod;
+    scope: ReportScope;
     transactions: Transaction[];
-    allTransactions: Transaction[];
     creditCardInvoices: CreditCardInvoice[];
+    wallets: Wallet[];
+    creditCards: CreditCard[];
+    today: string;
 }
 
-export function PlanningReportsTab({ period, transactions, allTransactions, creditCardInvoices }: PlanningReportsTabProps) {
-    const shouldReduceMotion = useReducedMotion();
+/** Escolhe o relatório pela combinação de contas: carteira(s), cartão(ões) ou ambos. */
+export function PlanningReportsTab({ period, scope, transactions, creditCardInvoices, wallets, creditCards, today }: PlanningReportsTabProps) {
     const beneficiaries = useFinanceBeneficiaries();
-    const { monthReports, categoryReports, incomeCategoryReports, beneficiaryReports, summary } = useMemo(
-        () => buildReportsDataset(period, transactions, creditCardInvoices, allTransactions, beneficiaries),
-        [allTransactions, beneficiaries, creditCardInvoices, period, transactions],
+    const tags = useFinanceTags();
+    const kind = getReportScopeKind(scope);
+    const dataset = useMemo(
+        () => buildReportsDataset(period, transactions, creditCardInvoices, scope, beneficiaries, tags),
+        [beneficiaries, creditCardInvoices, period, scope, tags, transactions],
     );
+    const scopedWallets = useMemo(() => wallets.filter((wallet) => scope.walletIds.includes(wallet.id)), [scope.walletIds, wallets]);
+    const scopedCreditCards = useMemo(() => creditCards.filter((creditCard) => scope.creditCardIds.includes(creditCard.id)), [creditCards, scope.creditCardIds]);
+
+    if (kind === "empty") {
+        return <PlanningReportsEmptyState title="Nenhuma conta selecionada" description="Marque ao menos uma carteira ou um cartão acima para montar o relatório." />;
+    }
+
+    if (dataset.summary.transactionCount === 0 && kind !== "card" && kind !== "cards") {
+        return <PlanningReportsEmptyState />;
+    }
 
     return (
-        <motion.section
-            variants={REPORTS_ENTRANCE_CONTAINER_VARIANTS}
-            initial={shouldReduceMotion ? false : "hidden"}
-            animate="visible"
-            className="flex flex-1 flex-col gap-3 text-left"
-        >
-            
-            {summary.transactionCount === 0 ? (
-                <motion.div variants={REPORTS_ENTRANCE_ITEM_VARIANTS}>
-                    <PlanningReportsEmptyState />
-                </motion.div>
+        <section className="flex flex-1 flex-col gap-4 text-left">
+            {kind === "wallet" || kind === "wallets" ? (
+                <PlanningReportsWalletView dataset={dataset} period={period} transactions={transactions} creditCardInvoices={creditCardInvoices} wallets={scopedWallets} />
+            ) : kind === "card" || kind === "cards" ? (
+                <PlanningReportsCardView
+                    dataset={dataset}
+                    period={period}
+                    transactions={transactions}
+                    creditCardInvoices={creditCardInvoices}
+                    creditCards={scopedCreditCards}
+                    today={today}
+                />
             ) : (
-                <>
-                    <motion.div variants={REPORTS_ENTRANCE_ITEM_VARIANTS}>
-                        <PlanningReportsMetricsSection summary={summary} />
-                    </motion.div>
-                    <motion.div
-                        variants={REPORTS_ENTRANCE_GRID_VARIANTS}
-                        className="grid min-h-0 gap-3 grid-cols-[minmax(0,1fr)_minmax(340px,1fr)] desktop:grid-cols-[minmax(0,1fr)_minmax(340px,1fr)_minmax(340px,0.7fr)]"
-                    >
-                        <motion.div variants={REPORTS_ENTRANCE_ITEM_VARIANTS} className="min-w-0">
-                            <PlanningReportsCategoriesSection categoryReports={categoryReports} totalAmount={summary.spending} />
-                        </motion.div>
-
-                        <motion.div variants={REPORTS_ENTRANCE_ITEM_VARIANTS} className="min-w-0">
-                            <PlanningReportsCategoriesSection categoryReports={incomeCategoryReports} totalAmount={summary.income} kind="income" />
-                        </motion.div>
-
-                        <motion.div variants={REPORTS_ENTRANCE_ITEM_VARIANTS} className="min-w-0">
-                            <PlanningReportsFlowSection monthReports={monthReports} />
-                        </motion.div>
-                        <motion.div variants={REPORTS_ENTRANCE_ITEM_VARIANTS} className="min-w-0">
-                            <PlanningReportsRankingSection beneficiaryReports={beneficiaryReports} />
-                        </motion.div>
-                        <motion.div variants={REPORTS_ENTRANCE_ITEM_VARIANTS} className="col-span-2 min-w-0">
-                            <PlanningReportsMethodSection monthReports={monthReports} methodReports={summary.methodReports} />
-                        </motion.div>
-                    </motion.div>
-                </>
+                <PlanningReportsCombinedView dataset={dataset} transactions={transactions} creditCardInvoices={creditCardInvoices} wallets={scopedWallets} creditCards={scopedCreditCards} />
             )}
-        </motion.section>
+        </section>
     );
 }

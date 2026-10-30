@@ -125,9 +125,7 @@ export function StatementMonthSelector({ selectedMonth, onMonthChange, ariaLabel
             </button>
 
             {isPickerOpen && (
-                <div className="absolute right-0 top-[calc(100%+0.5rem)] z-30 w-[288px] overflow-hidden rounded-2xl border border-white/[0.12] bg-[#0e0e0e]/95 p-3 shadow-[0_30px_70px_-36px_rgba(0,0,0,0.95)] backdrop-blur-xl">
-                    <div className="pointer-events-none absolute -left-8 -top-10 h-20 w-20 rounded-full bg-amber-400/14 blur-2xl" />
-                    <div className="pointer-events-none absolute -bottom-8 -right-10 h-24 w-24 rounded-full bg-sky-400/12 blur-2xl" />
+                <div className="absolute right-0 top-[calc(100%+0.5rem)] z-30 w-[240px] overflow-hidden rounded-2xl border border-white/[0.1] bg-[#0e0e0e]/95 p-2.5 shadow-[0_24px_60px_-30px_rgba(0,0,0,0.95)] backdrop-blur-xl">
 
                     <MonthGridPanel
                         selectedMonth={selectedMonth}

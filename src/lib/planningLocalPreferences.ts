@@ -24,7 +24,7 @@ export type PlanningLocalPreferences = Pick<
     | "reportsPeriod"
 >;
 
-export type SyncedPlanningPayload = Pick<PlanningState, "simulatedExpenses" | "simulatedIncomes" | "wishlistSelections" | "revenueOverrides">;
+export type SyncedPlanningPayload = Pick<PlanningState, "simulatedExpenses" | "simulatedIncomes" | "wishlistSelections" | "revenueOverrides" | "budgets">;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -118,6 +118,7 @@ export function toSyncedPlanningPayload(planning: PlanningState): SyncedPlanning
         simulatedIncomes: planning.simulatedIncomes,
         wishlistSelections: planning.wishlistSelections,
         revenueOverrides: planning.revenueOverrides,
+        budgets: planning.budgets ?? [],
     };
 }
 

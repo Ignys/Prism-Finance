@@ -1,7 +1,6 @@
 import { useMemo } from "react";
-import { X } from "lucide-react";
 import { useFinanceCreditCards, useFinanceStoredTransactions, useFinanceTransactionGroups, useFinanceWallets, type Transaction } from "../../context/FinanceContext";
-import { useModal } from "../../context/ModalContext";
+import { ModalHeader, ModalPanel } from "./ModalChrome";
 import { ModalStructure } from "./ModalStructure";
 import { STATUS_LABELS } from "../pages/transactions/transactionsPageShared";
 import { formatCurrencyBRL, formatTransactionDate } from "../transactions/transactionView";
@@ -55,7 +54,6 @@ function InfoRow({ label, value }: { label: string; value: string }) {
 }
 
 export function TransactionSeriesModal({ transaction }: { transaction: Transaction }) {
-    const { closeModal } = useModal();
     const groups = useFinanceTransactionGroups();
     const storedTransactions = useFinanceStoredTransactions();
     const creditCards = useFinanceCreditCards();
@@ -78,28 +76,15 @@ export function TransactionSeriesModal({ transaction }: { transaction: Transacti
 
     return (
         <ModalStructure height="auto" width="880px">
-            <div className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-white/[0.08] bg-[#171717] text-white shadow-[0_24px_60px_-32px_rgba(0,0,0,0.9)]">
-                <header className="flex items-start justify-between gap-4 border-b border-white/[0.08] px-5 py-4">
-                    <div className="min-w-0">
-                        <p className="text-[11px] uppercase tracking-[0.14em] text-white/45">Série</p>
-                        <h2 className="mt-1 truncate text-lg font-semibold text-white">{view?.group.title || transaction.description || transaction.category.label}</h2>
-                        <p className="mt-1 text-sm text-white/55">{view ? MODE_LABELS[view.mode] : "Série não encontrada"}</p>
-                    </div>
-                    <button
-                        type="button"
-                        onClick={closeModal}
-                        className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/[0.12] bg-white/[0.03] text-white/70 transition-colors hover:border-white/[0.22] hover:text-white"
-                        aria-label="Fechar série"
-                    >
-                        <X size={15} />
-                    </button>
-                </header>
+            <ModalPanel>
+                <ModalHeader title={view ? `Série: ${MODE_LABELS[view.mode]}` : "Série"} />
+                <h2 className="ml-1 mt-2 truncate text-lg font-medium text-white">{view?.group.title || transaction.description || transaction.category.label}</h2>
                 {view ? (
                     <SeriesBody view={view} resolveAccount={resolveAccount} currentTransactionId={transaction.id} />
                 ) : (
-                    <p className="px-5 py-6 text-sm text-white/60">Não foi possível localizar o grupo desta transação.</p>
+                    <p className="py-6 text-sm text-white/60">Não foi possível localizar o grupo desta transação.</p>
                 )}
-            </div>
+            </ModalPanel>
         </ModalStructure>
     );
 }
@@ -108,7 +93,7 @@ function SeriesBody({ view, resolveAccount, currentTransactionId }: { view: Tran
     const { group, totals, rows } = view;
 
     return (
-        <div className="min-h-0 overflow-auto px-5 py-4">
+        <div className="elegant-scrollbar mt-4 min-h-0 overflow-auto pr-1">
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                 <InfoRow label="Categoria" value={[group.categoryName, group.subcategoryName].filter(Boolean).join(" / ") || "—"} />
                 <InfoRow label="Beneficiário" value={group.beneficiaryName || "—"} />
@@ -133,7 +118,7 @@ function SeriesBody({ view, resolveAccount, currentTransactionId }: { view: Tran
             <div className="mt-4 overflow-hidden rounded-xl border border-white/[0.08]">
                 <div className="max-h-[46vh] overflow-auto">
                     <table className="min-w-full divide-y divide-white/[0.06] text-sm">
-                        <thead className="sticky top-0 bg-[#1b1b1b] text-[10px] uppercase tracking-[0.12em] text-white/45">
+                        <thead className="sticky top-0 bg-[#181818] text-[10px] uppercase tracking-[0.12em] text-white/45">
                             <tr>
                                 <th className="px-3 py-2 text-left font-medium">#</th>
                                 <th className="px-3 py-2 text-left font-medium">Data</th>
