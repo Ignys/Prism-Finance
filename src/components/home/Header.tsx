@@ -1,13 +1,11 @@
-import { useMemo } from "react";
 import { Menu } from "lucide-react";
-import { useFinanceCreditCardInvoices, useFinanceSession, useFinanceSummary, useFinanceTransactions, useFinanceWallets } from "../../context/FinanceContext";
-import { getMonthKeyFromDateValue } from "../../context/financeTypes";
+import { useFinanceSession } from "../../context/FinanceContext";
 import { usePage } from "../../context/PageContext";
-import { getLocalTodayDate } from "../../lib/localDate";
 import { resolveUserDisplayName } from "../../lib/userProfile";
 import { signOutSupabase } from "../../supabase/auth/authService";
 import { HeaderMetricsRow } from "./header/HeaderMetricsRow";
 import { HeaderProfileMenu } from "./header/HeaderProfileMenu";
+import { useHeaderAmounts } from "./header/useHeaderAmounts";
 
 interface HeaderProps {
     onOpenSidebar?: () => void;
@@ -15,73 +13,9 @@ interface HeaderProps {
 
 export function Header({ onOpenSidebar }: HeaderProps) {
     const { user, profile } = useFinanceSession();
-    const summary = useFinanceSummary();
-    const creditCardInvoices = useFinanceCreditCardInvoices();
-    const transactions = useFinanceTransactions();
-    const wallets = useFinanceWallets();
     const { goToPage } = usePage();
 
-    const pendingInvoicesAmount = useMemo(
-        () =>
-            Number(
-                creditCardInvoices
-                    .reduce((sum, invoice) => {
-                        const openAmount = Math.max(0, invoice.totalAmount - invoice.paidAmount);
-                        return sum + openAmount;
-                    }, 0)
-                    .toFixed(2),
-            ),
-        [creditCardInvoices],
-    );
-
-    const walletInclusionById = useMemo(() => new Map(wallets.map((wallet) => [wallet.id, wallet.includeInMainTotals])), [wallets]);
-
-    const monthlySummary = useMemo(() => {
-        const currentMonthKey = getMonthKeyFromDateValue(getLocalTodayDate());
-
-        const totals = transactions.reduce(
-            (acc, transaction) => {
-                if (transaction.status !== "paid") {
-                    return acc;
-                }
-
-                if (getMonthKeyFromDateValue(transaction.date) !== currentMonthKey) {
-                    return acc;
-                }
-
-                if ((walletInclusionById.get(transaction.inWallet) ?? true) === false) {
-                    return acc;
-                }
-
-                if (transaction.type === "income") {
-                    acc.receitas += transaction.value;
-                    return acc;
-                }
-
-                if (transaction.type === "spending" && transaction.paymentMethod !== "credit_card") {
-                    acc.despesas += transaction.value;
-                }
-
-                return acc;
-            },
-            { receitas: 0, despesas: 0 },
-        );
-
-        return {
-            receitas: Number(totals.receitas.toFixed(2)),
-            despesas: Number(totals.despesas.toFixed(2)),
-        };
-    }, [transactions, walletInclusionById]);
-
-    const metricAmounts = useMemo(
-        () => ({
-            balance: summary.balance,
-            receitas: monthlySummary.receitas,
-            despesas: monthlySummary.despesas,
-            pendingInvoices: pendingInvoicesAmount,
-        }),
-        [monthlySummary.despesas, monthlySummary.receitas, pendingInvoicesAmount, summary.balance],
-    );
+    const metricAmounts = useHeaderAmounts();
 
     const userName = profile?.displayName ?? resolveUserDisplayName(user);
     const userPhotoUrl = profile ? profile.photoURL : user?.photoURL?.trim() ? user.photoURL : null;

@@ -7,6 +7,7 @@ import { ModalProvider } from "./context/ModalContext";
 import { PageProvider, usePage } from "./context/PageContext";
 import "./lib/chart";
 import { initDemoMode } from "./lib/demoMode";
+import { useIsMobile } from "./mobile/useIsMobile";
 
 initDemoMode();
 
@@ -19,7 +20,50 @@ const StatementPage = lazy(() => import("./components/pages/Statement").then((mo
 const RegistryPage = lazy(() => import("./components/pages/Registry").then((module) => ({ default: module.RegistryPage })));
 const SettingsPage = lazy(() => import("./components/pages/Settings").then((module) => ({ default: module.SettingsPage })));
 const TransactionsPage = lazy(() => import("./components/pages/TransactionsPage").then((module) => ({ default: module.TransactionsPage })));
+const MobileApp = lazy(() => import("./mobile/MobileApp").then((module) => ({ default: module.MobileApp })));
 const WishlistPage = lazy(() => import("./components/pages/Wishlist").then((module) => ({ default: module.WishlistPage })));
+
+// Shared by the desktop shell and the mobile app (which overrides some paths with its own pages).
+const pageRoutes = (
+    <>
+        <Route path="/" element={<Navigate to="/home" replace />} />
+        <Route path="/home" element={<HomePage />} />
+        <Route path="/transactions" element={<TransactionsPage />} />
+        <Route path="/transactions/receitas" element={<TransactionsPage />} />
+        <Route path="/transactions/income" element={<TransactionsPage />} />
+        <Route path="/transactions/despesas" element={<TransactionsPage />} />
+        <Route path="/transactions/spending" element={<TransactionsPage />} />
+        <Route path="/transactions/transferencias" element={<TransactionsPage />} />
+        <Route path="/transactions/transfer" element={<TransactionsPage />} />
+        <Route path="/transactions/transfers" element={<TransactionsPage />} />
+        <Route path="/statement" element={<StatementPage />} />
+        <Route path="/fatura" element={<StatementPage />} />
+        <Route path="/planning" element={<PlanningPage />} />
+        <Route path="/planejamento" element={<PlanningPage />} />
+        <Route path="/analises" element={<PlanningPage />} />
+        <Route path="/reports" element={<ReportsPage />} />
+        <Route path="/relatorios" element={<ReportsPage />} />
+        <Route path="/budgets" element={<BudgetsPage />} />
+        <Route path="/orcamentos" element={<BudgetsPage />} />
+        <Route path="/budgets/:budgetId" element={<BudgetsPage />} />
+        <Route path="/orcamentos/:budgetId" element={<BudgetsPage />} />
+        <Route path="/wishlist" element={<WishlistPage />} />
+        <Route path="/registry" element={<RegistryPage />} />
+        <Route path="/registry/carteiras" element={<RegistryPage />} />
+        <Route path="/registry/wallets" element={<RegistryPage />} />
+        <Route path="/registry/cartoes" element={<RegistryPage />} />
+        <Route path="/registry/credit-cards" element={<RegistryPage />} />
+        <Route path="/registry/creditcards" element={<RegistryPage />} />
+        <Route path="/registry/categorias" element={<RegistryPage />} />
+        <Route path="/registry/categories" element={<RegistryPage />} />
+        <Route path="/registry/beneficiarios" element={<RegistryPage />} />
+        <Route path="/registry/beneficiaries" element={<RegistryPage />} />
+        <Route path="/registry/tags" element={<RegistryPage />} />
+        <Route path="/settings" element={<SettingsPage />} />
+        <Route path="/configuracoes" element={<SettingsPage />} />
+        <Route path="*" element={<Navigate to="/home" replace />} />
+    </>
+);
 
 function App() {
     return (
@@ -38,6 +82,7 @@ function App() {
 function MainApp() {
     const { user, loading } = useFinanceSession();
     const { currentPage } = usePage();
+    const isMobile = useIsMobile();
 
     if (loading) return <LoadingPage />;
 
@@ -49,47 +94,18 @@ function MainApp() {
         );
     }
 
+    if (isMobile) {
+        return (
+            <Suspense fallback={<LoadingPage />}>
+                <MobileApp routes={pageRoutes} />
+            </Suspense>
+        );
+    }
+
     return (
         <AuthShell mainClassName="text-white">
             <Suspense fallback={<PageSkeletonScreen page={currentPage} />}>
-                <Routes>
-                    <Route path="/" element={<Navigate to="/home" replace />} />
-                    <Route path="/home" element={<HomePage />} />
-                    <Route path="/transactions" element={<TransactionsPage />} />
-                    <Route path="/transactions/receitas" element={<TransactionsPage />} />
-                    <Route path="/transactions/income" element={<TransactionsPage />} />
-                    <Route path="/transactions/despesas" element={<TransactionsPage />} />
-                    <Route path="/transactions/spending" element={<TransactionsPage />} />
-                    <Route path="/transactions/transferencias" element={<TransactionsPage />} />
-                    <Route path="/transactions/transfer" element={<TransactionsPage />} />
-                    <Route path="/transactions/transfers" element={<TransactionsPage />} />
-                    <Route path="/statement" element={<StatementPage />} />
-                    <Route path="/fatura" element={<StatementPage />} />
-                    <Route path="/planning" element={<PlanningPage />} />
-                    <Route path="/planejamento" element={<PlanningPage />} />
-                    <Route path="/analises" element={<PlanningPage />} />
-                    <Route path="/reports" element={<ReportsPage />} />
-                    <Route path="/relatorios" element={<ReportsPage />} />
-                    <Route path="/budgets" element={<BudgetsPage />} />
-                    <Route path="/orcamentos" element={<BudgetsPage />} />
-                    <Route path="/budgets/:budgetId" element={<BudgetsPage />} />
-                    <Route path="/orcamentos/:budgetId" element={<BudgetsPage />} />
-                    <Route path="/wishlist" element={<WishlistPage />} />
-                    <Route path="/registry" element={<RegistryPage />} />
-                    <Route path="/registry/carteiras" element={<RegistryPage />} />
-                    <Route path="/registry/wallets" element={<RegistryPage />} />
-                    <Route path="/registry/cartoes" element={<RegistryPage />} />
-                    <Route path="/registry/credit-cards" element={<RegistryPage />} />
-                    <Route path="/registry/creditcards" element={<RegistryPage />} />
-                    <Route path="/registry/categorias" element={<RegistryPage />} />
-                    <Route path="/registry/categories" element={<RegistryPage />} />
-                    <Route path="/registry/beneficiarios" element={<RegistryPage />} />
-                    <Route path="/registry/beneficiaries" element={<RegistryPage />} />
-                    <Route path="/registry/tags" element={<RegistryPage />} />
-                    <Route path="/settings" element={<SettingsPage />} />
-                    <Route path="/configuracoes" element={<SettingsPage />} />
-                    <Route path="*" element={<Navigate to="/home" replace />} />
-                </Routes>
+                <Routes>{pageRoutes}</Routes>
             </Suspense>
         </AuthShell>
     );

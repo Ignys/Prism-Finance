@@ -8,7 +8,7 @@ import { formatCurrencyBRL, getTransactionTypeMeta, resolveTransactionWallet } f
 
 const FALLBACK_COLOR = "#737373";
 
-export function MiniTransactionBlock({ transaction }: { transaction: Transaction }) {
+export function MiniTransactionBlock({ transaction, showSign = true }: { transaction: Transaction; showSign?: boolean }) {
     const { openModal } = useModal();
     const wallets = useFinanceWallets();
     const creditCards = useFinanceCreditCards();
@@ -19,7 +19,7 @@ export function MiniTransactionBlock({ transaction }: { transaction: Transaction
     const typeMeta = getTransactionTypeMeta(transaction.type);
     const color = transaction.category.color ?? FALLBACK_COLOR;
     const CategoryIcon = getCategoryIconComponent(transaction.category.icon, transaction.category.type);
-    const sign = transaction.type === "income" ? "+" : transaction.type === "spending" ? "−" : "";
+    const sign = !showSign ? "" : transaction.type === "income" ? "+" : transaction.type === "spending" ? "−" : "";
 
     return (
         <button
@@ -45,7 +45,7 @@ export function MiniTransactionBlock({ transaction }: { transaction: Transaction
             </span>
 
             <span className={`shrink-0 text-sm font-semibold tabular-nums ${typeMeta.amountColorClass}`}>
-                {sign} R$ {formatCurrencyBRL(transaction.value)}
+                {sign && `${sign} `}R$ {formatCurrencyBRL(transaction.value)}
             </span>
         </button>
     );

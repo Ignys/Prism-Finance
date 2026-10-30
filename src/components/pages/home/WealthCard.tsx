@@ -59,10 +59,12 @@ export function WealthCard() {
                             onMouseEnter={() => setActiveId(wallet.id)}
                             className={`flex items-center gap-3 rounded-xl px-2 py-1.5 transition-colors ${activeId === wallet.id ? "bg-white/[0.04]" : ""}`}
                         >
-                            <WalletAvatar wallet={wallet} className="h-8 w-8 shrink-0 rounded-lg border border-white/10" iconSize={15} />
+                            <span className="shrink-0 rounded-lg border-2" style={{ borderColor: normalizeWalletColor(wallet.color) }}>
+                                <WalletAvatar wallet={wallet} className="h-7 w-7 rounded-md" iconSize={15} />
+                            </span>
                             <span className="min-w-0 flex-1 truncate text-sm text-neutral-200">{wallet.name}</span>
                             {share > 0 && <span className="shrink-0 text-xs tabular-nums text-neutral-500">{share.toFixed(0)}%</span>}
-                            <span className={`w-28 shrink-0 text-right text-sm font-medium tabular-nums ${wallet.balance < 0 ? "text-rose-300" : "text-white"}`}>
+                            <span className={`shrink-0 text-right text-sm font-medium tabular-nums ${wallet.balance < 0 ? "text-rose-300" : "text-white"}`}>
                                 {wallet.balance < 0 && "− "}R$ {formatCurrencyBRL(Math.abs(wallet.balance))}
                             </span>
                         </li>

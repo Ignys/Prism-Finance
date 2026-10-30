@@ -7,7 +7,7 @@ Prism Finance — personal finance web app (React 19 + TypeScript + Vite + Tailw
 ## Commands
 
 ```bash
-npm run dev              # Vite dev server (add -- --host for LAN)
+npm run dev              # Vite dev server, exposed on LAN (--host)
 npm run build            # vite build --configLoader runner
 npm run typecheck        # tsc --noEmit
 npm run lint             # eslint .
